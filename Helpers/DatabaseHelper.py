@@ -13,5 +13,10 @@ class DatabaseHelper(object):
     def query(self,queryString, queryParams=()):
         self.cursor.execute(queryString, queryParams)
         return self.cursor
+    def transact(self,queryString, queryParams=()):
+        self.cursor.execute(queryString, queryParams)
+        self.cnx.commit()
+        self.cursor.close()
+        return self.cursor.lastrowid
     def __del__(self):
         self.cnx.close()
