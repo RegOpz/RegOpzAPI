@@ -10,6 +10,7 @@ apiPath = APIConfig.APIPATH
 api.add_resource(Info, apiPath + "/info")
 api.add_resource(DocumentController,
     apiPath + "/document",
-    apiPath + "/document/upload")
+    apiPath + "/document/<string:doc_id>"
+)
 if __name__ == '__main__':
     app.run(debug=True, port=APIConfig.API['port'])
