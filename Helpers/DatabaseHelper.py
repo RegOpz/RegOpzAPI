@@ -9,17 +9,26 @@ class DatabaseHelper(object):
         self.password = dbconfig.DATABASE['password'];
         self.type = dbconfig.DATABASE['type'];
         self.cnx = mysql.connector.connect(user=self.user, password=self.password, host=self.host,database=self.db)
-        self.cursor = self.cnx.cursor()
+        self.cursor = self.cnx.cursor(dictionary=True)
+
     def query(self,queryString, queryParams=None):
         if queryParams != None:
-            self.cursor.execute(queryString % queryParams)
+            self.cursor.execute(queryString,queryParams)
         else:
             self.cursor.execute(queryString)
         return self.cursor
+
     def transact(self,queryString, queryParams=()):
         self.cursor.execute(queryString, queryParams)
-        self.cnx.commit()
         return self.cursor.lastrowid
+
+    def commit(self):
+        self.cnx.commit()
+
+    def transactmany(self,queryString,queryParams):
+        self.cursor.executemany(queryString,queryParams)
+        return self.cursor.lastrowid
+
     def __del__(self):
         self.cursor.close()
         self.cnx.close()
