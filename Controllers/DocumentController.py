@@ -22,7 +22,7 @@ class DocumentController(Resource):
         if doc_id != None:
             return (document.get(doc_id))
         return (document.get())"""
-        self.report_id = "MAS1003"
+        self.report_id = doc_id
         return self.render_report_template_json()
     def post(self):
         if 'file' not in request.files:
