@@ -33,11 +33,11 @@ class Document(object):
             if documents.rowcount != 0:
                 document = documents.fetchone()
                 print(document)
-                self.file = document[1]
-                self.uploaded_by = document[2]
-                self.time_stamp = str(document[3])
-                self.ip = document[4]
-                self.comment = document[5]
+                self.file = document["file"]
+                self.uploaded_by = document["uploaded_by"]
+                self.time_stamp = str(document["time_stamp"])
+                self.ip = document["ip"]
+                self.comment = document["comment"]
                 return self.__dict__
             return None
         else :

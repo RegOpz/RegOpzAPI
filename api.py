@@ -4,7 +4,9 @@ from Helpers.DatabaseHelper import *
 from Configs import APIConfig
 from Controllers.Info import Info
 from Controllers.DocumentController import DocumentController
+from flask_cors import CORS, cross_origin
 app = Flask(__name__)
+CORS(app)
 api = Api(app)
 apiPath = APIConfig.APIPATH
 api.add_resource(Info, apiPath + "/info")
