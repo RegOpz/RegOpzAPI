@@ -4,5 +4,5 @@ DATABASE = {
     'password': 'harry123',
     'db': 'RegOpz',
     'type': 'mysql',
-    'port':""
+    'port':"3306"
 };

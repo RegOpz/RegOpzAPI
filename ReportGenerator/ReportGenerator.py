@@ -1,56 +1,26 @@
-from flask_restful import Resource,abort
-import os
-from flask import Flask, request, redirect, url_for
-from werkzeug.utils import secure_filename
-import uuid
-from Constants.Status import *
-from Helpers.DatabaseHelper import DatabaseHelper
-from Models.Document import Document
-import datetime
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
 import openpyxl as xls
-import Helpers.utils as util
+import utils as util
 from openpyxl.styles import Border, Side, PatternFill, Font, GradientFill, Alignment, Protection
 from openpyxl.utils import get_column_letter
 import json
-UPLOAD_FOLDER = './uploads/templates'
-ALLOWED_EXTENSIONS = set(['txt', 'xls', 'xlsx'])
-class DocumentController(Resource):
-    def allowed_file(self,filename):
-        return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-    def get(self, doc_id=None):
-        """document = Document()
-        if doc_id != None:
-            return (document.get(doc_id))
-        return (document.get())"""
-        self.report_id = doc_id
-        return self.render_report_template_json()
-    def post(self):
-        if 'file' not in request.files:
-            return NO_FILE_SELECTED
-        self.report_id = request.form.get('report_id')
-        if self.report_id == None or self.report_id == "":
-            return REPORT_ID_EMPTY
-        file = request.files['file']
-        if file and not self.allowed_file(file.filename):
-            return FILE_TYPE_IS_NOT_ALLOWED
-        filename = str(uuid.uuid4()) + "_" + secure_filename(file.filename)
-        file.save(os.path.join(UPLOAD_FOLDER, filename))
-        document = Document({
-            'id': None,
-            'file': filename,
-            'uploaded_by': 1,
-            'time_stamp': str (datetime.datetime.utcnow()),
-            'ip': '1.1.1.1',
-            'comment': "Sample comment by model"
-        })
-        self.load_report_template(filename)
-        return self.render_report_template_json()
+from Helpers.DatabaseHelper import *
+
+class ReportGenerator(object):
+
+    def __init__(self,report_id,reporting_date,business_date_from,business_date_to):
+        self.report_id=report_id
+        self.reporting_date=reporting_date
+        self.bsuniess_date_from=business_date_from
+        self.business_date_to=business_date_to
+
     def load_report_template(self,template_file_name):
         formula_dict = {'SUM': 'CALCULATE_FORMULA',
                         '=SUM': 'CALCULATE_FORMULA',
                         }
         cell_render_ref = None
-        target_dir = UPLOAD_FOLDER + "/"
+        target_dir = './'
         wb = xls.load_workbook(target_dir + template_file_name)
 
         db = DatabaseHelper()
@@ -102,11 +72,74 @@ class DocumentController(Resource):
         db.commit()
         return 0
 
+    def render_report_template(self):
+
+        target_file_name = self.report_id + '_' + self.reporting_date + '.xlsx'
+        wr = xls.Workbook()
+        # target_dir='../output/'
+        target_dir = './'
+
+        db = DatabaseHelper()
+
+        cur = db.query('select distinct sheet_id from report_def where report_id=%s', (self.report_id,))
+        sheets = cur.fetchall()
+
+        # The default sheet of the workbook
+        al = Alignment(horizontal="center", vertical="center", wrap_text=True, shrink_to_fit=True)
+        ws = wr.worksheets[0]
+        for sheet in sheets:
+            # The first sheet title will be Sheet, so do not create any sheet, just rename the title
+            if ws.title == 'Sheet':
+                ws.title = sheet['sheet_id']
+            else:
+                ws = wr.create_sheet(title=sheet["sheet_id"])
+
+            cur = db.query(
+                'select cell_id,cell_render_def,cell_calc_ref from report_def where report_id=%s and sheet_id=%s',
+                (self.report_id, sheet["sheet_id"]))
+            report_template = cur.fetchall()
+
+            for row in report_template:
+                if row['cell_render_def'] == 'MERGED_CELL':
+                    ws.merge_cells(row["cell_id"])
+                    startcell, endcell = row["cell_id"].split(':')
+                    ws[startcell].value = row["cell_calc_ref"]
+                    ws[startcell].value = row["cell_calc_ref"]
+                    ws[startcell].fill = PatternFill("solid", fgColor="DDDDDD")
+                    ws[startcell].font = Font(size=9)
+                    ws[startcell].alignment = al
+                elif row["cell_render_def"] == 'STATIC_TEXT':
+                    ws[row["cell_id"]].value = row["cell_calc_ref"]
+                    ws[row["cell_id"]].fill = PatternFill("solid", fgColor="DDDDDD")
+                    ws[row["cell_id"]].font = Font(size=9)
+                    if row["cell_calc_ref"][:1] != '=' and row["cell_calc_ref"][
+                                                           len(row["cell_calc_ref"]) - 1:1] != '%' and 'SUM' not in row[
+                        "cell_calc_ref"]:
+                        ws[row["cell_id"]].alignment = al
+                elif row["cell_render_def"] == 'CALCULATE_FORMULA':
+                    ws[row["cell_id"]].fill = PatternFill("solid", fgColor="DDDDDD")
+                    ws[row["cell_id"]].font = Font(bold=True, size=9)
+                    if '=' in row["cell_calc_ref"]:
+                        ws[row["cell_id"]].value = row["cell_calc_ref"]
+                    else:
+                        ws[row["cell_id"]].value = '=' + row["cell_calc_ref"]
+                if row["cell_render_def"] == 'ROW_HEIGHT' and row["cell_calc_ref"] != 'None':
+                    # print('row ' + row["cell_id"])
+                    ws.row_dimensions[int(row["cell_id"])].height = float(row["cell_calc_ref"])
+                elif row["cell_render_def"] == 'COLUMN_WIDTH' and row["cell_calc_ref"] != 'None':
+                    # print(row["cell_id"])
+                    ws.column_dimensions[row["cell_id"]].width = float(row["cell_calc_ref"])
+                else:
+                    pass
+
+        wr.save(target_dir + target_file_name)
+        return 0
+
     def render_report_template_json(self):
 
         db = DatabaseHelper()
 
-        cur = db.query("select distinct sheet_id from report_def where report_id='%s' ", (self.report_id,))
+        cur = db.query("select distinct sheet_id from report_def where report_id=%s ", (self.report_id,))
         sheets = cur.fetchall()
         print(sheets)
 
@@ -114,7 +147,7 @@ class DocumentController(Resource):
         for sheet in sheets:
             matrix_list = []
             cur = db.query(
-                "select cell_id,cell_render_def,cell_calc_ref from report_def where report_id='%s' and sheet_id='%s'",
+                'select cell_id,cell_render_def,cell_calc_ref from report_def where report_id=%s and sheet_id=%s',
                 (self.report_id, sheet["sheet_id"]))
             report_template = cur.fetchall()
 
@@ -140,6 +173,18 @@ class DocumentController(Resource):
             sheet_d_list.append(sheet_d)
 
 
-        json_dump = (sheet_d_list)
+        json_dump = json.dumps(sheet_d_list)
         #print(json_dump)
+
         return json_dump
+
+
+if __name__=="__main__":
+
+    report=ReportGenerator('MAS1003','20160930','20160901','20160930')
+
+    #report.load_report_template('Functional_Specification_MAS10032.xlsx')
+
+    #report.render_report_template()
+
+    report.render_report_template_json()
