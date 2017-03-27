@@ -16,10 +16,12 @@ class DatabaseHelper(object):
             self.cursor.execute(queryString,queryParams)
         else:
             self.cursor.execute(queryString)
-        return self.cursor
+        print(self.cursor.statement)
+        return self.cursor        
 
     def transact(self,queryString, queryParams=()):
         self.cursor.execute(queryString, queryParams)
+        print(self.cursor.statement)
         self.commit()
         return self.cursor.lastrowid
 
@@ -28,6 +30,7 @@ class DatabaseHelper(object):
 
     def transactmany(self,queryString,queryParams):
         self.cursor.executemany(queryString,queryParams)
+        print(self.cursor.statement)
         return self.cursor.lastrowid
 
     def __del__(self):

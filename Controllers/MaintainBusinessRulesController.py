@@ -21,10 +21,11 @@ class MaintainBusinessRulesController(Resource):
          res=self.update_business_rules(br, business_rule)
          return res
 
-     def delete(self, business_rule):
-        br=request.get_json(force=True)
-        res=self.delete_business_rules(br)
-        return res
+     def delete(self, business_rule=None):
+         if(business_rule == None):
+             return BUSINESS_RULE_EMPTY
+         res=self.delete_business_rules(business_rule)
+         return res
 
      def render_business_rules_json(self):
         db=DatabaseHelper()
@@ -48,10 +49,10 @@ class MaintainBusinessRulesController(Resource):
         return json_dump
      def render_business_rule_json(self, business_rule):
         db=DatabaseHelper()
-        query = "SELECT * FROM business_rules WHERE business_rule = %s"
+        query = "select * from business_rules where business_rule = %s"
         cur = db.query(query, (business_rule, ))
-        if(cur.rowcount):
-            data = cur.fetchone()
+        data = cur.fetchone()
+        if data :
             return data
         return NO_BUSINESS_RULE_FOUND
 
@@ -66,8 +67,9 @@ class MaintainBusinessRulesController(Resource):
                      br["rule_type"],br["valid_from"],br["valid_to"]))
 
          res=db.transact(sql,params)
-
-         return res
+         if res == 0 :
+             return self.render_business_rule_json(br["business_rule"])
+         return UPDATE_ERROR
 
      def update_business_rules(self,br,business_rule):
          db=DatabaseHelper()
@@ -89,17 +91,14 @@ class MaintainBusinessRulesController(Resource):
                      br["rule_type"],br["valid_from"],br["valid_to"],business_rule, )
 
          res=db.transact(sql,params)
-         print(sql%params)
-         if(res):
+         if(res == 0):
              return self.render_business_rule_json(business_rule)
          return UPDATE_ERROR
-     def delete_business_rules(self,br):
+     def delete_business_rules(self,business_rule):
          db=DatabaseHelper()
          sql="delete from business_rules where business_rule=%s"
-         params=(br["business_rule"],)
-
+         params=(business_rule,)
          res=db.transact(sql,params)
-
          return res
 
      def export_to_csv(self,source_id='ALL'):
