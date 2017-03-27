@@ -24,4 +24,4 @@ api.add_resource(MaintainBusinessRulesController,
     endpoint="business_rule_ep"
 )
 if __name__ == '__main__':
-    app.run(debug=True, port=APIConfig.API['port'])
+    app.run(debug=True,host=0.0.0.0, port=APIConfig.API['port'])
