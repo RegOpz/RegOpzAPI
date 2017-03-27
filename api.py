@@ -16,7 +16,12 @@ api.add_resource(DocumentController,
     apiPath + "/document/<string:doc_id>"
 )
 api.add_resource(MaintainBusinessRulesController,
-    apiPath + "/business-rules"
+    apiPath + "/business-rules",
+    endpoint="business_rules_ep"
+)
+api.add_resource(MaintainBusinessRulesController,
+    apiPath + "/business-rules/<string:business_rule>",
+    endpoint="business_rule_ep"
 )
 if __name__ == '__main__':
     app.run(debug=True, port=APIConfig.API['port'])

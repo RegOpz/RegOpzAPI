@@ -13,7 +13,7 @@ class DatabaseHelper(object):
 
     def query(self,queryString, queryParams=None):
         if queryParams != None:
-            self.cursor.execute(queryString%queryParams)
+            self.cursor.execute(queryString,queryParams)
         else:
             self.cursor.execute(queryString)
         return self.cursor

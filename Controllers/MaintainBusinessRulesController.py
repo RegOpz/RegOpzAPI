@@ -1,9 +1,12 @@
 from flask import Flask, jsonify, request
 from flask_restful import Resource
-from Report_API.RegOpzAPI2.RegOpzAPI.Helpers.DatabaseHelper import DatabaseHelper
+from Helpers.DatabaseHelper import DatabaseHelper
 import csv
+from Constants.Status import *
 class MaintainBusinessRulesController(Resource):
-     def get(self):
+     def get(self, business_rule=None):
+        if business_rule :
+             return self.render_business_rule_json(business_rule)
         return self.render_business_rules_json()
 
      def post(self):
@@ -11,12 +14,14 @@ class MaintainBusinessRulesController(Resource):
          res=self.insert_business_rules(br)
          return res
 
-     def put(self):
+     def put(self, business_rule=None):
+         if(business_rule == None):
+             return BUSINESS_RULE_EMPTY
          br=request.get_json(force=True)
-         res=self.update_business_rules(br)
+         res=self.update_business_rules(br, business_rule)
          return res
 
-     def delete(self):
+     def delete(self, business_rule):
         br=request.get_json(force=True)
         res=self.delete_business_rules(br)
         return res
@@ -40,9 +45,15 @@ class MaintainBusinessRulesController(Resource):
 
         json_dump=(business_rules_dict)
 
-        # print(json_dump)
-
         return json_dump
+     def render_business_rule_json(self, business_rule):
+        db=DatabaseHelper()
+        query = "SELECT * FROM business_rules WHERE business_rule = %s"
+        cur = db.query(query, (business_rule, ))
+        if(cur.rowcount):
+            data = cur.fetchone()
+            return data
+        return NO_BUSINESS_RULE_FOUND
 
      def insert_business_rules(self,br):
          db=DatabaseHelper()
@@ -58,7 +69,7 @@ class MaintainBusinessRulesController(Resource):
 
          return res
 
-     def update_business_rules(self,br):
+     def update_business_rules(self,br,business_rule):
          db=DatabaseHelper()
          sql="Update business_rules set " \
              "rule_execution_order=%s, \
@@ -73,14 +84,15 @@ class MaintainBusinessRulesController(Resource):
              valid_from=%s,\
              valid_to=%s where business_rule=%s"
 
-         params=tuple((br["rule_execution_order"],br["business_rule"],br["source_id"],br["rule_description"], \
+         params=(br["rule_execution_order"],br["business_rule"],br["source_id"],br["rule_description"], \
                      br["logical_condition"],br["data_fields_list"],br["python_implementation"],br["business_or_validation"], \
-                     br["rule_type"],br["valid_from"],br["valid_to"],br["business_rule"]))
+                     br["rule_type"],br["valid_from"],br["valid_to"],business_rule, )
 
          res=db.transact(sql,params)
-
-         return res
-
+         print(sql%params)
+         if(res):
+             return self.render_business_rule_json(business_rule)
+         return UPDATE_ERROR
      def delete_business_rules(self,br):
          db=DatabaseHelper()
          sql="delete from business_rules where business_rule=%s"
@@ -108,6 +120,3 @@ class MaintainBusinessRulesController(Resource):
              dict_writer=csv.DictWriter(output_file,keys)
              dict_writer.writeheader()
              dict_writer.writerows(business_rules)
-
-
-
