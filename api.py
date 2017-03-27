@@ -4,6 +4,7 @@ from Helpers.DatabaseHelper import *
 from Configs import APIConfig
 from Controllers.Info import Info
 from Controllers.DocumentController import DocumentController
+from Controllers.MaintainBusinessRulesController import MaintainBusinessRulesController
 from flask_cors import CORS, cross_origin
 app = Flask(__name__)
 CORS(app)
@@ -13,6 +14,14 @@ api.add_resource(Info, apiPath + "/info")
 api.add_resource(DocumentController,
     apiPath + "/document",
     apiPath + "/document/<string:doc_id>"
+)
+api.add_resource(MaintainBusinessRulesController,
+    apiPath + "/business-rules",
+    endpoint="business_rules_ep"
+)
+api.add_resource(MaintainBusinessRulesController,
+    apiPath + "/business-rules/<string:business_rule>",
+    endpoint="business_rule_ep"
 )
 if __name__ == '__main__':
     app.run(debug=True, port=APIConfig.API['port'])
