@@ -1,5 +1,7 @@
 from Helpers.DatabaseHelper import DatabaseHelper
 from flask import url_for
+from Models.Token import Token
+from Constants.Status import *
 class RegOpzUser(object):
     def __init__(self, user=None):
         if user:
@@ -12,7 +14,7 @@ class RegOpzUser(object):
             self.email = user['email']
             self.ip = user['ip']
             self.image = None
-        # 5201json = {"name":"admin","first_name":"admin","last_name":"admin","password":"admin","contact_number":"8420403988","email":"admin@admin.com","ip":"1.1.1.1"}
+            #5201json = {"name":"admin","first_name":"admin","last_name":"admin","password":"admin","contact_number":"8420403988","email":"admin@admin.com","ip":"1.1.1.1"}
     def save(self):
         queryString = \
             'INSERT INTO RegOpzUser (name,password,first_name,last_name,contact_number,email,ip,image) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)'
@@ -61,8 +63,8 @@ class RegOpzUser(object):
         cur = dbhelper.query(queryString, (username,password, ))
         data = cur.fetchone()        
         if data:
-            return 1
-        return 0
+            return Token().create(data['id'])
+        return {"msg": "Login failed"},403
 
 
 

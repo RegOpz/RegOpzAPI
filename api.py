@@ -24,5 +24,9 @@ api.add_resource(UserController,
     apiPath + "/user/<string:userId>",
     endpoint="user_ep"
 )
+api.add_resource(UserController,
+    apiPath + "/user/login",
+    endpoint="user_login_ep"
+)
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=APIConfig.API['port'])
