@@ -1,9 +1,11 @@
 from flask import Flask, jsonify, request
 from flask_restful import Resource
 from Helpers.DatabaseHelper import DatabaseHelper
+from Helpers.authenticate import *
 import csv
 from Constants.Status import *
 class MaintainBusinessRulesController(Resource):
+     @authenticate
      def get(self, business_rule=None):
         if business_rule :
              return self.render_business_rule_json(business_rule)
