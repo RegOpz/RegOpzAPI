@@ -3,6 +3,12 @@ from Controllers.DocumentController import DocumentController
 from Controllers.MaintainBusinessRulesController import MaintainBusinessRulesController
 from Controllers.UserController import UserController
 from app import *
+from Controllers.ResourceController import ResourceController
+from flask_cors import CORS, cross_origin
+app = Flask(__name__)
+CORS(app)
+api = Api(app)
+apiPath = APIConfig.APIPATH
 api.add_resource(Info, apiPath + "/info")
 api.add_resource(DocumentController,
     apiPath + "/document",
@@ -27,6 +33,12 @@ api.add_resource(UserController,
 api.add_resource(UserController,
     apiPath + "/user/login",
     endpoint="user_login_ep"
+)
+
+api.add_resource(ResourceController,
+    apiPath+"/resource",
+    apiPath + "/resource/<int:id>",
+    endpoint="resource_ep"
 )
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=APIConfig.API['port'])
