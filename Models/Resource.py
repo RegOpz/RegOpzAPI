@@ -15,7 +15,7 @@ class Resource(object):
         queryString = "INSERT INTO resource(id, name) VALUES (%s, %s)"
 
         rowid = dbhelper.transact(queryString, values)
-        self.get(rowid)
+        return self.get(rowid)
 
     def get(self,id=None):
         dbhelper=DatabaseHelper()
@@ -25,11 +25,12 @@ class Resource(object):
             queryString="select * from resource where id=%s"
 
             resources=dbhelper.query(queryString,queryParams)
+            resource = resources.fetchone()
 
-            if resources.rowcount:
-                role=resources.fetchone()
-                self.id=resources['id']
-                self.name=resources['name']
+            if resource:
+                resource=resources.fetchone()
+                self.id=resource['id']
+                self.name=resource['name']
                 return self.__dict__
             return None
         else:
