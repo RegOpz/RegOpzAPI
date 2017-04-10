@@ -4,10 +4,8 @@ from Controllers.MaintainBusinessRulesController import MaintainBusinessRulesCon
 from Controllers.UserController import UserController
 from app import *
 from Controllers.ResourceController import ResourceController
-<<<<<<< e7d43ffcef1c37d09ae60ab41c0f18a23c4985d5
 from Controllers.RoleController import RoleController
-=======
->>>>>>> Added Model and Controller for resource
+from Controllers.RoleController import RoleController
 from flask_cors import CORS, cross_origin
 app = Flask(__name__)
 CORS(app)
