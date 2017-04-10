@@ -2,7 +2,6 @@ from Helpers.DatabaseHelper import DatabaseHelper
 from flask_restful import Resource,request
 import Models.Resource as rsc
 from Constants.Status import *
-
 class ResourceController(Resource):
 
     def get(self,id=None):
