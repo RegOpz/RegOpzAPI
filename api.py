@@ -20,7 +20,7 @@ api.add_resource(MaintainBusinessRulesController,
     endpoint="business_rules_ep"
 )
 api.add_resource(MaintainBusinessRulesController,
-    apiPath + "/business-rules/<string:business_rule>",
+    apiPath + "/business-rules/<string:id>",
     endpoint="business_rule_ep"
 )
 if __name__ == '__main__':
