@@ -6,7 +6,6 @@ from Constants.Status import *
 
 
 class MaintainBusinessRulesController(Resource):
-<<<<<<< 420f1a37af5b3c3a8bdd87ca63468634ca44d47e
      def get(self, id=None):
         if id :
              return self.render_business_rule_json(id)
@@ -178,4 +177,3 @@ class MaintainBusinessRulesController(Resource):
                  result_set.append(data)
 
          return result_set
-
