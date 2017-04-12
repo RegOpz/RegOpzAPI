@@ -60,6 +60,14 @@ class MaintainBusinessRulesController(Resource):
 		if data:
 			return data
 		return NO_BUSINESS_RULE_FOUND
+	def render_business_rule_json_by_id(self, id):
+		db = DatabaseHelper()
+		query = 'select * from business_rules where id = %s'
+		cur = db.query(query, (id, ))
+		data = cur.fetchone()
+		if data:
+			return data
+		return NO_BUSINESS_RULE_FOUND
 
 	def insert_business_rules(self, br):
 		db = DatabaseHelper()
@@ -99,7 +107,7 @@ class MaintainBusinessRulesController(Resource):
 
 		res = db.transact(sql, params)
 		if res:
-			return {"id":res}
+			return self.render_business_rule_json_by_id(res)
 		return UPDATE_ERROR
 
 	def update_business_rules(self, br, id):
