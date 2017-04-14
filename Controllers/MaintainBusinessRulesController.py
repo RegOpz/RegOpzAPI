@@ -127,7 +127,6 @@ class MaintainBusinessRulesController(Resource):
          business_rules=cur.fetchall()
          #keys=business_rules[0].keys()
          keys=[i[0] for i in cur.description]
-
          with open("business_rules.csv","wt") as output_file:
              dict_writer=csv.DictWriter(output_file,keys)
              dict_writer.writeheader()
