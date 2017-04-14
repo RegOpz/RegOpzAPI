@@ -7,10 +7,10 @@ from Constants.Status import *
 
 class MaintainBusinessRulesController(Resource):
 
-	def get(self, business_rule=None):
+	def get(self, business_rule=None, page=0):
 		if business_rule:
 			return self.render_business_rule_json(business_rule)
-		return self.render_business_rules_json()
+		return self.render_business_rules_json(page)
 
 	def post(self):
 		br = request.get_json(force=True)			
@@ -30,26 +30,23 @@ class MaintainBusinessRulesController(Resource):
 		res = self.delete_business_rules(business_rule)
 		return res
 
-	def render_business_rules_json(self):
+	def render_business_rules_json(self, page):
 		db = DatabaseHelper()
-
+		startPage =  int(page)*100
 		business_rules_dict = {}
 		business_rules_list = []
-		cur = db.query('select * from business_rules')
+		cur = db.query('select * from business_rules limit ' + str(startPage) + ', 100')
 		business_rules = cur.fetchall()
 
 		cols = [i[0] for i in cur.description]
-		business_rules_dict['cols'] = cols
-
-		# print(business_rules_dict)
+		business_rules_dict['cols'] = cols	
 
 		for br in business_rules:
 			business_rules_list.append(br)
-
 		business_rules_dict['rows'] = business_rules_list
-
+		count = db.query('select count(*) as count from business_rules').fetchone()
+		business_rules_dict['count'] = count['count']
 		json_dump = business_rules_dict
-
 		return json_dump
 
 	def render_business_rule_json(self, business_rule):

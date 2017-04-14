@@ -16,7 +16,7 @@ api.add_resource(DocumentController,
     apiPath + "/document/<string:doc_id>"
 )
 api.add_resource(MaintainBusinessRulesController,
-    apiPath + "/business-rules",
+    apiPath + "/business-rules/<string:page>",
     endpoint="business_rules_ep"
 )
 api.add_resource(MaintainBusinessRulesController,
