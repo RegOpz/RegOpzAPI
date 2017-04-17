@@ -12,7 +12,7 @@ class MaintainBusinessRulesController(Resource):
 			return self.render_business_rule_json(business_rule)
 		return self.render_business_rules_json(page)
 
-	def post(self):
+	def post(self,page=None):
 		br = request.get_json(force=True)			
 		res = self.insert_business_rules(br)
 		return res
@@ -24,10 +24,10 @@ class MaintainBusinessRulesController(Resource):
 		res = self.update_business_rules(br, id)
 		return res
 
-	def delete(self, business_rule=None):
-		if business_rule == None:
+	def delete(self, id=None):
+		if id == None:
 			return BUSINESS_RULE_EMPTY
-		res = self.delete_business_rules(business_rule)
+		res = self.delete_business_rules(id)
 		return res
 
 	def render_business_rules_json(self, page):
@@ -132,10 +132,10 @@ class MaintainBusinessRulesController(Resource):
 			return {"id":res}
 		return UPDATE_ERROR
 
-	def delete_business_rules(self, business_rule):
+	def delete_business_rules(self, id):
 		db = DatabaseHelper()
-		sql = 'delete from business_rules where business_rule=%s'
-		params = (business_rule, )
+		sql = 'delete from business_rules where id=%s'
+		params = (id, )
 		res = db.transact(sql, params)
 		return res
 
