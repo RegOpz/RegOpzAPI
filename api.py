@@ -21,7 +21,7 @@ api.add_resource(MaintainBusinessRulesController,
     endpoint="business_rules_ep"
 )
 api.add_resource(MaintainBusinessRulesController,
-    apiPath + "/business-rules/<string:id>",
+    apiPath + "/business-rule/<string:id>",
     endpoint="business_rule_ep"
 )
 <<<<<<< HEAD
