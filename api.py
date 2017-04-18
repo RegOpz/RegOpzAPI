@@ -20,6 +20,10 @@ api.add_resource(MaintainBusinessRulesController,
     endpoint="business_rules_ep"
 )
 api.add_resource(MaintainBusinessRulesController,
+    apiPath + "/business-rules/<string:page>/orderby/<string:col_name>",
+    endpoint="business_rules_ep_ordered"
+)
+api.add_resource(MaintainBusinessRulesController,
     apiPath + "/business-rule/<string:id>",
     endpoint="business_rule_ep"
 )

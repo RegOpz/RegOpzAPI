@@ -7,10 +7,14 @@ from Constants.Status import *
 
 class MaintainBusinessRulesController(Resource):
 
-	def get(self, business_rule=None, page=0):
-		if business_rule:
-			return self.render_business_rule_json(business_rule)
-		return self.render_business_rules_json(page)
+	def get(self, id=None, page=0, col_name=None):		
+		if id:
+			return self.render_business_rule_json(id)
+		elif page and col_name == None:
+			return self.render_business_rules_json(page)
+		elif col_name:
+			direction = request.args.get('direction')			
+			return self.render_business_rules_json(page, (col_name,direction))
 
 	def post(self,page=None):
 		br = request.get_json(force=True)			
@@ -30,14 +34,16 @@ class MaintainBusinessRulesController(Resource):
 		res = self.delete_business_rules(id)
 		return res
 
-	def render_business_rules_json(self, page):
+	def render_business_rules_json(self, page, order=None):
 		db = DatabaseHelper()
 		startPage =  int(page)*100
 		business_rules_dict = {}
-		business_rules_list = []
-		cur = db.query('select * from business_rules limit ' + str(startPage) + ', 100')
+		business_rules_list = []		
+		if order:			
+			cur = db.query('select * from business_rules ' + 'order by ' + order[0] + ' ' + order[1] + ' limit ' + str(startPage) + ', 100')
+		else:
+			cur = db.query('select * from business_rules limit ' + str(startPage) + ', 100')
 		business_rules = cur.fetchall()
-
 		cols = [i[0] for i in cur.description]
 		business_rules_dict['cols'] = cols	
 
@@ -49,10 +55,10 @@ class MaintainBusinessRulesController(Resource):
 		json_dump = business_rules_dict
 		return json_dump
 
-	def render_business_rule_json(self, business_rule):
+	def render_business_rule_json(self, id):
 		db = DatabaseHelper()
-		query = 'select * from business_rules where business_rule = %s'
-		cur = db.query(query, (business_rule, ))
+		query = 'select * from business_rules where id = %s'
+		cur = db.query(query, (id, ))
 		data = cur.fetchone()
 		if data:
 			return data
