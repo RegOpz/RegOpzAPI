@@ -1,16 +1,19 @@
 from flask import Flask, jsonify, request
 from flask_restful import Resource
-from RegOpzAPI.Helpers.DatabaseHelper import DatabaseHelper
+from Helpers.DatabaseHelper import DatabaseHelper
 import csv
 from Constants.Status import *
 
 
 class MaintainBusinessRulesController(Resource):
 
-	def get(self, business_rule=None, page=0):
-		if business_rule:
-			return self.render_business_rule_json(business_rule)
-		return self.render_business_rules_json(page)
+	def get(self, id=None, page=0, business_rule=None):
+		if request.endpoint == "business_rule_linkage_ep":
+			return self.list_reports_for_rule(business_rule=business_rule)
+		if id:
+			return self.render_business_rule_json(id)
+		elif page:
+			return self.render_business_rules_json(page)
 
 	def post(self,page=None):
 		br = request.get_json(force=True)			
@@ -49,10 +52,10 @@ class MaintainBusinessRulesController(Resource):
 		json_dump = business_rules_dict
 		return json_dump
 
-	def render_business_rule_json(self, business_rule):
+	def render_business_rule_json(self, id):
 		db = DatabaseHelper()
-		query = 'select * from business_rules where business_rule = %s'
-		cur = db.query(query, (business_rule, ))
+		query = 'select * from business_rules where id = %s'
+		cur = db.query(query, (id, ))
 		data = cur.fetchone()
 		if data:
 			return data
@@ -159,3 +162,20 @@ class MaintainBusinessRulesController(Resource):
 			dict_writer = csv.DictWriter(output_file, keys)
 			dict_writer.writeheader()
 			dict_writer.writerows(business_rules)
+	def list_reports_for_rule(self,**kwargs):
+
+		parameter_list = ['business_rule']
+
+		if set(parameter_list).issubset(set(kwargs.keys())):
+			business_rule = kwargs['business_rule']
+
+		else:
+			return BUSINESS_RULE_EMPTY
+
+		db = DatabaseHelper()
+		sql = "select distinct report_id,sheet_id,cell_id from report_calc_def \
+		where cell_business_rules like '%" + business_rule + "%'"
+		cur=db.query(sql)
+		report_list = cur.fetchall()
+
+		return [(rpt['report_id'], rpt['sheet_id'], rpt['cell_id']) for rpt in report_list]
