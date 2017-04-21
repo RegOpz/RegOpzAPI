@@ -17,14 +17,21 @@ api.add_resource(DocumentController,
     apiPath + "/document/<string:doc_id>"
 )
 api.add_resource(MaintainBusinessRulesController,
-    apiPath + "/business-rules",
+    apiPath + "/business-rules/<string:page>",
     endpoint="business_rules_ep"
 )
 api.add_resource(MaintainBusinessRulesController,
-    apiPath + "/business-rules/<string:id>",
+    apiPath + "/business-rules/<string:page>/orderby/<string:col_name>",
+    endpoint="business_rules_ep_ordered"
+)
+api.add_resource(MaintainBusinessRulesController,
+    apiPath + "/business-rule/<string:id>",
     endpoint="business_rule_ep"
 )
-<<<<<<< HEAD
+api.add_resource(MaintainBusinessRulesController,
+    apiPath + "/business-rule/linkage/<string:business_rule>",
+    endpoint="business_rule_linkage_ep"
+)
 api.add_resource(UserController,
     apiPath + "/users",
     endpoint="users_ep"
@@ -37,27 +44,16 @@ api.add_resource(UserController,
     apiPath + "/user/login",
     endpoint="user_login_ep"
 )
-=======
-
->>>>>>> f538c731bea870961432172a3c1ae8221ab84a88
 api.add_resource(ResourceController,
     apiPath+"/resource",
     apiPath + "/resource/<int:id>",
     endpoint="resource_ep"
 )
-<<<<<<< HEAD
-=======
-
->>>>>>> f538c731bea870961432172a3c1ae8221ab84a88
 api.add_resource(RoleController,
     apiPath+"/role",
     apiPath + "/role/<int:id>",
     endpoint="role_ep"
 )
-<<<<<<< HEAD
-=======
-
->>>>>>> f538c731bea870961432172a3c1ae8221ab84a88
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=APIConfig.API['port'])
 #hello
