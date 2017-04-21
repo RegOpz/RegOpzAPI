@@ -6,16 +6,16 @@ from Constants.Status import *
 
 
 class MaintainBusinessRulesController(Resource):
-
-	def get(self, id=None, page=0, col_name=None):		
+	def get(self, id=None, page=0, col_name=None,business_rule=None):
+		if request.endpoint == "business_rule_linkage_ep":
+			return self.list_reports_for_rule(business_rule=business_rule)		
 		if id:
 			return self.render_business_rule_json(id)
 		elif page and col_name == None:
 			return self.render_business_rules_json(page)
 		elif col_name:
 			direction = request.args.get('direction')			
-			return self.render_business_rules_json(page, (col_name,direction))
-
+			return self.render_business_rules_json(page, (col_name,direction))	
 	def post(self,page=None):
 		br = request.get_json(force=True)			
 		res = self.insert_business_rules(br)
@@ -33,8 +33,7 @@ class MaintainBusinessRulesController(Resource):
 			return BUSINESS_RULE_EMPTY
 		res = self.delete_business_rules(id)
 		return res
-
-	def render_business_rules_json(self, page, order=None):
+	def render_business_rules_json(self, page=0, order=None):
 		db = DatabaseHelper()
 		startPage =  int(page)*100
 		business_rules_dict = {}
@@ -165,7 +164,21 @@ class MaintainBusinessRulesController(Resource):
 			dict_writer = csv.DictWriter(output_file, keys)
 			dict_writer.writeheader()
 			dict_writer.writerows(business_rules)
+	def list_reports_for_rule(self,**kwargs):
 
+		parameter_list = ['business_rule']
 
+		if set(parameter_list).issubset(set(kwargs.keys())):
+			business_rule = kwargs['business_rule']
 
-			
+		else:
+			return BUSINESS_RULE_EMPTY
+
+		db = DatabaseHelper()
+		sql = "select distinct report_id,sheet_id,cell_id from report_calc_def \
+		where cell_business_rules like '%" + business_rule + "%'"
+		cur=db.query(sql)
+		report_list = cur.fetchall()
+
+		return [(rpt['report_id'], rpt['sheet_id'], rpt['cell_id']) for rpt in report_list]
+

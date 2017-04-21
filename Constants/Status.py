@@ -6,3 +6,7 @@ BUSINESS_RULE_EMPTY = {"msg":"Business rule is empty"}, 400
 DATABASE_ERROR = {"msg":"Database error occured"}, 400
 UPDATE_ERROR = {"msg":"No records updated"}, 400
 NO_BUSINESS_RULE_FOUND = {"msg":"No Business Rule found"}, 404
+INVALID_JSON = {"msg":"Invalid JSON data"}, 400
+NO_USER_FOUND = {"msg":"No User found"}, 404
+RESOURCE_EMPTY = {"msg":"Resource id is empty"}, 400
+ROLE_EMPTY = {"msg":"Role id is empty"}, 400

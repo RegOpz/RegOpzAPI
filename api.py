@@ -1,10 +1,11 @@
-from flask import Flask
-from flask_restful import Resource, Api
-from Helpers.DatabaseHelper import *
-from Configs import APIConfig
 from Controllers.Info import Info
 from Controllers.DocumentController import DocumentController
 from Controllers.MaintainBusinessRulesController import MaintainBusinessRulesController
+from Controllers.UserController import UserController
+from app import *
+from Controllers.ResourceController import ResourceController
+from Controllers.RoleController import RoleController
+from Controllers.RoleController import RoleController
 from flask_cors import CORS, cross_origin
 app = Flask(__name__)
 CORS(app)
@@ -27,5 +28,32 @@ api.add_resource(MaintainBusinessRulesController,
     apiPath + "/business-rule/<string:id>",
     endpoint="business_rule_ep"
 )
+api.add_resource(MaintainBusinessRulesController,
+    apiPath + "/business-rule/linkage/<string:business_rule>",
+    endpoint="business_rule_linkage_ep"
+)
+api.add_resource(UserController,
+    apiPath + "/users",
+    endpoint="users_ep"
+)
+api.add_resource(UserController,
+    apiPath + "/user/<string:userId>",
+    endpoint="user_ep"
+)
+api.add_resource(UserController,
+    apiPath + "/user/login",
+    endpoint="user_login_ep"
+)
+api.add_resource(ResourceController,
+    apiPath+"/resource",
+    apiPath + "/resource/<int:id>",
+    endpoint="resource_ep"
+)
+api.add_resource(RoleController,
+    apiPath+"/role",
+    apiPath + "/role/<int:id>",
+    endpoint="role_ep"
+)
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=APIConfig.API['port'])
+#hello
