@@ -17,6 +17,9 @@ class MaintainBusinessRulesController(Resource):
 			direction = request.args.get('direction')			
 			return self.render_business_rules_json(page, (col_name,direction))	
 	def post(self,page=None):
+		if request.endpoint == "business_rules_ep_filtered":
+			filter_conditions = request.get_json(force=True)
+			return self.get_business_rules_filtered(filter_conditions)			
 		br = request.get_json(force=True)			
 		res = self.insert_business_rules(br)
 		return res
@@ -53,7 +56,17 @@ class MaintainBusinessRulesController(Resource):
 		business_rules_dict['count'] = count['count']
 		json_dump = business_rules_dict
 		return json_dump
-
+	def get_business_rules_filtered(self,filter_conditions):
+		filter_string = ""
+		for filter_condition in filter_conditions:						
+			filter_string = filter_string + " AND " + filter_condition['field_name'] + "='" + filter_condition['value'] + "'"
+		db = DatabaseHelper()
+		query = 'select * from business_rules where 1' + filter_string
+		cur = db.query(query)
+		data = cur.fetchall()
+		if data:
+			return data
+		return NO_BUSINESS_RULE_FOUND		
 	def render_business_rule_json(self, id):
 		db = DatabaseHelper()
 		query = 'select * from business_rules where id = %s'
