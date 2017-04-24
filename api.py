@@ -36,6 +36,12 @@ api.add_resource(MaintainBusinessRulesController,
     apiPath + "/business-rule/linkage/<string:business_rule>",
     endpoint="business_rule_linkage_ep"
 )
+
+api.add_resource(MaintainBusinessRulesController,
+    apiPath + "/business-rule/linkage-multiple",
+    endpoint="business_rule_linkage_multiple_ep"
+)
+
 api.add_resource(UserController,
     apiPath + "/users",
     endpoint="users_ep"

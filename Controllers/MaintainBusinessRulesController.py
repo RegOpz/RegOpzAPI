@@ -17,6 +17,12 @@ class MaintainBusinessRulesController(Resource):
 			direction = request.args.get('direction')			
 			return self.render_business_rules_json(page, (col_name,direction))	
 	def post(self,page=None):
+
+		if request.endpoint == "business_rule_linkage_multiple_ep":
+			params=request.get_json(force=True)
+			print(params)
+			return self.list_reports_for_rule_list(source_id=params['source_id'],business_rule_list=params['business_rule_list'])
+
 		if request.endpoint == "business_rules_ep_filtered":
 			filter_conditions = request.get_json(force=True)
 			return self.get_business_rules_filtered(filter_conditions)			
@@ -189,9 +195,38 @@ class MaintainBusinessRulesController(Resource):
 
 		db = DatabaseHelper()
 		sql = "select distinct report_id,sheet_id,cell_id from report_calc_def \
-		where cell_business_rules like '%" + business_rule + "%'"
+		where cell_business_rules like '%," + business_rule + ",%'"
 		cur=db.query(sql)
 		report_list = cur.fetchall()
 
 		return [(rpt['report_id'], rpt['sheet_id'], rpt['cell_id']) for rpt in report_list]
+
+	def list_reports_for_rule_list(self,**kwargs):
+
+		parameter_list = ['source_id', 'business_rule_list']
+
+		if set(parameter_list).issubset(set(kwargs.keys())):
+			source_id = kwargs['source_id']
+			business_rule_list = kwargs['business_rule_list']
+
+		else:
+			return BUSINESS_RULE_EMPTY
+
+		db=DatabaseHelper()
+
+		sql = "select report_id,sheet_id,cell_id,cell_business_rules from report_calc_def where source_id=" + str(
+			source_id)
+		cur=db.query(sql)
+		data_list = cur.fetchall()
+
+		result_set = []
+		for data in data_list:
+			# print(data['cell_business_rules'])
+			cell_rule_list = data['cell_business_rules'].split(',')
+			# print(type(cell_rule_list))
+			if set(business_rule_list).issubset(set(cell_rule_list)):
+				# print(data)
+				result_set.append(data)
+
+		return result_set
 
