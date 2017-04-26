@@ -1,8 +1,8 @@
 DATABASE = {
     'host': 'localhost',
-    'user': 'joerubiks',
-    'password': '0pt0p1234#',
-    'db': 'report_db',
+    'user': 'root',
+    'password': 'harry123',
+    'db': 'RegOpz',
     'type': 'mysql',
     'port':"3306"
 };

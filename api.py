@@ -41,7 +41,10 @@ api.add_resource(MaintainBusinessRulesController,
     apiPath + "/business-rule/linkage-multiple",
     endpoint="business_rule_linkage_multiple_ep"
 )
-
+api.add_resource(MaintainBusinessRulesController,
+    apiPath + "/business-rule/export_to_csv",
+    endpoint="business_rule_export_to_csv_ep"
+)
 api.add_resource(UserController,
     apiPath + "/users",
     endpoint="users_ep"

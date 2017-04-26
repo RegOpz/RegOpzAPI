@@ -7,15 +7,18 @@ from Constants.Status import *
 
 class MaintainBusinessRulesController(Resource):
 	def get(self, id=None, page=0, col_name=None,business_rule=None):
+		if request.endpoint == "business_rule_export_to_csv_ep":
+			self.export_to_csv()
+			return {"msg":"CSV export finsihed"}
 		if request.endpoint == "business_rule_linkage_ep":
-			return self.list_reports_for_rule(business_rule=business_rule)		
+			return self.list_reports_for_rule(business_rule=business_rule)
 		if id:
 			return self.render_business_rule_json(id)
 		elif page and col_name == None:
 			return self.render_business_rules_json(page)
 		elif col_name:
-			direction = request.args.get('direction')			
-			return self.render_business_rules_json(page, (col_name,direction))	
+			direction = request.args.get('direction')
+			return self.render_business_rules_json(page, (col_name,direction))
 	def post(self,page=None):
 
 		if request.endpoint == "business_rule_linkage_multiple_ep":
@@ -25,8 +28,8 @@ class MaintainBusinessRulesController(Resource):
 
 		if request.endpoint == "business_rules_ep_filtered":
 			filter_conditions = request.get_json(force=True)
-			return self.get_business_rules_filtered(filter_conditions)			
-		br = request.get_json(force=True)			
+			return self.get_business_rules_filtered(filter_conditions)
+		br = request.get_json(force=True)
 		res = self.insert_business_rules(br)
 		return res
 
@@ -46,14 +49,14 @@ class MaintainBusinessRulesController(Resource):
 		db = DatabaseHelper()
 		startPage =  int(page)*100
 		business_rules_dict = {}
-		business_rules_list = []		
-		if order:			
+		business_rules_list = []
+		if order:
 			cur = db.query('select * from business_rules ' + 'order by ' + order[0] + ' ' + order[1] + ' limit ' + str(startPage) + ', 100')
 		else:
 			cur = db.query('select * from business_rules limit ' + str(startPage) + ', 100')
 		business_rules = cur.fetchall()
 		cols = [i[0] for i in cur.description]
-		business_rules_dict['cols'] = cols	
+		business_rules_dict['cols'] = cols
 
 		for br in business_rules:
 			business_rules_list.append(br)
@@ -64,7 +67,7 @@ class MaintainBusinessRulesController(Resource):
 		return json_dump
 	def get_business_rules_filtered(self,filter_conditions):
 		filter_string = ""
-		for filter_condition in filter_conditions:						
+		for filter_condition in filter_conditions:
 			filter_string = filter_string + " AND " + filter_condition['field_name'] + "='" + filter_condition['value'] + "'"
 		db = DatabaseHelper()
 		query = 'select * from business_rules where 1' + filter_string
@@ -72,7 +75,7 @@ class MaintainBusinessRulesController(Resource):
 		data = cur.fetchall()
 		if data:
 			return data
-		return NO_BUSINESS_RULE_FOUND		
+		return NO_BUSINESS_RULE_FOUND
 	def render_business_rule_json(self, id):
 		db = DatabaseHelper()
 		query = 'select * from business_rules where id = %s'
@@ -179,7 +182,7 @@ class MaintainBusinessRulesController(Resource):
 
 		keys = [i[0] for i in cur.description]
 
-		with open('business_rules.csv', 'wt') as output_file:
+		with open('./static/business_rules.csv', 'wt') as output_file:
 			dict_writer = csv.DictWriter(output_file, keys)
 			dict_writer.writeheader()
 			dict_writer.writerows(business_rules)
@@ -229,4 +232,3 @@ class MaintainBusinessRulesController(Resource):
 				result_set.append(data)
 
 		return result_set
-
