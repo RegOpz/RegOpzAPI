@@ -2,6 +2,7 @@ from Controllers.Info import Info
 from Controllers.DocumentController import DocumentController
 from Controllers.MaintainBusinessRulesController import MaintainBusinessRulesController
 from Controllers.UserController import UserController
+from Controllers.ViewDataController import ViewDataController
 from app import *
 from Controllers.ResourceController import ResourceController
 from Controllers.RoleController import RoleController
@@ -67,6 +68,11 @@ api.add_resource(RoleController,
     apiPath + "/role/<int:id>",
     endpoint="role_ep"
 )
+api.add_resource(ViewDataController,
+    apiPath+"/view-data",
+    endpoint="view_data_ep"
+)
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=APIConfig.API['port'])
 #hello

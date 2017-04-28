@@ -5,7 +5,7 @@ import time
 from multiprocessing import Pool
 from functools import partial
 import csv
-import utils as util
+import Helpers.utils as util
 from openpyxl.styles import Border, Side, PatternFill, Font, GradientFill, Alignment, Protection
 from openpyxl.utils import get_column_letter
 from collections import defaultdict
@@ -15,10 +15,12 @@ import mysql.connector as mysql
 import pandas as pd
 from Helpers.DatabaseHelper import DatabaseHelper
 from operator import itemgetter
-
-
-class ViewData(Resource):
-    def getDataSource(**kwargs):
+from datetime import datetime
+class ViewDataController(Resource):
+    def get(self):
+        return self.render_data_load_dates()
+        #return self.getDataSource(source_id=1,business_date='20160930',page=100)
+    def getDataSource(self,**kwargs):
         parameter_list = ['source_id', 'business_date', 'page']
 
         if set(parameter_list).issubset(set(kwargs.keys())):
@@ -27,9 +29,7 @@ class ViewData(Resource):
             page = kwargs['page']
         else:
             print("Please supply parameters: " + str(parameter_list))
-
         db = DatabaseHelper()
-
         cur = db.query(
             "select source_table_name from data_source_information where source_id='" + str(source_id) + "'")
         table = cur.fetchone()
@@ -49,35 +49,48 @@ class ViewData(Resource):
         # print(data_dict)
         return data_dict
 
-    def render_data_load_dates():
+    def render_data_load_dates(self):
+        month_lookup={ '1': 'January',
+                       '2':'February',
+                       '3':'March',
+                       '4':'April',
+                       '5':'May',
+                       '6':'June',
+                       '7':'July',
+                       '8':'August',
+                       '9':'Sepember',
+                       '10':'October',
+                       '11':'November',
+                       '12':'December'
+                       }
         db = DatabaseHelper()
 
-        catalog = db.query(
-            "select distinct business_date from data_catalog order by business_date").fetchall()
+        catalog=db.query("select distinct business_date from data_catalog order by business_date").fetchall()
 
-        catalog_list = []
+        catalog_list=[]
 
         for cat in catalog:
-            year = cat['business_date'][:4]
-            month = cat['business_date'][4:6]
-            bus_date = cat['business_date']
+            year=str(cat['business_date'].year)
+            month_num=str(cat['business_date'].month)
+            bus_date=str(cat['business_date'].day)
+            month=month_lookup[month_num]
 
-            # print(year,month,bus_date)
-            # print(list(map(itemgetter('year'),catalog_list)))
+            #print(year,month,bus_date)
+            #print(list(map(itemgetter('year'),catalog_list)))
 
-            idx = list(map(itemgetter('year'), catalog_list)).index(year)\
-                if year in map(itemgetter('year'), catalog_list) else None
+            idx=list(map(itemgetter('year'),catalog_list)).index(year)\
+                if year in map(itemgetter('year'),catalog_list) else None
             #print(list(map(itemgetter('year'), catalog_list)))
-            if idx == None:
-                d = {'year': year, month: [bus_date]}
+            if idx==None:
+                d={'year':year,'month':{month:[bus_date]}}
                 catalog_list.append(d)
-                # print(catalog_list)
+                #print(catalog_list)
 
             else:
-                if month in catalog_list[idx].keys():
-                    catalog_list[idx][month].append(bus_date)
+                if month in catalog_list[idx]['month'].keys():
+                    catalog_list[idx]['month'][month].append(bus_date)
                 else:
-                    catalog_list[idx][month] = [bus_date]
+                    catalog_list[idx]['month'][month]=[bus_date]
 
-        # print(catalog_list)
-        return catalog_list
+        
+        return (catalog_list)
