@@ -69,8 +69,16 @@ api.add_resource(RoleController,
     endpoint="role_ep"
 )
 api.add_resource(ViewDataController,
-    apiPath+"/view-data",
-    endpoint="view_data_ep"
+    apiPath+"/view-data/get-date-heads",
+    endpoint="get_date_heads_ep"
+)
+api.add_resource(ViewDataController,
+    apiPath+"/view-data/get-report",
+    endpoint="get_report_ep"
+)
+api.add_resource(ViewDataController,
+    apiPath+"/view-data/get-sources",
+    endpoint="get_source_ep"
 )
 
 if __name__ == '__main__':

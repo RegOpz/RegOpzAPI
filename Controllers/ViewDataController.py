@@ -18,8 +18,16 @@ from operator import itemgetter
 from datetime import datetime
 class ViewDataController(Resource):
     def get(self):
-        return self.render_data_load_dates()
-        #return self.getDataSource(source_id=1,business_date='20160930',page=100)
+        if(request.endpoint == 'get_date_heads_ep'):
+            return self.render_data_load_dates()
+        if(request.endpoint == 'get_report_ep'):
+            source_id = request.args['source_id']
+            business_date = request.args['business_date']
+            page = request.args['page']
+            return self.getDataSource(source_id=source_id,business_date=business_date,page=page)
+        if(request.endpoint == 'get_source_ep'):
+            business_date = request.args['business_date']
+            return self.render_data_source_list(business_date=business_date)
     def getDataSource(self,**kwargs):
         parameter_list = ['source_id', 'business_date', 'page']
 
@@ -41,7 +49,8 @@ class ViewDataController(Resource):
         data = cur.fetchall()
         cols = [i[0] for i in cur.description]
         count = db.query('select count(*) as count from ' +
-                         table['source_table_name']).fetchone()
+                         table['source_table_name'] +
+                         ' where business_date=\'' + business_date + '\'').fetchone()
         data_dict['cols'] = cols
         data_dict['rows'] = data
         data_dict['count'] = count['count']
@@ -92,5 +101,20 @@ class ViewDataController(Resource):
                 else:
                     catalog_list[idx]['month'][month]=[bus_date]
 
-        
+
         return (catalog_list)
+    def render_data_source_list(self,**kwargs):
+
+        parameter_list = ['business_date']
+
+        if set(parameter_list).issubset(set(kwargs.keys())):
+            business_date = kwargs['business_date']
+        else:
+            print("Please supply parameters: " + str(parameter_list))
+
+        db=DatabaseHelper()
+        data_sources = db.query("select source_id,data_file_name\
+                        from data_catalog where business_date='"+business_date+"'").fetchall()
+
+        #print(data_sources)
+        return (data_sources)
