@@ -30,6 +30,11 @@ class ViewDataController(Resource):
         if(request.endpoint == 'get_source_ep'):
             business_date = request.args['business_date']
             return self.render_data_source_list(business_date=business_date)
+        if(request.endpoint == 'report_linkage_ep'):
+            source_id = request.args.get("source_id")
+            qualifying_key = request.args.get("qualifying_key")
+            business_date = request.args.get("business_date")
+            return self.list_reports_for_data(source_id=source_id,qualifying_key=qualifying_key,business_date=business_date)
     def getDataSource(self,**kwargs):
         parameter_list = ['source_id', 'business_date', 'page']
 
@@ -121,3 +126,26 @@ class ViewDataController(Resource):
 
         #print(data_sources)
         return (data_sources)
+    def list_reports_for_data(self,**kwargs):
+        parameter_list = ['source_id','qualifying_key','business_date']
+        if set(parameter_list).issubset(set(kwargs.keys())):
+            source_id=kwargs["source_id"]
+            qualifying_key = kwargs['qualifying_key']
+            business_date=kwargs['business_date']
+
+        else:
+            print("Please supply parameters: " + str(parameter_list))
+
+        db=DatabaseHelper()
+        sql="select * from report_qualified_data_link where qualifying_key='"+qualifying_key+\
+            "' and business_date='"+business_date+"'"
+
+        cur=db.query(sql)
+        report_list=cur.fetchall()
+
+
+        result_set = []
+        for data in report_list:
+            result_set.append(data)
+
+        return result_set

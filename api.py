@@ -80,6 +80,10 @@ api.add_resource(ViewDataController,
     apiPath+"/view-data/get-sources",
     endpoint="get_source_ep"
 )
+api.add_resource(ViewDataController,
+    apiPath+"/view-data/get-report-linkage",
+    endpoint="report_linkage_ep"
+)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=APIConfig.API['port'])
