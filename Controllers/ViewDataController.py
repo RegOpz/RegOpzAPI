@@ -19,7 +19,9 @@ from datetime import datetime
 class ViewDataController(Resource):
     def get(self):
         if(request.endpoint == 'get_date_heads_ep'):
-            return self.render_data_load_dates()
+            startDate = request.args.get('start_date') if request.args.get('start_date') != None else '19000101'
+            endDate = request.args.get('end_date') if request.args.get('end_date') != None else '39991231'
+            return self.render_data_load_dates(startDate, endDate)
         if(request.endpoint == 'get_report_ep'):
             source_id = request.args['source_id']
             business_date = request.args['business_date']
@@ -58,30 +60,31 @@ class ViewDataController(Resource):
         # print(data_dict)
         return data_dict
 
-    def render_data_load_dates(self):
-        month_lookup={ '1': 'January',
-                       '2':'February',
-                       '3':'March',
-                       '4':'April',
-                       '5':'May',
-                       '6':'June',
-                       '7':'July',
-                       '8':'August',
-                       '9':'Sepember',
+    def render_data_load_dates(self,start_business_date='19000101',end_business_date='39991231'):
+
+        month_lookup={ '01': 'January',
+                       '02':'February',
+                       '03':'March',
+                       '04':'April',
+                       '05':'May',
+                       '06':'June',
+                       '07':'July',
+                       '08':'August',
+                       '09':'Sepember',
                        '10':'October',
                        '11':'November',
                        '12':'December'
                        }
         db = DatabaseHelper()
 
-        catalog=db.query("select distinct business_date from data_catalog order by business_date").fetchall()
+        catalog=db.query("select distinct business_date from data_catalog where business_date between "+ start_business_date + " and " + end_business_date + " order by business_date").fetchall()
 
         catalog_list=[]
 
         for cat in catalog:
-            year=str(cat['business_date'].year)
-            month_num=str(cat['business_date'].month)
-            bus_date=str(cat['business_date'].day)
+            year=cat['business_date'][:4]
+            month_num=cat['business_date'][4:6]
+            bus_date=cat['business_date'][6:]
             month=month_lookup[month_num]
 
             #print(year,month,bus_date)
