@@ -35,14 +35,14 @@ class DocumentController(Resource):
             return FILE_TYPE_IS_NOT_ALLOWED
         filename = str(uuid.uuid4()) + "_" + secure_filename(file.filename)
         file.save(os.path.join(UPLOAD_FOLDER, filename))
-        document = Document({
+        '''document = Document({
             'id': None,
             'file': filename,
             'uploaded_by': 1,
             'time_stamp': str (datetime.datetime.utcnow()),
             'ip': '1.1.1.1',
             'comment': "Sample comment by model"
-        })
+        })'''
         self.load_report_template(filename)
         return self.render_report_template_json()
     def load_report_template(self,template_file_name):
@@ -100,13 +100,16 @@ class DocumentController(Resource):
                                       values(%s,%s,%s,%s,%s)',
                                         (self.report_id, sheet.title, cell_ref, cell_render_ref, cell_obj_value.strip()))
         db.commit()
+        print('====================================')
+        print('End of load report template')
+        print('====================================')
         return 0
 
     def render_report_template_json(self):
 
         db = DatabaseHelper()
 
-        cur = db.query("select distinct sheet_id from report_def where report_id='%s' ", (self.report_id,))
+        cur = db.query("select distinct sheet_id from report_def where report_id=%s", (self.report_id,))
         sheets = cur.fetchall()
         print(sheets)
 
@@ -114,7 +117,7 @@ class DocumentController(Resource):
         for sheet in sheets:
             matrix_list = []
             cur = db.query(
-                "select cell_id,cell_render_def,cell_calc_ref from report_def where report_id='%s' and sheet_id='%s'",
+                "select cell_id,cell_render_def,cell_calc_ref from report_def where report_id=%s and sheet_id=%s",
                 (self.report_id, sheet["sheet_id"]))
             report_template = cur.fetchall()
 
