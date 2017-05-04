@@ -73,8 +73,16 @@ api.add_resource(ViewDataController,
     endpoint="get_date_heads_ep"
 )
 api.add_resource(ViewDataController,
-    apiPath+"/view-data/get-report",
-    endpoint="get_report_ep"
+    apiPath+"/view-data/report",
+    endpoint="report_ep"
+)
+api.add_resource(ViewDataController,
+    apiPath+"/view-data/report/<string:id>",
+    endpoint="report_update_ep"
+)
+api.add_resource(ViewDataController,
+    apiPath+"/view-data/report/export-csv",
+    endpoint="report_export_csv_ep"
 )
 api.add_resource(ViewDataController,
     apiPath+"/view-data/get-sources",

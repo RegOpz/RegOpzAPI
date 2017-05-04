@@ -22,7 +22,7 @@ class ViewDataController(Resource):
             startDate = request.args.get('start_date') if request.args.get('start_date') != None else '19000101'
             endDate = request.args.get('end_date') if request.args.get('end_date') != None else '39991231'
             return self.render_data_load_dates(startDate, endDate)
-        if(request.endpoint == 'get_report_ep'):
+        if(request.endpoint == 'report_ep'):
             source_id = request.args['source_id']
             business_date = request.args['business_date']
             page = request.args['page']
@@ -35,6 +35,111 @@ class ViewDataController(Resource):
             qualifying_key = request.args.get("qualifying_key")
             business_date = request.args.get("business_date")
             return self.list_reports_for_data(source_id=source_id,qualifying_key=qualifying_key,business_date=business_date)
+        if (request.endpoint == 'report_export_csv_ep'):
+            tableName = request.args.get("table_name")
+            businessDate = request.args.get("business_date")
+            return self.export_to_csv(tableName,businessDate)
+
+    def put(self, id=None):
+        data = request.get_json(force=True)
+        res = self.update_data(data, id)
+        return res
+
+    def post(self):
+        data = request.get_json(force=True)
+        res = self.insert_data(data)
+        return res
+
+    def delete(self, id=None):
+        if id == None:
+            return DATA_NOT_FOUND
+        tableName = request.args.get("table_name")
+        businessDate = request.args.get("business_date")
+        res = self.delete_data(businessDate,tableName,id)
+        return res
+
+    def delete_data(self,business_date,table_name,id):
+        db=DatabaseHelper()
+        sql="delete from "+table_name +" where business_date = %s and id=%s"
+        print(sql)
+
+        params=(business_date,id,)
+        print(params)
+        res=db.transact(sql,params)
+
+        return res
+
+
+    def insert_data(self,data):
+
+        db = DatabaseHelper()
+
+        table_name = data['table_name']
+        update_info = data['update_info']
+        update_info_cols = update_info.keys()
+        business_date=data['business_date']
+
+        sql="insert into "+table_name + "("
+        placeholders="("
+        params=[]
+
+        for col in update_info_cols:
+            sql+=col+","
+            placeholders+="%s,"
+            if col=='business_date':
+                params.append(business_date)
+            else:
+                params.append(update_info[col])
+
+        placeholders=placeholders[:len(placeholders)-1]
+        placeholders+=")"
+        sql=sql[:len(sql)-1]
+        sql+=") values "+ placeholders
+
+        params_tuple=tuple(params)
+        #print(sql)
+        #print(params_tuple)
+        res=db.transact(sql,params_tuple)
+
+        return self.ret_source_data_by_id(table_name,business_date,res)
+
+    def update_data(self,data,id):
+        db=DatabaseHelper()
+
+        table_name=data['table_name']
+        update_info=data['update_info']
+        update_info_cols=update_info.keys()
+        business_date=data['business_date']
+
+        sql= 'update '+table_name+ ' set '
+        params=[]
+        for col in update_info_cols:
+            sql+=col +'=%s,'
+            params.append(update_info[col])
+
+        sql=sql[:len(sql)-1]
+        sql+=" where business_date = '"+business_date+"' and id='"+id+"'"
+        params_tuple=tuple(params)
+
+        print(sql)
+        print(params_tuple)
+
+        res=db.transact(sql,params_tuple)
+
+        if res==0:
+            return self.ret_source_data_by_id(table_name,business_date,id)
+
+        return UPDATE_ERROR
+
+    def ret_source_data_by_id(self, table_name,business_date,id):
+        db = DatabaseHelper()
+        query = 'select * from ' + table_name + ' where business_date = %s and id = %s'
+        cur = db.query(query, (business_date,id, ))
+        data = cur.fetchone()
+        if data:
+            return data
+        return NO_BUSINESS_RULE_FOUND
+
     def getDataSource(self,**kwargs):
         parameter_list = ['source_id', 'business_date', 'page']
 
@@ -61,6 +166,7 @@ class ViewDataController(Resource):
         data_dict['cols'] = cols
         data_dict['rows'] = data
         data_dict['count'] = count['count']
+        data_dict['table_name'] = table['source_table_name']
 
         # print(data_dict)
         return data_dict
@@ -138,14 +244,37 @@ class ViewDataController(Resource):
 
         db=DatabaseHelper()
         sql="select * from report_qualified_data_link where qualifying_key='"+qualifying_key+\
-            "' and business_date='"+business_date+"'"
+        "' and business_date='"+business_date+"'"
 
         cur=db.query(sql)
         report_list=cur.fetchall()
 
+        data_qual = db.query(
+        "select * from qualified_data where qualifying_key='" + qualifying_key + "' and business_date='" + business_date + "'").fetchone()
 
         result_set = []
         for data in report_list:
-            result_set.append(data)
+            cell_rule=db.query("select * from report_calc_def where cell_calc_ref='"+data['cell_calc_ref']+"'").fetchone()
+
+            data["cell_business_rules"]=cell_rule["cell_business_rules"]
+            data["data_qualifying_rules"]=data_qual["business_rules"]
+
+        result_set.append(data)
 
         return result_set
+    def export_to_csv(self,table_name,business_date):
+        db = DatabaseHelper()
+
+        sql = "select * from "+table_name +" where business_date='"+business_date+"'"
+
+        cur = db.query(sql)
+
+        data = cur.fetchall()
+        keys = [i[0] for i in cur.description]
+        filename=table_name+business_date+".csv"
+
+        with open('./static/'+filename, 'wt') as output_file:
+            dict_writer = csv.DictWriter(output_file, keys)
+            dict_writer.writeheader()
+            dict_writer.writerows(data)
+        return { "file_name": filename }
