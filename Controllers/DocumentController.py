@@ -111,6 +111,7 @@ class DocumentController(Resource):
         db = DatabaseHelper()
 
         cur = db.query("select distinct sheet_id from report_def where report_id=%s", (self.report_id,))
+
         sheets = cur.fetchall()
         print(sheets)
 
