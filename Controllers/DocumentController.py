@@ -108,8 +108,7 @@ class DocumentController(Resource):
     def render_report_template_json(self):
 
         db = DatabaseHelper()
-
-        cur = db.query("select distinct sheet_id from report_def where report_id=%s", (self.report_id,))
+        cur = db.query("select distinct sheet_id from report_def where report_id=%s ", (self.report_id,))
         sheets = cur.fetchall()
         print(sheets)
 
