@@ -228,7 +228,7 @@ class DocumentController(Resource):
                     matrix_list.append(cell_d)
 
                 elif row['cell_render_def']=='ROW_HEIGHT':
-                    if row['cell_calc_ref']==None:
+                    if row['cell_calc_ref']=="None":
                         row_height=12.5
                     else:
                         row_height=row['cell_calc_ref']
@@ -236,7 +236,8 @@ class DocumentController(Resource):
                     row_attr[row['cell_id']]={'height':row_height}
 
                 elif row['cell_render_def'] == 'COLUMN_WIDTH':
-                    if row['cell_calc_ref'] == None:
+
+                    if row['cell_calc_ref'] == "None":
                         col_width = 13.88
                     else:
                         col_width = row['cell_calc_ref']
