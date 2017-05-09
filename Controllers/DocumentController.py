@@ -108,13 +108,15 @@ class DocumentController(Resource):
     def render_report_template_json(self):
 
         db = DatabaseHelper()
-        cur = db.query("select distinct sheet_id from report_def where report_id=%s ", (self.report_id,))
+        cur = db.query("select distinct sheet_id from report_def where report_id=%s", (self.report_id,))
         sheets = cur.fetchall()
         print(sheets)
 
         sheet_d_list=[]
         for sheet in sheets:
             matrix_list = []
+            row_attr={}
+            col_attr={}
             cur = db.query(
                 "select cell_id,cell_render_def,cell_calc_ref from report_def where report_id=%s and sheet_id=%s",
                 (self.report_id, sheet["sheet_id"]))
@@ -135,10 +137,28 @@ class DocumentController(Resource):
                     cell_d['merged'] = end_cell
                     matrix_list.append(cell_d)
 
+                elif row['cell_render_def']=='ROW_HEIGHT':
+                    if row['cell_calc_ref']=="None":
+                        row_height=12.5
+                    else:
+                        row_height=row['cell_calc_ref']
+
+                    row_attr[row['cell_id']]={'height':row_height}
+
+                elif row['cell_render_def'] == 'COLUMN_WIDTH':
+                    if row['cell_calc_ref'] == "None":
+                        col_width = 13.88
+                    else:
+                        col_width = row['cell_calc_ref']
+
+                    col_attr[row['cell_id']] = {'width': col_width}
+
             sheet_d={}
             sheet_d['sheet']=sheet['sheet_id']
             #print(sheet_d['sheet'])
             sheet_d['matrix']=matrix_list
+            sheet_d['row_attr']=row_attr
+            sheet_d['col_attr'] = col_attr
             sheet_d_list.append(sheet_d)
 
 
