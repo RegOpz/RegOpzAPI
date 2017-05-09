@@ -111,6 +111,94 @@ class DocumentController(Resource):
         db = DatabaseHelper()
 
         cur = db.query("select distinct sheet_id from report_def where report_id=%s", (self.report_id,))
+        sheets = cur.fetchall()
+        print(sheets)
+
+        sheet_d_list = []
+        for sheet in sheets:
+            matrix_list = []
+            row_attr = {}
+            col_attr = {}
+            cur = db.query(
+                "select cell_id,cell_render_def,cell_calc_ref from report_def where report_id=%s and sheet_id=%s",
+                (self.report_id, sheet["sheet_id"]))
+            report_template = cur.fetchall()
+
+            data = db.query('select b.report_id,b.sheet_id,b.cell_id,a.cell_summary,\
+                                b.reporting_scale,b.rounding_option \
+                                from report_calc_def b left join report_summary a\
+                                on a.report_id=b.report_id and\
+                                a.sheet_id=b.sheet_id and \
+                                a.cell_id=b.cell_id and \
+                                a.reporting_date=%s \
+                                where b.report_id=%s \
+                                and b.sheet_id=%s\
+                                order by b.report_id,b.sheet_id,b.cell_id', (reporting_date, self.report_id,sheet["sheet_id"])).fetchall()
+
+            for row in report_template:
+                cell_d = {}
+                if row["cell_render_def"] == 'STATIC_TEXT':
+                    cell_d['cell'] = row['cell_id']
+                    cell_d['value'] = row['cell_calc_ref']
+                    matrix_list.append(cell_d)
+
+
+                elif row['cell_render_def'] == 'MERGED_CELL':
+                    start_cell, end_cell = row['cell_id'].split(':')
+                    cell_d['cell'] = start_cell
+                    cell_d['value'] = row['cell_calc_ref']
+                    cell_d['merged'] = end_cell
+                    matrix_list.append(cell_d)
+
+
+                elif row['cell_render_def'] == 'ROW_HEIGHT':
+                    if row['cell_calc_ref'] == 'None':
+                        row_height = '12.5'
+                    else:
+                        row_height = row['cell_calc_ref']
+                    row_attr[row['cell_id']] = {'height': row_height}
+
+
+                elif row['cell_render_def'] == 'COLUMN_WIDTH':
+                    if row['cell_calc_ref'] == 'None':
+                        col_width = '13.88'
+                    else:
+                        col_width = row['cell_calc_ref']
+                    col_attr[row['cell_id']] = {'width': col_width}
+
+            for row in data:
+                cell_d={}
+                if cell_format_yn == 'Y':
+                    # print(row["cell_id"],row["cell_summary"])
+                    cell_summary = util.round_value(
+                        float(util.if_null_zero(row["cell_summary"])) / float(row["reporting_scale"]),
+                        row["rounding_option"])
+
+                else:
+                    cell__summary= float(util.if_null_zero(row["cell_summary"]))
+
+                cell_d['cell']=row['cell_id']
+                cell_d['value']=cell_summary
+                matrix_list.append(cell_d)
+
+
+            sheet_d = {}
+            sheet_d['sheet'] = sheet['sheet_id']
+            # print(sheet_d['sheet'])
+            sheet_d['matrix'] = matrix_list
+            sheet_d['row_attr'] = row_attr
+            sheet_d['col_attr'] = col_attr
+            sheet_d_list.append(sheet_d)
+
+        json_dump = (sheet_d_list)
+        # print(json_dump)
+        return json_dump
+
+    def render_report_template_json(self):
+
+        db = DatabaseHelper()
+
+        cur = db.query("select distinct sheet_id from report_def where report_id=%s", (self.report_id,))
 
         sheets = cur.fetchall()
         print(sheets)
