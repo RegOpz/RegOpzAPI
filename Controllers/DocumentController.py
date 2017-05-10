@@ -461,7 +461,7 @@ class DocumentController(Resource):
                 elif row["cell_render_def"] == 'CALCULATE_FORMULA':
                     ws[row["cell_id"]].fill = PatternFill("solid", fgColor="DDDDDD")
                     ws[row["cell_id"]].font = Font(bold=True, size=9)
-                    if '=' in row["cell_calc_ref"]:
+                    if '=' in ro>w["cell_calc_ref"]:
                         ws[row["cell_id"]].value = row["cell_calc_ref"]
                     else:
                         ws[row["cell_id"]].value = '=' + row["cell_calc_ref"]
@@ -556,3 +556,4 @@ class DocumentController(Resource):
         drill_data = db.query(sql).fetchall()
 
         return drill_data
+#Conflict resolved
