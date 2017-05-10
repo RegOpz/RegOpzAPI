@@ -87,7 +87,7 @@ class DocumentController(Resource):
             for all_obj in sheet['A1':util.cell_index(sheet.max_column, sheet.max_row)]:
                 for cell_obj in all_obj:
                     cell_ref = str(cell_obj.column) + str(cell_obj.row)
-                    if len(rng_startcell) > 0 and cell_ref not in rng_startcell:
+                    if (len(rng_startcell) > 0 and cell_ref not in rng_startcell) or (len(rng_startcell) == 0):
                         if cell_obj.value:
                             for key in formula_dict.keys():
                                 cell_obj_value = str(cell_obj.value)
