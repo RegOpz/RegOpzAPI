@@ -2,6 +2,7 @@ from Controllers.Info import Info
 from Controllers.DocumentController import DocumentController
 from Controllers.MaintainBusinessRulesController import MaintainBusinessRulesController
 from Controllers.UserController import UserController
+from Controllers.ViewDataController import ViewDataController
 from app import *
 from Controllers.ResourceController import ResourceController
 from Controllers.RoleController import RoleController
@@ -67,6 +68,31 @@ api.add_resource(RoleController,
     apiPath + "/role/<int:id>",
     endpoint="role_ep"
 )
+api.add_resource(ViewDataController,
+    apiPath+"/view-data/get-date-heads",
+    endpoint="get_date_heads_ep"
+)
+api.add_resource(ViewDataController,
+    apiPath+"/view-data/report",
+    endpoint="report_ep"
+)
+api.add_resource(ViewDataController,
+    apiPath+"/view-data/report/<string:id>",
+    endpoint="report_update_ep"
+)
+api.add_resource(ViewDataController,
+    apiPath+"/view-data/report/export-csv",
+    endpoint="report_export_csv_ep"
+)
+api.add_resource(ViewDataController,
+    apiPath+"/view-data/get-sources",
+    endpoint="get_source_ep"
+)
+api.add_resource(ViewDataController,
+    apiPath+"/view-data/get-report-linkage",
+    endpoint="report_linkage_ep"
+)
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=APIConfig.API['port'])
 #hello
