@@ -227,8 +227,7 @@ class ViewDataController(Resource):
             print("Please supply parameters: " + str(parameter_list))
 
         db=DatabaseHelper()
-        data_sources = db.query("select source_id,data_file_name\
-                        from data_catalog where business_date='"+business_date+"'").fetchall()
+        data_sources = db.query("select *  from data_catalog where business_date='"+business_date+"'").fetchall()
 
         #print(data_sources)
         return (data_sources)
