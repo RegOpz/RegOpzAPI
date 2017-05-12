@@ -520,6 +520,16 @@ class DocumentController(Resource):
 
         db=DatabaseHelper()
 
+        sql="select * from report_comp_agg_def where report_id='"+report_id+"' and sheet_id='"+sheet_id+"' and\
+            cell_id='"+cell_id+"'"
+
+        comp_agg_rules=db.query(sql).fetchall()
+
+        sql="select * from report_agg_def where report_id='"+report_id+"' and sheet_id='"+sheet_id+"' and\
+            cell_id='"+cell_id+"'"
+
+        agg_rules=db.query(sql).fetchall()
+
         sql = "select b.source_table_name, a.* from report_calc_def a,\
             data_source_information b where a.source_id=b.source_id and \
             report_id='" + report_id + "' and sheet_id='" + sheet_id + "' and \
@@ -527,17 +537,24 @@ class DocumentController(Resource):
 
         cell_rules=db.query(sql).fetchall()
 
-        return [(tpl['source_table_name'], tpl['source_id'], tpl['cell_business_rules']) for tpl in cell_rules]
+        display_dict={}
+
+        display_dict['comp_agg_rules']=comp_agg_rules
+        display_dict['agg_rules']=agg_rules
+        display_dict['cell_rules']=cell_rules
+
+        return display_dict
 
     def cell_drill_down_data(self,**kwargs):
 
-        parameter_list = ['source_id', 'report_id', 'sheet_id', 'cell_id', 'reporting_date']
+        parameter_list = ['source_id', 'report_id', 'sheet_id', 'cell_id', 'cell_calc_ref','reporting_date']
 
         if set(parameter_list).issubset(set(kwargs.keys())):
             source_id = kwargs["source_id"]
             report_id = kwargs["report_id"]
             sheet_id = kwargs['sheet_id']
             cell_id = kwargs['cell_id']
+            cell_calc_ref=kwargs['cell_calc_ref']
             reporting_date = kwargs['reporting_date']
         else:
             print("Please supply parameters: " + str(parameter_list))
@@ -551,9 +568,19 @@ class DocumentController(Resource):
         sql = "select a.*,b.* from " + src_inf['source_table_name'] + " a, report_qualified_data_link b\
              where a." + key_column + "=b.qualifying_key and b.report_id='" + report_id + "' and b.source_id='" + str(
             source_id) + \
-              "' and b.sheet_id='" + sheet_id + "' and b.cell_id='" + cell_id + "' and b.reporting_date='" + reporting_date + "'"
+              "' and b.sheet_id='" + sheet_id + "' and b.cell_id='" + cell_id + "' and b.reporting_date='" + reporting_date + "'\
+                and b.cell_calc_ref='"+cell_calc_ref+"'"
 
         drill_data = db.query(sql).fetchall()
 
         return drill_data
-#Conflict resolved
+
+    def suggesstion_list(self,search_string):
+
+        db=DatabaseHelper()
+        catalog = db.query("select distinct report_id from report_catalog where report_id like '"+search_string+"%'" ).fetchall()
+
+        if not catalog:
+            return {"msg":"No report name found starting with '"+search_string+"'"}
+        else:
+            return catalog
