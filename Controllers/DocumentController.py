@@ -13,18 +13,30 @@ from openpyxl.styles import Border, Side, PatternFill, Font, GradientFill, Align
 from openpyxl.utils import get_column_letter
 import Helpers.utils as util
 import json
+from operator import itemgetter
+from datetime import datetime
 UPLOAD_FOLDER = './uploads/templates'
 ALLOWED_EXTENSIONS = set(['txt', 'xls', 'xlsx'])
 class DocumentController(Resource):
     def allowed_file(self,filename):
         return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
     def get(self, doc_id=None):
-        """document = Document()
-        if doc_id != None:
-            return (document.get(doc_id))
-        return (document.get())"""
+        if request.endpoint == 'report_list_ep':
+            reporting_date = request.args['reporting_date']
+            return self.render_report_list(reporting_date=reporting_date)
+        if(request.endpoint == 'get_date_heads_for_report_ep'):
+            startDate = request.args.get('start_date') if request.args.get('start_date') != None else '19000101'
+            endDate = request.args.get('end_date') if request.args.get('end_date') != None else '39991231'
+            return self.render_data_load_dates(startDate, endDate)
+        if request.endpoint == 'drill_down_ep':
+            report_id = request.args.get('report_id')
+            sheet_id = request.args.get('sheet_id')
+            cell_id = request.args.get('cell_id')
+            return self.cell_drill_down_rules(report_id=report_id,sheet_id=sheet_id,cell_id=cell_id)
         self.report_id = doc_id
-        return self.render_report_json('20160930')
+        reporting_date = request.args.get('reporting_date')
+        print(reporting_date)
+        return self.render_report_json(reporting_date)
     def post(self):
         if 'file' not in request.files:
             return NO_FILE_SELECTED
@@ -45,7 +57,7 @@ class DocumentController(Resource):
             'comment': "Sample comment by model"
         })'''
         self.load_report_template(filename)
-        return self.render_report_template_json()
+        return self.render_report_json()
     def load_report_template(self,template_file_name):
         formula_dict = {'SUM': 'CALCULATE_FORMULA',
                         '=SUM': 'CALCULATE_FORMULA',
@@ -106,7 +118,7 @@ class DocumentController(Resource):
         print('====================================')
         return 0
 
-    def render_report_json(self,reporting_date,cell_format_yn='Y'):
+    def render_report_json(self,reporting_date='19000101',cell_format_yn='Y'):
 
         db = DatabaseHelper()
 
@@ -194,156 +206,7 @@ class DocumentController(Resource):
         # print(json_dump)
         return json_dump
 
-    def render_report_template_json(self):
 
-        db = DatabaseHelper()
-
-        cur = db.query("select distinct sheet_id from report_def where report_id=%s", (self.report_id,))
-
-        sheets = cur.fetchall()
-        print(sheets)
-
-        sheet_d_list = []
-        for sheet in sheets:
-            matrix_list = []
-            row_attr = {}
-            col_attr = {}
-            cur = db.query(
-                "select cell_id,cell_render_def,cell_calc_ref from report_def where report_id=%s and sheet_id=%s",
-                (self.report_id, sheet["sheet_id"]))
-            report_template = cur.fetchall()
-
-            data = db.query('select b.report_id,b.sheet_id,b.cell_id,a.cell_summary,\
-                                b.reporting_scale,b.rounding_option \
-                                from report_calc_def b left join report_summary a\
-                                on a.report_id=b.report_id and\
-                                a.sheet_id=b.sheet_id and \
-                                a.cell_id=b.cell_id and \
-                                a.reporting_date=%s \
-                                where b.report_id=%s \
-                                and b.sheet_id=%s\
-                                order by b.report_id,b.sheet_id,b.cell_id', (reporting_date, self.report_id,sheet["sheet_id"])).fetchall()
-
-            for row in report_template:
-                cell_d = {}
-                if row["cell_render_def"] == 'STATIC_TEXT':
-                    cell_d['cell'] = row['cell_id']
-                    cell_d['value'] = row['cell_calc_ref']
-                    matrix_list.append(cell_d)
-
-
-                elif row['cell_render_def'] == 'MERGED_CELL':
-                    start_cell, end_cell = row['cell_id'].split(':')
-                    cell_d['cell'] = start_cell
-                    cell_d['value'] = row['cell_calc_ref']
-                    cell_d['merged'] = end_cell
-                    matrix_list.append(cell_d)
-
-
-                elif row['cell_render_def'] == 'ROW_HEIGHT':
-                    if row['cell_calc_ref'] == 'None':
-                        row_height = '12.5'
-                    else:
-                        row_height = row['cell_calc_ref']
-                    row_attr[row['cell_id']] = {'height': row_height}
-
-
-                elif row['cell_render_def'] == 'COLUMN_WIDTH':
-                    if row['cell_calc_ref'] == 'None':
-                        col_width = '13.88'
-                    else:
-                        col_width = row['cell_calc_ref']
-                    col_attr[row['cell_id']] = {'width': col_width}
-
-            for row in data:
-                cell_d={}
-                if cell_format_yn == 'Y':
-                    # print(row["cell_id"],row["cell_summary"])
-                    cell_summary = util.round_value(
-                        float(util.if_null_zero(row["cell_summary"])) / float(row["reporting_scale"]),
-                        row["rounding_option"])
-
-                else:
-                    cell__summary= float(util.if_null_zero(row["cell_summary"]))
-
-                cell_d['cell']=row['cell_id']
-                cell_d['value']=cell_summary
-                matrix_list.append(cell_d)
-
-
-            sheet_d = {}
-            sheet_d['sheet'] = sheet['sheet_id']
-            # print(sheet_d['sheet'])
-            sheet_d['matrix'] = matrix_list
-            sheet_d['row_attr'] = row_attr
-            sheet_d['col_attr'] = col_attr
-            sheet_d_list.append(sheet_d)
-
-        json_dump = (sheet_d_list)
-        # print(json_dump)
-        return json_dump
-
-    def render_report_template_json(self):
-
-        db = DatabaseHelper()
-        cur = db.query("select distinct sheet_id from report_def where report_id=%s", (self.report_id,))
-        sheets = cur.fetchall()
-        print(sheets)
-
-        sheet_d_list=[]
-        for sheet in sheets:
-            matrix_list = []
-            row_attr={}
-            col_attr={}
-            cur = db.query(
-                "select cell_id,cell_render_def,cell_calc_ref from report_def where report_id=%s and sheet_id=%s",
-                (self.report_id, sheet["sheet_id"]))
-            report_template = cur.fetchall()
-
-            for row in report_template:
-                cell_d = {}
-                if row["cell_render_def"] == 'STATIC_TEXT':
-                    cell_d['cell'] =row['cell_id']
-                    cell_d['value']=row['cell_calc_ref']
-                    matrix_list.append(cell_d)
-
-
-                elif row['cell_render_def'] == 'MERGED_CELL':
-                    start_cell, end_cell = row['cell_id'].split(':')
-                    cell_d['cell'] = start_cell
-                    cell_d['value'] = row['cell_calc_ref']
-                    cell_d['merged'] = end_cell
-                    matrix_list.append(cell_d)
-
-                elif row['cell_render_def']=='ROW_HEIGHT':
-                    if row['cell_calc_ref']=="None":
-                        row_height=12.5
-                    else:
-                        row_height=row['cell_calc_ref']
-
-                    row_attr[row['cell_id']]={'height':row_height}
-
-                elif row['cell_render_def'] == 'COLUMN_WIDTH':
-
-                    if row['cell_calc_ref'] == "None":
-                        col_width = 13.88
-                    else:
-                        col_width = row['cell_calc_ref']
-
-                    col_attr[row['cell_id']] = {'width': col_width}
-
-            sheet_d={}
-            sheet_d['sheet']=sheet['sheet_id']
-            #print(sheet_d['sheet'])
-            sheet_d['matrix']=matrix_list
-            sheet_d['row_attr']=row_attr
-            sheet_d['col_attr'] = col_attr
-            sheet_d_list.append(sheet_d)
-
-
-        json_dump = (sheet_d_list)
-        #print(json_dump)
-        return json_dump
 
     def render_data_load_dates(self,start_reporting_date='19000101',end_reporting_date='39991231'):
 
@@ -402,7 +265,7 @@ class DocumentController(Resource):
             print("Please supply parameters: " + str(parameter_list))
 
         db=DatabaseHelper()
-        reports = db.query("select report_id\
+        reports = db.query("select * \
                         from report_catalog where reporting_date='"+reporting_date+"'").fetchall()
 
         #print(data_sources)

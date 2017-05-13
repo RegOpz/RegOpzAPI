@@ -21,7 +21,8 @@ class ViewDataController(Resource):
         if(request.endpoint == 'get_date_heads_ep'):
             startDate = request.args.get('start_date') if request.args.get('start_date') != None else '19000101'
             endDate = request.args.get('end_date') if request.args.get('end_date') != None else '39991231'
-            return self.render_data_load_dates(startDate, endDate)
+            table_name = request.args.get('table_name')
+            return self.render_data_load_dates(startDate, endDate, table_name)
         if(request.endpoint == 'report_ep'):
             source_id = request.args['source_id']
             business_date = request.args['business_date']
@@ -171,7 +172,7 @@ class ViewDataController(Resource):
         # print(data_dict)
         return data_dict
 
-    def render_data_load_dates(self,start_business_date='19000101',end_business_date='39991231'):
+    def render_data_load_dates(self,start_business_date='19000101',end_business_date='39991231',catalog_table='data_catalog'):
 
         month_lookup={ '01': 'January',
                        '02':'February',
@@ -187,8 +188,14 @@ class ViewDataController(Resource):
                        '12':'December'
                        }
         db = DatabaseHelper()
+        if catalog_table == 'data_catalog':
+            sqlQuery = "select distinct business_date from data_catalog where business_date between "+ start_business_date + " and " + end_business_date + " order by business_date"
+        if catalog_table == 'report_catalog':
+            sqlQuery = "select distinct reporting_date as business_date from report_catalog where reporting_date between "+ start_business_date + " and " + end_business_date + " order by reporting_date"
 
-        catalog=db.query("select distinct business_date from data_catalog where business_date between "+ start_business_date + " and " + end_business_date + " order by business_date").fetchall()
+        #print(catalog_table,date_column)
+
+        catalog=db.query(sqlQuery).fetchall()
 
         catalog_list=[]
 

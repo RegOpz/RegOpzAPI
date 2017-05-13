@@ -17,6 +17,18 @@ api.add_resource(DocumentController,
     apiPath + "/document",
     apiPath + "/document/<string:doc_id>"
 )
+api.add_resource(DocumentController,
+    apiPath + "/document/get-report-list",
+    endpoint = "report_list_ep"
+)
+api.add_resource(DocumentController,
+    apiPath + "/document/drill-down",
+    endpoint = "drill_down_ep"
+)
+api.add_resource(DocumentController,
+    apiPath + "/document/get-date-heads-for-report",
+    endpoint = "get_date_heads_for_report_ep"
+)
 api.add_resource(MaintainBusinessRulesController,
     apiPath + "/business-rules/<string:page>",
     endpoint="business_rules_ep"
@@ -92,6 +104,7 @@ api.add_resource(ViewDataController,
     apiPath+"/view-data/get-report-linkage",
     endpoint="report_linkage_ep"
 )
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=APIConfig.API['port'])
