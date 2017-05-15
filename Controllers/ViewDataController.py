@@ -281,7 +281,7 @@ class ViewDataController(Resource):
 
         data = cur.fetchall()
         keys = [i[0] for i in cur.description]
-        filename=table_name+business_date+".csv"
+        filename=table_name+business_date+str(time.time())+".csv"
 
         with open('./static/'+filename, 'wt') as output_file:
             dict_writer = csv.DictWriter(output_file, keys)

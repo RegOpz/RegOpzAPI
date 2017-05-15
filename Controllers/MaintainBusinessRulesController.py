@@ -2,14 +2,14 @@ from flask import Flask, jsonify, request
 from flask_restful import Resource
 from Helpers.DatabaseHelper import DatabaseHelper
 import csv
+import time
 from Constants.Status import *
 
 
 class MaintainBusinessRulesController(Resource):
 	def get(self, id=None, page=0, col_name=None,business_rule=None):
 		if request.endpoint == "business_rule_export_to_csv_ep":
-			self.export_to_csv()
-			return {"msg":"CSV export finsihed"}
+			return self.export_to_csv()
 		if request.endpoint == "business_rule_linkage_ep":
 			return self.list_reports_for_rule(business_rule=business_rule)
 		if id:
@@ -181,11 +181,14 @@ class MaintainBusinessRulesController(Resource):
 		 # keys=business_rules[0].keys()
 
 		keys = [i[0] for i in cur.description]
+		filename="business_rules"+str(time.time())+".csv"
 
-		with open('./static/business_rules.csv', 'wt') as output_file:
+		with open('./static/'+filename, 'wt') as output_file:
 			dict_writer = csv.DictWriter(output_file, keys)
 			dict_writer.writeheader()
 			dict_writer.writerows(business_rules)
+		return { "file_name": filename }
+		
 	def list_reports_for_rule(self,**kwargs):
 
 		parameter_list = ['business_rule']
