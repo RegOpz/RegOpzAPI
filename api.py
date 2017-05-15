@@ -104,6 +104,10 @@ api.add_resource(ViewDataController,
     apiPath+"/view-data/get-report-linkage",
     endpoint="report_linkage_ep"
 )
+api.add_resource(ViewDataController,
+    apiPath+"/view-data/apply-rules",
+    endpoint="apply_rules_ep"
+)
 
 
 if __name__ == '__main__':

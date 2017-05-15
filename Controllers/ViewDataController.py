@@ -40,6 +40,11 @@ class ViewDataController(Resource):
             tableName = request.args.get("table_name")
             businessDate = request.args.get("business_date")
             return self.export_to_csv(tableName,businessDate)
+        if(request.endpoint == 'apply_rules_ep'):
+            source_id = request.args['source_id']
+            business_date = request.args['business_date']
+            business_or_validation = request.args['business_or_validation']
+            return self.run_rules_engine(source_id=source_id,business_date=business_date,business_or_validation=business_or_validation)
 
     def put(self, id=None):
         data = request.get_json(force=True)
@@ -264,8 +269,7 @@ class ViewDataController(Resource):
 
             data["cell_business_rules"]=cell_rule["cell_business_rules"]
             data["data_qualifying_rules"]=data_qual["business_rules"]
-
-        result_set.append(data)
+            result_set.append(data)
 
         return result_set
     def export_to_csv(self,table_name,business_date):
@@ -284,3 +288,102 @@ class ViewDataController(Resource):
             dict_writer.writeheader()
             dict_writer.writerows(data)
         return { "file_name": filename }
+
+    def run_rules_engine(self,source_id,business_date,business_or_validation='ALL'):
+
+        db=DatabaseHelper()
+
+        sql_str = 'Select source_id,source_table_name from data_source_information'
+        if source_id!='ALL':
+            sql_str+=' where source_id =' + str(source_id)
+
+        tables=db.query(sql_str).fetchall()
+
+        for src in tables:
+            # Select the data in the rule ececution order to facilitate derived rules definitions in the rule
+            data=db.query('select * from business_rules where source_id=%s order by rule_execution_order asc',(src["source_id"],)).fetchall()
+
+            code = 'if business_or_validation in [\'ALL\',\'BUSINESSRULES\']:\n'
+            code += '\tdb.transact("delete from qualified_data where source_id='+src["source_id"]+' and business_date=%s",(business_date,))\n'
+            code += 'if business_or_validation in [\'ALL\',\'VALIDATION\']:\n'
+            code += '\tdb.transact("delete from invalid_data where source_id=' + src["source_id"] + ' and business_date=%s",(business_date,))\n'
+            code += 'curdata=db.query("SELECT * FROM  '+src["source_table_name"]+' where business_date=%s",(business_date,))\n'
+            code += 'while True:\n'
+            code += '\tdata=curdata.fetchmany(100000)\n'
+            code += '\tif not data:\n'
+            code += '\t\tbreak\n'
+            code +='\tqualified_data=[]\n'
+            code +='\tinvalid_data=[]\n'
+            code += '\tfor row in data:\n'
+            code += '\t\tbusiness_rule=\'\'\n'
+            code += '\t\tvalidation_rule=\'\'\n'
+            qualifying_key='\'\''
+            buy_currency='\'\''
+            sell_currency='\'\''
+            mtm_currency='\'\''
+            for row in data:
+                if row["python_implementation"].strip():
+                     fields=row["data_fields_list"].split(',')
+                     final_str=row["python_implementation"]
+                     for field in fields:
+                         new_str="row[\""+field+"\"]"
+                         #fields names in the python_implementation should be within the tag <fld>field</fld>
+                         #no space allowed between tags and the fields name
+                         #final_str=final_str.replace("<fld>" + field + "</fld>",new_str)
+                         final_str=final_str.replace("["+field+"]",new_str)
+                     ##################################################################################
+                     # Some specific literals to be used while defining rules
+                     #  rule_type    |      Description
+                     #  KEYCOLUMN    | The column name of the source data table which is unique.
+                     #               | e.g. source_key, order_number etc.
+                     #  BUYCURRENCY  | The column name of the buy currency for notional/book value.
+                     #               | e.g. buy_currency, balance_currency, CHF etc.
+                     #  SELLCURRENCY | The column name of the sell currency for a transaction.
+                     #               | e.g. sell_currency, currency, SGD or can be null as well.
+                     #  MTMCURRENCY  | The column name of the MTM currency for a transaction.
+                     #               | e.g. mtm_currency, currency, CHF, SGD or can be null as well.
+                     #  USEDATA      | Create the tag using data of the list of columns.
+                     #               | e.g. buy_currency/sell_currency => USD/SGD
+                     #               | business_date => 20170323 etc.
+                     #  DERIVED      | Refer to the business_rule tag of an earlier rule during the ordered execution.
+                     #               | e.g. 'IRS' not in DERIVED
+                     #               | ',NRPT,' in DERIVED etc
+                     ##################################################################################
+                     if row["rule_type"]=='DERIVED':
+                         final_str=final_str.replace("DERIVED","business_rule")
+                     if row["rule_type"]=='KEYCOLUMN':
+                         qualifying_key=final_str
+                     elif row["rule_type"]=='BUYCURRENCY':
+                         buy_currency=final_str
+                     elif row["rule_type"]=='SELLCURRENCY':
+                         sell_currency=final_str
+                     elif row["rule_type"] == 'MTMCURRENCY':
+                         mtm_currency = final_str
+                     elif row["rule_type"]=='USEDATA':
+                         code += '\t\tbusiness_rule+='+final_str+'+\',\'\n'
+                     else:
+                         code += '\t\tif '+final_str+':\n'
+                         if row["business_or_validation"] == 'VALIDATION':
+                             code += '\t\t\tvalidation_rule+=\'' + row["business_rule"].strip() + ',\'\n'
+                         else:
+                             code += '\t\t\tbusiness_rule+=\''+row["business_rule"].strip()+',\'\n'
+
+            code += '\t\tif business_rule!=\'\' and validation_rule==\'\' and business_or_validation in [\'ALL\',\'BUSINESSRULES\']:\n'
+            code += '\t\t\tqualified_data.append((source_id,business_date,'+qualifying_key+',business_rule,'+buy_currency+','+sell_currency+','+mtm_currency+'))\n'
+
+
+            code += '\t\tif validation_rule!=\'\' and business_or_validation in [\'ALL\',\'VALIDATION\']:\n'
+            code += '\t\t\tinvalid_data.append((source_id,business_date,' + qualifying_key + ',validation_rule))\n'
+
+            code += '\tdb.transactmany("insert into invalid_data(source_id,business_date,qualifying_key,business_rules)\\\n \
+                      values(%s,%s,%s,%s)",invalid_data)\n'
+            code += '\tdb.transactmany("insert into qualified_data(source_id,business_date,qualifying_key,business_rules,buy_currency,sell_currency,mtm_currency)\\\n \
+                      values(%s,%s,%s,%s,%s,%s,%s)",qualified_data)\n'
+            #code += 'db.commit()\n'
+
+            exec(code)
+
+            data_sources = db.query("select *  from data_catalog where business_date='"+business_date+"' and source_id="+str(source_id)).fetchone()
+
+            data_sources["file_load_status"] = "SUCCESS"
+            return (data_sources)
