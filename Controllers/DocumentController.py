@@ -225,14 +225,14 @@ class DocumentController(Resource):
                        }
         db = DatabaseHelper()
 
-        catalog=db.query("select distinct reporting_date from report_catalog where reporting_date between "+ start_reporting_date + " and " + end_reporting_date + " order by reporting_date").fetchall()
+        catalog=db.query("select distinct as_of_reporting_date from report_catalog where as_of_reporting_date between "+ start_reporting_date + " and " + end_reporting_date + " order by as_of_reporting_date").fetchall()
 
         catalog_list=[]
 
         for cat in catalog:
-            year=cat['reporting_date'][:4]
-            month_num=cat['reporting_date'][4:6]
-            report_date=cat['reporting_date'][6:]
+            year=cat['as_of_reporting_date'][:4]
+            month_num=cat['as_of_reporting_date'][4:6]
+            report_date=cat['as_of_reporting_date'][6:]
             month=month_lookup[month_num]
 
             #print(year,month,bus_date)
@@ -266,7 +266,7 @@ class DocumentController(Resource):
 
         db=DatabaseHelper()
         reports = db.query("select * \
-                        from report_catalog where reporting_date='"+reporting_date+"'").fetchall()
+                        from report_catalog where as_of_reporting_date='"+reporting_date+"'").fetchall()
 
         #print(data_sources)
         return (reports)

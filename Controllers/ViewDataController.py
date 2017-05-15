@@ -381,9 +381,11 @@ class ViewDataController(Resource):
                       values(%s,%s,%s,%s,%s,%s,%s)",qualified_data)\n'
             #code += 'db.commit()\n'
 
-            exec(code)
-
-            data_sources = db.query("select *  from data_catalog where business_date='"+business_date+"' and source_id="+str(source_id)).fetchone()
-
-            data_sources["file_load_status"] = "SUCCESS"
-            return (data_sources)
+            try:
+                data_sources = db.query("select *  from data_catalog where business_date='"+business_date+"' and source_id="+str(source_id)).fetchone()
+                exec(code)
+                data_sources["file_load_status"] = "SUCCESS"
+            except Exception as e:
+                data_sources["file_load_status"] = "FAILED"
+            finally:
+                return (data_sources)
