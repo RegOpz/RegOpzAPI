@@ -111,5 +111,5 @@ api.add_resource(ViewDataController,
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=APIConfig.API['port'])
+    app.run(debug=True, host='0.0.0.0', port=APIConfig.API['port'], threaded=True)
 #hello

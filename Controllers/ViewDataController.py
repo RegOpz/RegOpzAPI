@@ -330,7 +330,7 @@ class ViewDataController(Resource):
                          #fields names in the python_implementation should be within the tag <fld>field</fld>
                          #no space allowed between tags and the fields name
                          #final_str=final_str.replace("<fld>" + field + "</fld>",new_str)
-                         final_str=final_str.replace("["+field+"]",new_str)
+                         final_str=final_str.replace(field,new_str)
                      ##################################################################################
                      # Some specific literals to be used while defining rules
                      #  rule_type    |      Description
@@ -380,7 +380,6 @@ class ViewDataController(Resource):
             code += '\tdb.transactmany("insert into qualified_data(source_id,business_date,qualifying_key,business_rules,buy_currency,sell_currency,mtm_currency)\\\n \
                       values(%s,%s,%s,%s,%s,%s,%s)",qualified_data)\n'
             #code += 'db.commit()\n'
-
             try:
                 data_sources = db.query("select *  from data_catalog where business_date='"+business_date+"' and source_id="+str(source_id)).fetchone()
                 exec(code)
