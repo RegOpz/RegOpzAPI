@@ -138,7 +138,7 @@ class DocumentController(Resource):
 
             data = db.query('select b.report_id,b.sheet_id,b.cell_id,a.cell_summary,\
                                 b.reporting_scale,b.rounding_option \
-                                from report_calc_def b left join report_summary a\
+                                from report_comp_agg_def b left join report_summary a\
                                 on a.report_id=b.report_id and\
                                 a.sheet_id=b.sheet_id and \
                                 a.cell_id=b.cell_id and \
@@ -344,7 +344,7 @@ class DocumentController(Resource):
         wb = xls.load_workbook(target_dir + report_file_name)
         data=db.query('select b.report_id,b.sheet_id,b.cell_id,a.cell_summary,\
                     b.reporting_scale,b.rounding_option \
-                    from report_calc_def b left join report_summary a\
+                    from report_comp_agg_def b left join report_summary a\
                     on a.report_id=b.report_id and\
                     a.sheet_id=b.sheet_id and \
                     a.cell_id=b.cell_id and \
