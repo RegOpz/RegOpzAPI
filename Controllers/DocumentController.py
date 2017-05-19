@@ -138,7 +138,7 @@ class DocumentController(Resource):
 
             data = db.query('select b.report_id,b.sheet_id,b.cell_id,a.cell_summary,\
                                 b.reporting_scale,b.rounding_option \
-                                from report_calc_def b left join report_summary a\
+                                from report_comp_agg_def b left join report_summary a\
                                 on a.report_id=b.report_id and\
                                 a.sheet_id=b.sheet_id and \
                                 a.cell_id=b.cell_id and \
@@ -344,7 +344,7 @@ class DocumentController(Resource):
         wb = xls.load_workbook(target_dir + report_file_name)
         data=db.query('select b.report_id,b.sheet_id,b.cell_id,a.cell_summary,\
                     b.reporting_scale,b.rounding_option \
-                    from report_calc_def b left join report_summary a\
+                    from report_comp_agg_def b left join report_summary a\
                     on a.report_id=b.report_id and\
                     a.sheet_id=b.sheet_id and \
                     a.cell_id=b.cell_id and \
@@ -388,10 +388,10 @@ class DocumentController(Resource):
 
         comp_agg_rules=db.query(sql).fetchall()
 
-        sql="select * from report_agg_def where report_id='"+report_id+"' and sheet_id='"+sheet_id+"' and\
-            cell_id='"+cell_id+"'"
+        #sql="select * from report_agg_def where report_id='"+report_id+"' and sheet_id='"+sheet_id+"' and\
+        #    cell_id='"+cell_id+"'"
 
-        agg_rules=db.query(sql).fetchall()
+        agg_rules=[]
 
         sql = "select b.source_table_name, a.* from report_calc_def a,\
             data_source_information b where a.source_id=b.source_id and \

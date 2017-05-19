@@ -14,6 +14,7 @@ import ast
 import mysql.connector as mysql
 import pandas as pd
 from Helpers.DatabaseHelper import DatabaseHelper
+from Constants.Status import *
 from operator import itemgetter
 from datetime import datetime
 class ViewDataController(Resource):
@@ -106,6 +107,7 @@ class ViewDataController(Resource):
         #print(sql)
         #print(params_tuple)
         res=db.transact(sql,params_tuple)
+        db.commit()
 
         return self.ret_source_data_by_id(table_name,business_date,res)
 
@@ -133,8 +135,10 @@ class ViewDataController(Resource):
         res=db.transact(sql,params_tuple)
 
         if res==0:
+            db.commit()
             return self.ret_source_data_by_id(table_name,business_date,id)
 
+        db.rollback()
         return UPDATE_ERROR
 
     def ret_source_data_by_id(self, table_name,business_date,id):
@@ -257,8 +261,7 @@ class ViewDataController(Resource):
         sql="select * from report_qualified_data_link where qualifying_key='"+qualifying_key+\
         "' and business_date='"+business_date+"'"
 
-        cur=db.query(sql)
-        report_list=cur.fetchall()
+        report_list=db.query(sql).fetchall()
 
         data_qual = db.query(
         "select * from qualified_data where qualifying_key='" + qualifying_key + "' and business_date='" + business_date + "'").fetchone()
@@ -288,6 +291,7 @@ class ViewDataController(Resource):
             dict_writer.writeheader()
             dict_writer.writerows(data)
         return { "file_name": filename }
+
 
     def run_rules_engine(self,source_id,business_date,business_or_validation='ALL'):
 
@@ -324,13 +328,19 @@ class ViewDataController(Resource):
             for row in data:
                 if row["python_implementation"].strip():
                      fields=row["data_fields_list"].split(',')
+                     #Replace "," of the fields list as " is not None and " to avoid NoneType error
+                     #Also included [] to enclose fields for replacement in the loop
+                     NoneType_chk_str="["+row["data_fields_list"].replace(",","] is not None and [")
+                     #Now to check the last field in the fields list for NoneType error
+                     NoneType_chk_str+="] is not None "
                      final_str=row["python_implementation"]
                      for field in fields:
                          new_str="row[\""+field+"\"]"
                          #fields names in the python_implementation should be within the tag <fld>field</fld>
                          #no space allowed between tags and the fields name
                          #final_str=final_str.replace("<fld>" + field + "</fld>",new_str)
-                         final_str=final_str.replace(field,new_str)
+                         final_str=final_str.replace("["+field+"]",new_str)
+                         NoneType_chk_str=NoneType_chk_str.replace("["+field+"]",new_str)
                      ##################################################################################
                      # Some specific literals to be used while defining rules
                      #  rule_type    |      Description
@@ -360,9 +370,12 @@ class ViewDataController(Resource):
                      elif row["rule_type"] == 'MTMCURRENCY':
                          mtm_currency = final_str
                      elif row["rule_type"]=='USEDATA':
-                         code += '\t\tbusiness_rule+='+final_str+'+\',\'\n'
+                         #Now check each element for None and set it to '' if None else use the value
+                         for field in fields:
+                             final_str=final_str.replace("row[\""+field+"\"]","(row[\""+field+"\"],\'\')[row[\""+field+"\"] is None]")
+                         code += '\t\tbusiness_rule+=str('+final_str+')+\',\'\n'
                      else:
-                         code += '\t\tif '+final_str+':\n'
+                         code += '\t\tif ('+NoneType_chk_str+') and ('+final_str+'):\n'
                          if row["business_or_validation"] == 'VALIDATION':
                              code += '\t\t\tvalidation_rule+=\'' + row["business_rule"].strip() + ',\'\n'
                          else:
@@ -375,16 +388,27 @@ class ViewDataController(Resource):
             code += '\t\tif validation_rule!=\'\' and business_or_validation in [\'ALL\',\'VALIDATION\']:\n'
             code += '\t\t\tinvalid_data.append((source_id,business_date,' + qualifying_key + ',validation_rule))\n'
 
+            code += '\t\tif validation_rule==\'\' and business_rule==\'\' and business_or_validation in [\'ALL\',\'VALIDATION\']:\n'
+            code += '\t\t\tinvalid_data.append((source_id,business_date,' + qualifying_key + ',\'No rule applicable!!\'))\n'
+
             code += '\tdb.transactmany("insert into invalid_data(source_id,business_date,qualifying_key,business_rules)\\\n \
                       values(%s,%s,%s,%s)",invalid_data)\n'
             code += '\tdb.transactmany("insert into qualified_data(source_id,business_date,qualifying_key,business_rules,buy_currency,sell_currency,mtm_currency)\\\n \
                       values(%s,%s,%s,%s,%s,%s,%s)",qualified_data)\n'
             #code += 'db.commit()\n'
+            data_sources = db.query("select *  from data_catalog where business_date='"+business_date+"' and source_id="+str(source_id)).fetchone()
             try:
-                data_sources = db.query("select *  from data_catalog where business_date='"+business_date+"' and source_id="+str(source_id)).fetchone()
+                print("Before exec...")
                 exec(code)
+                db.commit()
                 data_sources["file_load_status"] = "SUCCESS"
+                #print(code)
+                print("End of try....")
             except Exception as e:
+                print("In except..." + str(e))
+                db.rollback()
+                #print(code)
                 data_sources["file_load_status"] = "FAILED"
             finally:
-                return (data_sources)
+                print("In finally")
+                return data_sources

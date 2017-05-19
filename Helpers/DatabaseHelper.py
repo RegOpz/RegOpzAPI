@@ -33,6 +33,9 @@ class DatabaseHelper(object):
     def commit(self):
         self.cnx.commit()
 
+    def rollback(self):
+        self.cnx.rollback()
+
     def transactmany(self,queryString,queryParams):
         self.cursor.executemany(queryString,queryParams)
         print(self.cursor.statement)
