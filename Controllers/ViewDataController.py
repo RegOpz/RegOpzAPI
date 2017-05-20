@@ -41,11 +41,6 @@ class ViewDataController(Resource):
             tableName = request.args.get("table_name")
             businessDate = request.args.get("business_date")
             return self.export_to_csv(tableName,businessDate)
-        if(request.endpoint == 'apply_rules_ep'):
-            source_id = request.args['source_id']
-            business_date = request.args['business_date']
-            business_or_validation = request.args['business_or_validation']
-            return self.run_rules_engine(source_id=source_id,business_date=business_date,business_or_validation=business_or_validation)
 
     def put(self, id=None):
         data = request.get_json(force=True)
@@ -53,9 +48,18 @@ class ViewDataController(Resource):
         return res
 
     def post(self):
-        data = request.get_json(force=True)
-        res = self.insert_data(data)
-        return res
+        if(request.endpoint == 'report_ep'):
+            data = request.get_json(force=True)
+            res = self.insert_data(data)
+            return res
+        if(request.endpoint == 'apply_rules_ep'):
+            source_info = request.get_json(force=True)
+            source_id = source_info['source_id']
+            business_date = source_info['business_date']
+            business_or_validation = source_info['business_or_validation']
+            print(str(source_id)+ "-" + str(business_date) + "-" + business_or_validation)
+            return self.run_rules_engine(source_id=source_id,business_date=business_date,business_or_validation=business_or_validation)
+
 
     def delete(self, id=None):
         if id == None:
@@ -200,7 +204,7 @@ class ViewDataController(Resource):
         if catalog_table == 'data_catalog':
             sqlQuery = "select distinct business_date from data_catalog where business_date between "+ start_business_date + " and " + end_business_date + " order by business_date"
         if catalog_table == 'report_catalog':
-            sqlQuery = "select distinct reporting_date as business_date from report_catalog where reporting_date between "+ start_business_date + " and " + end_business_date + " order by reporting_date"
+            sqlQuery = "select distinct as_of_reporting_date as business_date from report_catalog where as_of_reporting_date between "+ start_business_date + " and " + end_business_date + " order by as_of_reporting_date"
 
         #print(catalog_table,date_column)
 
@@ -295,7 +299,10 @@ class ViewDataController(Resource):
 
     def run_rules_engine(self,source_id,business_date,business_or_validation='ALL'):
 
+        #db to insert qualified/invalid_data
         db=DatabaseHelper()
+        #dbsf to query data and create source data cursor
+        dbsf=DatabaseHelper()
 
         sql_str = 'Select source_id,source_table_name from data_source_information'
         if source_id!='ALL':
@@ -311,13 +318,15 @@ class ViewDataController(Resource):
             code += '\tdb.transact("delete from qualified_data where source_id='+src["source_id"]+' and business_date=%s",(business_date,))\n'
             code += 'if business_or_validation in [\'ALL\',\'VALIDATION\']:\n'
             code += '\tdb.transact("delete from invalid_data where source_id=' + src["source_id"] + ' and business_date=%s",(business_date,))\n'
-            code += 'curdata=db.query("SELECT * FROM  '+src["source_table_name"]+' where business_date=%s",(business_date,))\n'
+            code += 'curdata=dbsf.query("SELECT * FROM  '+src["source_table_name"]+' where business_date=%s",(business_date,))\n'
+            code += 'start_process=time.time()\n'
             code += 'while True:\n'
-            code += '\tdata=curdata.fetchmany(100000)\n'
+            code += '\tdata=curdata.fetchmany(50000)\n'
             code += '\tif not data:\n'
             code += '\t\tbreak\n'
             code +='\tqualified_data=[]\n'
             code +='\tinvalid_data=[]\n'
+            code += '\tstart=time.time()\n'
             code += '\tfor row in data:\n'
             code += '\t\tbusiness_rule=\'\'\n'
             code += '\t\tvalidation_rule=\'\'\n'
@@ -391,14 +400,19 @@ class ViewDataController(Resource):
             code += '\t\tif validation_rule==\'\' and business_rule==\'\' and business_or_validation in [\'ALL\',\'VALIDATION\']:\n'
             code += '\t\t\tinvalid_data.append((source_id,business_date,' + qualifying_key + ',\'No rule applicable!!\'))\n'
 
+            code += '\tprint("Time taken for data loop : " + str((time.time()-start)*1000))\n'
+            code += '\tstart=time.time()\n'
             code += '\tdb.transactmany("insert into invalid_data(source_id,business_date,qualifying_key,business_rules)\\\n \
                       values(%s,%s,%s,%s)",invalid_data)\n'
             code += '\tdb.transactmany("insert into qualified_data(source_id,business_date,qualifying_key,business_rules,buy_currency,sell_currency,mtm_currency)\\\n \
                       values(%s,%s,%s,%s,%s,%s,%s)",qualified_data)\n'
+            code += '\tprint("Time taken for data inserts : "+ str((time.time()-start)*1000))\n'
+            code += 'print("Total Time taken for data processing : "+ str((time.time()-start_process)*1000))\n'
             #code += 'db.commit()\n'
             data_sources = db.query("select *  from data_catalog where business_date='"+business_date+"' and source_id="+str(source_id)).fetchone()
             try:
                 print("Before exec...")
+                self.update_data_catalog(status='RUNNING',source_id=source_id,business_date=business_date)
                 exec(code)
                 db.commit()
                 data_sources["file_load_status"] = "SUCCESS"
@@ -411,4 +425,11 @@ class ViewDataController(Resource):
                 data_sources["file_load_status"] = "FAILED"
             finally:
                 print("In finally")
+                self.update_data_catalog(status=data_sources["file_load_status"],source_id=source_id,business_date=business_date)
                 return data_sources
+
+    def update_data_catalog(self,status,source_id,business_date):
+        db=DatabaseHelper()
+        db.transact("update data_catalog set file_load_status=%s \
+                    where source_id=%s and business_date=%s",(status,source_id,business_date))
+        db.commit()

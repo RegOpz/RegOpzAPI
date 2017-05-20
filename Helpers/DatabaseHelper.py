@@ -9,7 +9,7 @@ class DatabaseHelper(object):
         self.password = dbconfig.DATABASE['password'];
         self.type = dbconfig.DATABASE['type'];
         self.cnx = mysql.connector.connect(user=self.user, password=self.password, host=self.host,database=self.db)
-        self.cursor = self.cnx.cursor(dictionary=True,buffered=True)
+        self.cursor = self.cnx.cursor(dictionary=True)
 
     def query(self,queryString, queryParams=None):
         if queryParams != None:
@@ -38,7 +38,7 @@ class DatabaseHelper(object):
 
     def transactmany(self,queryString,queryParams):
         self.cursor.executemany(queryString,queryParams)
-        print(self.cursor.statement)
+        #print(self.cursor.statement)
         return self.cursor.lastrowid
 
     def __del__(self):
