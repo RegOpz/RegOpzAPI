@@ -3,6 +3,7 @@ from Controllers.DocumentController import DocumentController
 from Controllers.MaintainBusinessRulesController import MaintainBusinessRulesController
 from Controllers.UserController import UserController
 from Controllers.ViewDataController import ViewDataController
+from Controllers.GenerateReportController import GenerateReportController
 from app import *
 from Controllers.ResourceController import ResourceController
 from Controllers.RoleController import RoleController
@@ -108,7 +109,10 @@ api.add_resource(ViewDataController,
     apiPath+"/view-data/apply-rules",
     endpoint="apply_rules_ep"
 )
-
+api.add_resource(GenerateReportController,
+    apiPath+"/view-data/generate-report",
+    endpoint="generate_report_ep"
+)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=APIConfig.API['port'], threaded=True)
