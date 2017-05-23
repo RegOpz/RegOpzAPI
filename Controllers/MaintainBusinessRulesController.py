@@ -131,7 +131,10 @@ class MaintainBusinessRulesController(Resource):
 
 		res = db.transact(sql, params)
 		if res:
+			db.commit()
 			return self.render_business_rule_json_by_id(res)
+
+		db.rollback()
 		return UPDATE_ERROR
 
 	def update_business_rules(self, br, id):
@@ -156,7 +159,10 @@ class MaintainBusinessRulesController(Resource):
 
 		res = db.transact(sql, params)
 		if res == 0:
+			db.commit()
 			return {"id":res}
+
+		db.rollback()
 		return UPDATE_ERROR
 
 	def delete_business_rules(self, id):
@@ -164,7 +170,12 @@ class MaintainBusinessRulesController(Resource):
 		sql = 'delete from business_rules where id=%s'
 		params = (id, )
 		res = db.transact(sql, params)
-		return res
+		if res == 0:
+			db.commit()
+			return res
+
+		db.rollback()
+		return DATABASE_ERROR
 
 	def export_to_csv(self, source_id='ALL'):
 		db = DatabaseHelper()
@@ -188,7 +199,7 @@ class MaintainBusinessRulesController(Resource):
 			dict_writer.writeheader()
 			dict_writer.writerows(business_rules)
 		return { "file_name": filename }
-		
+
 	def list_reports_for_rule(self,**kwargs):
 
 		parameter_list = ['business_rule']

@@ -308,6 +308,10 @@ class GenerateReportController(Resource):
         all_agg_cls_grp=all_agg_cls.groupby('source_id')
         sources=all_agg_cls['source_id'].unique()
 
+        # clean summary table before populating it for reporting_date
+        # util.clean_table(cur, 'report_summary', '', reporting_date)
+        util.clean_table(db._cursor(), 'report_summary_by_source', '', reporting_date)
+
         for src in sources:
             print('Processing data frame for source id [' + src + '].')
             agg_cls_grp = all_agg_cls_grp.get_group(src)
@@ -332,10 +336,6 @@ class GenerateReportController(Resource):
                         result_set.append((row['report_id'], row['sheet_id'], row['cell_id'], \
                                            row['source_id'], row['cell_calc_ref'], float(summary), reporting_date))
 
-                # clean summary table before populating it for reporting_date
-                # util.clean_table(cur, 'report_summary', '', reporting_date)
-                util.clean_table(db._cursor(), 'report_summary_by_source', '', reporting_date)
-
                 db.transactmany('insert into report_summary_by_source(report_id,sheet_id,cell_id,\
                                     source_id,cell_calc_ref,cell_summary,reporting_date)\
                                     values(%s,%s,%s,%s,%s,%s,%s)', result_set)
@@ -359,6 +359,10 @@ class GenerateReportController(Resource):
         # cur = con.cursor(dictionary=True)
         #
         db=DatabaseHelper()
+
+        # clean summary table before populating it for reporting_date
+        # util.clean_table(cur, 'report_summary', '', reporting_date)
+        util.clean_table(db._cursor(), 'report_summary', '', reporting_date)
 
 
         # formula='(RCDMAS1003ID001G19+RCDMAS1003ID001H19)/RCDMAS1003ID001K19+RCDMAS1003ID001G19*0.5'
