@@ -382,6 +382,7 @@ class ViewDataController(Resource):
                          #Now check each element for None and set it to '' if None else use the value
                          for field in fields:
                              final_str=final_str.replace("row[\""+field+"\"]","(row[\""+field+"\"],\'\')[row[\""+field+"\"] is None]")
+
                          code += '\t\tbusiness_rule+=str('+final_str+')+\',\'\n'
                      else:
                          code += '\t\tif ('+NoneType_chk_str+') and ('+final_str+'):\n'
@@ -400,6 +401,7 @@ class ViewDataController(Resource):
             code += '\t\tif validation_rule==\'\' and business_rule==\'\' and business_or_validation in [\'ALL\',\'VALIDATION\']:\n'
             code += '\t\t\tinvalid_data.append((source_id,business_date,' + qualifying_key + ',\'No rule applicable!!\'))\n'
 
+
             code += '\tprint("Time taken for data loop : " + str((time.time()-start)*1000))\n'
             code += '\tstart=time.time()\n'
             code += '\tdb.transactmany("insert into invalid_data(source_id,business_date,qualifying_key,business_rules)\\\n \
@@ -412,7 +414,9 @@ class ViewDataController(Resource):
             data_sources = db.query("select *  from data_catalog where business_date='"+business_date+"' and source_id="+str(source_id)).fetchone()
             try:
                 print("Before exec...")
+
                 self.update_data_catalog(status='RUNNING',source_id=source_id,business_date=business_date)
+
                 exec(code)
                 db.commit()
                 data_sources["file_load_status"] = "SUCCESS"
