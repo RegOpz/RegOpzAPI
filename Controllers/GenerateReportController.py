@@ -161,13 +161,20 @@ class GenerateReportController(Resource):
         #Clean the link table before populating for same reporting date
         util.clean_table(db._cursor(), 'report_qualified_data_link', '', reporting_date)
         start=time.time()
-        result_set_flat=util.flatten(result_set)
-        db.transactmany('insert into report_qualified_data_link \
-                        (report_id,sheet_id ,cell_id ,cell_calc_ref,source_id ,qualifying_key,\
-                         buy_currency,sell_currency,mtm_currency,business_date,reporting_date,\
-                         buy_reporting_rate,sell_reporting_rate,mtm_reporting_rate,\
-                         buy_usd_rate,sell_usd_rate,mtm_usd_rate)\
-                          values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',result_set_flat)
+        result_set_flat_all=util.flatten(result_set)
+        #split large no of data into smaller chunks to avoid sql connection error
+        #mysql.connector.errors.OperationalError: 2055: Lost connection to MySQL
+        rs = all_qual_trd_dict_split = util.split(result_set_flat_all, 100000)
+        print('Time taken by result set split '+ str((time.time() - start) * 1000))
+        start=time.time()
+        for result_set_flat in rs:
+            print('Database inserts for 100000 .....')
+            db.transactmany('insert into report_qualified_data_link \
+                            (report_id,sheet_id ,cell_id ,cell_calc_ref,source_id ,qualifying_key,\
+                             buy_currency,sell_currency,mtm_currency,business_date,reporting_date,\
+                             buy_reporting_rate,sell_reporting_rate,mtm_reporting_rate,\
+                             buy_usd_rate,sell_usd_rate,mtm_usd_rate)\
+                              values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',result_set_flat)
 
         print('Time taken by database inserts '+ str((time.time() - start) * 1000))
         db.commit()
@@ -255,6 +262,32 @@ class GenerateReportController(Resource):
 
         return df
 
+    def get_list_of_columns_for_dataframe(self,agg_df,table_name):
+        db=DatabaseHelper()
+        table_def = db.query("describe " + table_name).fetchall()
+
+        #Now build the agg column list
+        df_agg_column_list=''
+        for agg_ref in agg_df['aggregation_ref'].unique():
+            df_agg_column_list += '/' + agg_ref
+
+        #check for column in the agg column list search_string
+        #if present add to the table column list
+        table_col_list=''
+        for col in table_def:
+            if col['Field'] in df_agg_column_list:
+                if table_col_list == '':
+                    table_col_list = col['Field']
+                else:
+                    table_col_list += ',' + col['Field']
+
+        #Iftable col list is blank, that means we have to select all the columns of the table
+        table_col_list=(table_col_list,'*')[table_col_list=='']
+        print(table_col_list)
+        return table_col_list
+
+
+
     def create_report_summary_by_source(self,**kwargs):
 
         parameter_list = ['report_id', 'business_date_from', 'business_date_to']
@@ -270,13 +303,42 @@ class GenerateReportController(Resource):
 
         db=DatabaseHelper()
 
-        sql= "select a.*,b.source_table_name from report_qualified_data_link a , data_source_information b\
+        # Fetch all aggregate clauses into a dataframe
+        sql = "select a.report_id,a.sheet_id,a.cell_id,b.source_id,\
+                        b.source_table_name,a.aggregation_ref,a.cell_calc_ref,a.aggregation_func\
+                        from report_calc_def a,data_source_information b\
+                        where  a.source_id=b.source_id and report_id='REPORT_ID' order by a.source_id".replace(
+            'REPORT_ID', report_id)
+        all_agg_cls = pd.read_sql(sql, db.connection())
+        #Convert to float where possible to reduce memory usage
+        for col_to_convert in all_agg_cls.columns:
+            all_agg_cls[[col_to_convert]]=all_agg_cls[[col_to_convert]].astype(dtype=float,errors='ignore')
+
+        print(all_agg_cls.dtypes)
+        all_agg_cls_grp=all_agg_cls.groupby('source_id')
+        sources=all_agg_cls['source_id'].unique()
+
+        #Now get the required column list for data frames
+        col_list = ''
+        col_list = self.get_list_of_columns_for_dataframe(all_agg_cls,'report_qualified_data_link')
+        col_list = 'a.' + col_list.replace(',',',a.')
+
+        sql= "select a.sheet_id, a.cell_id, a.cell_calc_ref,a.source_id,a.qualifying_key,\
+              a.business_date,COLUMN_LIST,b.source_table_name from report_qualified_data_link a , data_source_information b\
               where business_date between 'DATE_FROM' and 'DATE_TO' and \
-               a.source_id=b.source_id and report_id='REPORT_ID' and reporting_date='REPORT_DATE'".replace('REPORT_ID',report_id)\
-                .replace('DATE_FROM',business_date_from).replace('DATE_TO',business_date_to).replace('REPORT_DATE',reporting_date)
+               a.source_id=b.source_id and report_id='REPORT_ID' and \
+               reporting_date='REPORT_DATE'".replace('COLUMN_LIST',col_list).replace('REPORT_ID',report_id)\
+                .replace('DATE_FROM',business_date_from).replace('DATE_TO',business_date_to)\
+                .replace('REPORT_DATE',reporting_date)
 
         print(sql)
         report_qualified_data_link=pd.read_sql(sql,db.connection())
+        #Convert to float where possible to reduce memory usage
+        for col_to_convert in report_qualified_data_link.columns:
+            report_qualified_data_link[[col_to_convert]]=report_qualified_data_link[[col_to_convert]].astype(dtype=float,errors='ignore')
+
+        print(report_qualified_data_link.dtypes)
+        report_qualified_data_link.info(memory_usage='deep')
 
         # break report_qualified_data_link into groups according to source_id
         grouped = report_qualified_data_link.groupby('source_id')
@@ -285,49 +347,56 @@ class GenerateReportController(Resource):
         for idx,grp in grouped:
             source_table=grp['source_table_name'].unique()[0]
             key_column = util.get_keycolumn(db._cursor(), source_table).replace("[","").replace("]","")
-            print(key_column)
+            print('key column ['+key_column+']')
 
-            sql = "select * from TBL where business_date between 'DATE_FROM' and 'DATE_TO'".replace('TBL', source_table) \
+            col_list = ''
+            col_list = self.get_list_of_columns_for_dataframe(all_agg_cls,source_table)
+            if key_column not in col_list:
+                col_list = key_column + ',' + col_list
+            sql = "select COLUMN_LIST from TBL where business_date between 'DATE_FROM' and 'DATE_TO'".replace('COLUMN_LIST',col_list)\
+                .replace('TBL', source_table) \
                 .replace('DATE_FROM', business_date_from).replace('DATE_TO', business_date_to)
 
             data_frms = pd.read_sql(sql, db.connection(), chunksize=50000)
             df_group_list = []
             for frm in data_frms:
+                #print(frm.columns)
+                #print(frm.dtypes)
+                #Convert to float where possible to reduce memory usage
+                for col_to_convert in frm.columns:
+                    frm[[col_to_convert]]=frm[[col_to_convert]].astype(dtype=float,errors='ignore')
+                print(frm.dtypes)
                 col_to_use = frm.columns.difference(grp.columns)
+                frm.info(memory_usage='deep')
+                #print(col_to_use)
                 df_group_list.append(pd.merge(grp, frm[col_to_use], left_on='qualifying_key', right_on=key_column))
 
+            #print("Df group list count: " + str(len(df_group_list)))
             merge_grouped[idx]=pd.concat(df_group_list)
 
-        # Fetch all aggregate clauses into a dataframe
-        sql = "select a.report_id,a.sheet_id,a.cell_id,b.source_id,\
-                        b.source_table_name,a.aggregation_ref,a.cell_calc_ref,a.aggregation_func\
-                        from report_calc_def a,data_source_information b\
-                        where  a.source_id=b.source_id and report_id='REPORT_ID' order by a.source_id".replace(
-            'REPORT_ID', report_id)
-        all_agg_cls = pd.read_sql(sql, db.connection())
-        all_agg_cls_grp=all_agg_cls.groupby('source_id')
-        sources=all_agg_cls['source_id'].unique()
 
         # clean summary table before populating it for reporting_date
         # util.clean_table(cur, 'report_summary', '', reporting_date)
         util.clean_table(db._cursor(), 'report_summary_by_source', '', reporting_date)
 
         for src in sources:
-            print('Processing data frame for source id [' + src + '].')
+            print('Processing data frame for source id [' + str(src) + '].')
             agg_cls_grp = all_agg_cls_grp.get_group(src)
             result_set = []
             # if the data frame is empty for a source id, then the source id would not be there as one of the keys
             # of the merged group of data frames, so do nothing for empty data frames
             if src not in merge_grouped.keys():
-                print('Empty data frame for source id [' + src + '], so no action required.')
+                print('Empty data frame for source id [' + str(src) + '], so no action required.')
             else:
                 mrg_src_grp = merge_grouped[src].groupby(['sheet_id', 'cell_id', 'cell_calc_ref'])
+                #print(mrg_src_grp.groups.keys())
 
                 for idx, row in agg_cls_grp.iterrows():
                     key = (row['sheet_id'], row['cell_id'], row['cell_calc_ref'])
                     #print(key)
 
                     if key in mrg_src_grp.groups.keys():
+                        #print("Inside if..", key)
                         mrg_src = mrg_src_grp.get_group(key)
                         mrg_src = self.apply_formula_to_frame(mrg_src, row['aggregation_ref'], 'reporting_value')
                         # print(mrg_src['reporting_value'])
