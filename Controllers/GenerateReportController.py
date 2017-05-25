@@ -282,7 +282,7 @@ class GenerateReportController(Resource):
                     table_col_list += ',' + col['Field']
 
         #Iftable col list is blank, that means we have to select all the columns of the table
-        table_col_list=(table_col_list,'*')[table_col_list=='']
+        table_col_list=(table_col_list,'1 as const')[table_col_list=='']
         print(table_col_list)
         return table_col_list
 
