@@ -39,8 +39,9 @@ class ViewDataController(Resource):
             return self.list_reports_for_data(source_id=source_id,qualifying_key=qualifying_key,business_date=business_date)
         if (request.endpoint == 'report_export_csv_ep'):
             tableName = request.args.get("table_name")
-            businessDate = request.args.get("business_date")
-            return self.export_to_csv(tableName,businessDate)
+            businessref = request.args.get("business_ref")
+            sql = request.args.get("sql")
+            return self.export_to_csv(tableName,businessref,sql)
 
     def put(self, id=None):
         data = request.get_json(force=True)
@@ -177,10 +178,13 @@ class ViewDataController(Resource):
         count = db.query('select count(*) as count from ' +
                          table['source_table_name'] +
                          ' where business_date=\'' + business_date + '\'').fetchone()
+        sql = "select * from " + table['source_table_name'] + \
+                       " where business_date='" + business_date + "'"
         data_dict['cols'] = cols
         data_dict['rows'] = data
         data_dict['count'] = count['count']
         data_dict['table_name'] = table['source_table_name']
+        data_dict['sql'] = sql
 
         # print(data_dict)
         return data_dict
@@ -279,16 +283,16 @@ class ViewDataController(Resource):
             result_set.append(data)
 
         return result_set
-    def export_to_csv(self,table_name,business_date):
+    def export_to_csv(self,table_name,business_ref,sql):
         db = DatabaseHelper()
 
-        sql = "select * from "+table_name +" where business_date='"+business_date+"'"
+        sql = sql
 
         cur = db.query(sql)
 
         data = cur.fetchall()
         keys = [i[0] for i in cur.description]
-        filename=table_name+business_date+str(time.time())+".csv"
+        filename=table_name+business_ref+str(time.time())+".csv"
 
         with open('./static/'+filename, 'wt') as output_file:
             dict_writer = csv.DictWriter(output_file, keys)

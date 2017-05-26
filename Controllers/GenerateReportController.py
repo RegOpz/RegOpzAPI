@@ -346,7 +346,7 @@ class GenerateReportController(Resource):
         merge_grouped={}
         for idx,grp in grouped:
             source_table=grp['source_table_name'].unique()[0]
-            key_column = util.get_keycolumn(db._cursor(), source_table).replace("[","").replace("]","")
+            key_column = util.get_keycolumn(db._cursor(), source_table)
             print('key column ['+key_column+']')
 
             col_list = ''

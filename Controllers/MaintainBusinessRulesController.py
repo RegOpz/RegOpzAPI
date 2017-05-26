@@ -8,10 +8,17 @@ from Constants.Status import *
 
 class MaintainBusinessRulesController(Resource):
 	def get(self, id=None, page=0, col_name=None,business_rule=None):
+		print(request.endpoint)
 		if request.endpoint == "business_rule_export_to_csv_ep":
 			return self.export_to_csv()
 		if request.endpoint == "business_rule_linkage_ep":
 			return self.list_reports_for_rule(business_rule=business_rule)
+		if request.endpoint == "business_rule_drill_down_rules_ep":
+			print('Inside rules drilldown ep')
+			source = request.args.get('source_id')
+			rules = request.args.get('rules')
+			page = request.args.get('page')
+			return self.get_business_rules_list_by_source(rules=rules,source=source,page=page)
 		if id:
 			return self.render_business_rule_json(id)
 		elif page and col_name == None:
@@ -76,6 +83,24 @@ class MaintainBusinessRulesController(Resource):
 		if data:
 			return data
 		return NO_BUSINESS_RULE_FOUND
+	def get_business_rules_list_by_source(self,rules,source,page):
+		db = DatabaseHelper()
+
+		startPage = int(page) * 100
+		data_dict = {}
+		sql = 'select * from business_rules where source_id =' + source + ' and business_rule in (\''+rules.replace(',','\',\'')+'\')'
+		cur = db.query(sql + " limit " + str(startPage) + ", 100")
+		data = cur.fetchall()
+		cols = [i[0] for i in cur.description]
+		count = db.query(sql.replace('*','count(*) as count ')).fetchone()
+		data_dict['cols'] = cols
+		data_dict['rows'] = data
+		data_dict['count'] = count['count']
+		data_dict['table_name'] = 'business_rules'
+		data_dict['sql'] = sql
+
+		return data_dict
+
 	def render_business_rule_json(self, id):
 		db = DatabaseHelper()
 		query = 'select * from business_rules where id = %s'

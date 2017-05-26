@@ -33,6 +33,10 @@ class DocumentController(Resource):
             sheet_id = request.args.get('sheet_id')
             cell_id = request.args.get('cell_id')
             return self.cell_drill_down_rules(report_id=report_id,sheet_id=sheet_id,cell_id=cell_id)
+        if request.endpoint == 'drill_down_data_ep':
+            drill_kwargs = eval(request.args.get('drill_kwargs'))
+            print(drill_kwargs)
+            return self.cell_drill_down_data(**drill_kwargs)
         self.report_id = doc_id
         reporting_date = request.args.get('reporting_date')
         print(reporting_date)
@@ -410,33 +414,58 @@ class DocumentController(Resource):
 
     def cell_drill_down_data(self,**kwargs):
 
-        parameter_list = ['source_id', 'report_id', 'sheet_id', 'cell_id', 'cell_calc_ref','reporting_date']
+        parameter_list = ['source_id', 'report_id', 'sheet_id', 'cell_id', 'cell_calc_ref','reporting_date','page']
 
+        print(kwargs)
         if set(parameter_list).issubset(set(kwargs.keys())):
-            source_id = kwargs["source_id"]
-            report_id = kwargs["report_id"]
+            source_id = kwargs['source_id']
+            report_id = kwargs['report_id']
             sheet_id = kwargs['sheet_id']
             cell_id = kwargs['cell_id']
             cell_calc_ref=kwargs['cell_calc_ref']
             reporting_date = kwargs['reporting_date']
+            page = kwargs['page']
         else:
             print("Please supply parameters: " + str(parameter_list))
+            print(kwargs.keys())
 
         db=DatabaseHelper()
 
         src_inf=db.query("select * from data_source_information where source_id=" + str(source_id)).fetchone()
 
-        key_column = util.get_keycolumn(cur, src_inf['source_table_name'])
+        key_column = util.get_keycolumn(db._cursor(), src_inf['source_table_name'])
 
-        sql = "select a.*,b.* from " + src_inf['source_table_name'] + " a, report_qualified_data_link b\
+        startPage = int(page) * 100
+        data_dict = {}
+        sql = "select a.* from " + src_inf['source_table_name'] + " a, report_qualified_data_link b\
+             where a." + key_column + "=b.qualifying_key and b.report_id='" + report_id + "' and b.source_id='" + str(
+            source_id) + \
+              "' and b.sheet_id='" + sheet_id + "' and b.cell_id='" + cell_id + "' and b.reporting_date='" + reporting_date + "'\
+                and b.cell_calc_ref='"+cell_calc_ref+"' limit " + str(startPage) + ", 100"
+
+        cur = db.query(sql)
+        data = cur.fetchall()
+
+        cols = [i[0] for i in cur.description]
+        print(cols)
+        sql = "select count(1) as count from " + src_inf['source_table_name'] + " a, report_qualified_data_link b\
              where a." + key_column + "=b.qualifying_key and b.report_id='" + report_id + "' and b.source_id='" + str(
             source_id) + \
               "' and b.sheet_id='" + sheet_id + "' and b.cell_id='" + cell_id + "' and b.reporting_date='" + reporting_date + "'\
                 and b.cell_calc_ref='"+cell_calc_ref+"'"
+        count = db.query(sql).fetchone()
+        sql = sql = "select a.* from " + src_inf['source_table_name'] + " a, report_qualified_data_link b\
+             where a." + key_column + "=b.qualifying_key and b.report_id='" + report_id + "' and b.source_id='" + str(
+            source_id) + \
+              "' and b.sheet_id='" + sheet_id + "' and b.cell_id='" + cell_id + "' and b.reporting_date='" + reporting_date + "'\
+                and b.cell_calc_ref='"+cell_calc_ref+"'"
+        data_dict['cols'] = cols
+        data_dict['rows'] = data
+        data_dict['count'] = count['count']
+        data_dict['table_name'] = src_inf['source_table_name']
+        data_dict['sql'] = sql
 
-        drill_data = db.query(sql).fetchall()
-
-        return drill_data
+        return data_dict
 
     def suggesstion_list(self,search_string):
 

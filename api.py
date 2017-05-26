@@ -27,6 +27,10 @@ api.add_resource(DocumentController,
     endpoint = "drill_down_ep"
 )
 api.add_resource(DocumentController,
+    apiPath + "/document/drill-down-data",
+    endpoint = "drill_down_data_ep"
+)
+api.add_resource(DocumentController,
     apiPath + "/document/get-date-heads-for-report",
     endpoint = "get_date_heads_for_report_ep"
 )
@@ -43,6 +47,10 @@ api.add_resource(MaintainBusinessRulesController,
     endpoint="business_rules_ep_filtered"
 )
 api.add_resource(MaintainBusinessRulesController,
+    apiPath + "/business-rules/drill-down-rules",
+    endpoint="business_rule_drill_down_rules_ep"
+)
+api.add_resource(MaintainBusinessRulesController,
     apiPath + "/business-rule/<string:id>",
     endpoint="business_rule_ep"
 )
@@ -50,7 +58,6 @@ api.add_resource(MaintainBusinessRulesController,
     apiPath + "/business-rule/linkage/<string:business_rule>",
     endpoint="business_rule_linkage_ep"
 )
-
 api.add_resource(MaintainBusinessRulesController,
     apiPath + "/business-rule/linkage-multiple",
     endpoint="business_rule_linkage_multiple_ep"
