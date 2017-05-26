@@ -13,6 +13,7 @@ from openpyxl.styles import Border, Side, PatternFill, Font, GradientFill, Align
 from openpyxl.utils import get_column_letter
 import Helpers.utils as util
 import json
+import ast
 from operator import itemgetter
 from datetime import datetime
 UPLOAD_FOLDER = './uploads/templates'
@@ -391,6 +392,12 @@ class DocumentController(Resource):
             cell_id='"+cell_id+"'"
 
         comp_agg_rules=db.query(sql).fetchall()
+        formula = comp_agg_rules[0]['comp_agg_ref']
+        variables = list(set([node.id for node in ast.walk(ast.parse(formula)) if isinstance(node, ast.Name)]))
+        cell_calc_ref_list = ''
+        for v in variables:
+            cell_calc_ref_list += ',\'' + v + '\''
+        cell_calc_ref_list = cell_calc_ref_list[1:]
 
         #sql="select * from report_agg_def where report_id='"+report_id+"' and sheet_id='"+sheet_id+"' and\
         #    cell_id='"+cell_id+"'"
@@ -400,8 +407,13 @@ class DocumentController(Resource):
         sql = "select b.source_table_name, a.* from report_calc_def a,\
             data_source_information b where a.source_id=b.source_id and \
             report_id='" + report_id + "' and sheet_id='" + sheet_id + "' and \
-            cell_id='" + cell_id + "'"
+            cell_id='" + cell_id + "'" + \
+            " union " + \
+            "select b.source_table_name, a.* from report_calc_def a,\
+                data_source_information b where a.source_id=b.source_id and \
+                report_id='" + report_id + "' and cell_calc_ref in (" + cell_calc_ref_list + ")"
 
+        print(sql)
         cell_rules=db.query(sql).fetchall()
 
         display_dict={}
