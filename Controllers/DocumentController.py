@@ -38,6 +38,10 @@ class DocumentController(Resource):
             drill_kwargs = eval(request.args.get('drill_kwargs'))
             print(drill_kwargs)
             return self.cell_drill_down_data(**drill_kwargs)
+        if request.endpoint == 'get_report_template_suggestion_list_ep':
+            reports = request.args.get('reports')
+            country = request.args.get('country')
+            return self.report_template_suggesstion_list(report_id=reports,country=country)
         self.report_id = doc_id
         reporting_date = request.args.get('reporting_date')
         print(reporting_date)
@@ -488,3 +492,41 @@ class DocumentController(Resource):
             return {"msg":"No report name found starting with '"+search_string+"'"}
         else:
             return catalog
+    def report_template_suggesstion_list(self,report_id='ALL',country='ALL'):
+
+        db=DatabaseHelper()
+        data_dict={}
+        where_clause = ''
+
+        sql = "select distinct country from report_def where 1 "
+        country_suggestion = db.query(sql).fetchall()
+        if country is not None and country !='ALL':
+             where_clause =  " and instr(upper('" + country + "'), upper(country)) > 0"
+
+        country = db.query(sql + where_clause).fetchall()
+
+        sql = "select distinct report_id from report_def"
+        report_suggestion = db.query(sql).fetchall()
+        data_dict['country'] = country
+        for i,c in enumerate(data_dict['country']):
+            sql = "select distinct report_id from report_def where country = '" + c['country'] + "'"
+            if report_id is not None and report_id !='ALL':
+                 where_clause +=  " and instr(upper('" + report_id + "'), upper(report_id)) > 0"
+            report = db.query(sql + where_clause).fetchall()
+            print(data_dict['country'][i])
+            data_dict['country'][i]['report'] = report
+            where_report = ''
+            for j,r in enumerate(data_dict['country'][i]['report']):
+                sql = "select distinct report_id, valid_from, valid_to, last_updated_by from report_def where country = '" + c['country'] + "'"
+                where_report =  " and report_id = '" + data_dict['country'][i]['report'][j]['report_id'] + "'"
+                reportversions = db.query(sql + where_clause + where_report).fetchall()
+                print(data_dict['country'][i]['report'][j])
+                data_dict['country'][i]['report'][j]['reportversions'] = reportversions
+            print(data_dict)
+        data_dict['report_suggestion'] = report_suggestion
+        data_dict['country_suggestion'] = country_suggestion
+
+        if not data_dict:
+            return {"msg":"No report matched found"},404
+        else:
+            return data_dict

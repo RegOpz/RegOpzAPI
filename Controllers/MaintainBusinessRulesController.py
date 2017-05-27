@@ -86,10 +86,17 @@ class MaintainBusinessRulesController(Resource):
 	def get_business_rules_list_by_source(self,rules,source,page):
 		db = DatabaseHelper()
 
+		if page is None:
+			page = 0
 		startPage = int(page) * 100
 		data_dict = {}
-		sql = 'select * from business_rules where source_id =' + source + ' and business_rule in (\''+rules.replace(',','\',\'')+'\')'
-		cur = db.query(sql + " limit " + str(startPage) + ", 100")
+		where_clause = ''
+		sql = 'select * from business_rules where 1 '
+		if source is not None:
+			where_clause += ' and source_id =' + source
+		if rules is not None:
+			where_clause += ' and business_rule in (\''+rules.replace(',','\',\'')+'\')'
+		cur = db.query(sql + where_clause + " limit " + str(startPage) + ", 100")
 		data = cur.fetchall()
 		cols = [i[0] for i in cur.description]
 		count = db.query(sql.replace('*','count(*) as count ')).fetchone()

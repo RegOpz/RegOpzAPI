@@ -34,6 +34,10 @@ api.add_resource(DocumentController,
     apiPath + "/document/get-date-heads-for-report",
     endpoint = "get_date_heads_for_report_ep"
 )
+api.add_resource(DocumentController,
+    apiPath + "/document/get-report-template-suggestion-list",
+    endpoint = "get_report_template_suggestion_list_ep"
+)
 api.add_resource(MaintainBusinessRulesController,
     apiPath + "/business-rules/<string:page>",
     endpoint="business_rules_ep"
