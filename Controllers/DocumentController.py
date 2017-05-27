@@ -395,13 +395,15 @@ class DocumentController(Resource):
         sql="select * from report_comp_agg_def where report_id='"+report_id+"' and sheet_id='"+sheet_id+"' and\
             cell_id='"+cell_id+"'"
 
-        comp_agg_rules=db.query(sql).fetchall()
-        formula = comp_agg_rules[0]['comp_agg_ref']
-        variables = list(set([node.id for node in ast.walk(ast.parse(formula)) if isinstance(node, ast.Name)]))
         cell_calc_ref_list = ''
-        for v in variables:
-            cell_calc_ref_list += ',\'' + v + '\''
-        cell_calc_ref_list = cell_calc_ref_list[1:]
+        comp_agg_rules=db.query(sql).fetchall()
+        if comp_agg_rules:
+            formula = comp_agg_rules[0]['comp_agg_ref']
+            variables = list(set([node.id for node in ast.walk(ast.parse(formula)) if isinstance(node, ast.Name)]))
+            cell_calc_ref_list = ''
+            for v in variables:
+                cell_calc_ref_list += ',\'' + v + '\''
+            cell_calc_ref_list = cell_calc_ref_list[1:]
 
         #sql="select * from report_agg_def where report_id='"+report_id+"' and sheet_id='"+sheet_id+"' and\
         #    cell_id='"+cell_id+"'"
@@ -411,8 +413,9 @@ class DocumentController(Resource):
         sql = "select b.source_table_name, a.* from report_calc_def a,\
             data_source_information b where a.source_id=b.source_id and \
             report_id='" + report_id + "' and sheet_id='" + sheet_id + "' and \
-            cell_id='" + cell_id + "'" + \
-            " union " + \
+            cell_id='" + cell_id + "'"
+        if cell_calc_ref_list != '':
+            sql += " union " + \
             "select b.source_table_name, a.* from report_calc_def a,\
                 data_source_information b where a.source_id=b.source_id and \
                 report_id='" + report_id + "' and cell_calc_ref in (" + cell_calc_ref_list + ")"
@@ -455,8 +458,8 @@ class DocumentController(Resource):
         data_dict = {}
         sql = "select a.* from " + src_inf['source_table_name'] + " a, report_qualified_data_link b\
              where a." + key_column + "=b.qualifying_key and b.report_id='" + report_id + "' and b.source_id='" + str(
-            source_id) + \
-              "' and b.sheet_id='" + sheet_id + "' and b.cell_id='" + cell_id + "' and b.reporting_date='" + reporting_date + "'\
+            source_id) + "' and a.business_date = b.business_date "\
+              " and b.sheet_id='" + sheet_id + "' and b.cell_id='" + cell_id + "' and b.reporting_date='" + reporting_date + "'\
                 and b.cell_calc_ref='"+cell_calc_ref+"' limit " + str(startPage) + ", 100"
 
         cur = db.query(sql)
