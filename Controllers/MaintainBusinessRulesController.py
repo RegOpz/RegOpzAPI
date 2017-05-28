@@ -2,16 +2,23 @@ from flask import Flask, jsonify, request
 from flask_restful import Resource
 from Helpers.DatabaseHelper import DatabaseHelper
 import csv
+import time
 from Constants.Status import *
 
 
 class MaintainBusinessRulesController(Resource):
 	def get(self, id=None, page=0, col_name=None,business_rule=None):
+		print(request.endpoint)
 		if request.endpoint == "business_rule_export_to_csv_ep":
-			self.export_to_csv()
-			return {"msg":"CSV export finsihed"}
+			return self.export_to_csv()
 		if request.endpoint == "business_rule_linkage_ep":
 			return self.list_reports_for_rule(business_rule=business_rule)
+		if request.endpoint == "business_rule_drill_down_rules_ep":
+			print('Inside rules drilldown ep')
+			source = request.args.get('source_id')
+			rules = request.args.get('rules')
+			page = request.args.get('page')
+			return self.get_business_rules_list_by_source(rules=rules,source=source,page=page)
 		if id:
 			return self.render_business_rule_json(id)
 		elif page and col_name == None:
@@ -76,6 +83,31 @@ class MaintainBusinessRulesController(Resource):
 		if data:
 			return data
 		return NO_BUSINESS_RULE_FOUND
+	def get_business_rules_list_by_source(self,rules,source,page):
+		db = DatabaseHelper()
+
+		if page is None:
+			page = 0
+		startPage = int(page) * 100
+		data_dict = {}
+		where_clause = ''
+		sql = 'select * from business_rules where 1 '
+		if source is not None:
+			where_clause += ' and source_id =' + source
+		if rules is not None:
+			where_clause += ' and business_rule in (\''+rules.replace(',','\',\'')+'\')'
+		cur = db.query(sql + where_clause + " limit " + str(startPage) + ", 100")
+		data = cur.fetchall()
+		cols = [i[0] for i in cur.description]
+		count = db.query(sql.replace('*','count(*) as count ') + where_clause).fetchone()
+		data_dict['cols'] = cols
+		data_dict['rows'] = data
+		data_dict['count'] = count['count']
+		data_dict['table_name'] = 'business_rules'
+		data_dict['sql'] = sql
+
+		return data_dict
+
 	def render_business_rule_json(self, id):
 		db = DatabaseHelper()
 		query = 'select * from business_rules where id = %s'
@@ -131,7 +163,10 @@ class MaintainBusinessRulesController(Resource):
 
 		res = db.transact(sql, params)
 		if res:
+			db.commit()
 			return self.render_business_rule_json_by_id(res)
+
+		db.rollback()
 		return UPDATE_ERROR
 
 	def update_business_rules(self, br, id):
@@ -156,7 +191,10 @@ class MaintainBusinessRulesController(Resource):
 
 		res = db.transact(sql, params)
 		if res == 0:
+			db.commit()
 			return {"id":res}
+
+		db.rollback()
 		return UPDATE_ERROR
 
 	def delete_business_rules(self, id):
@@ -164,7 +202,12 @@ class MaintainBusinessRulesController(Resource):
 		sql = 'delete from business_rules where id=%s'
 		params = (id, )
 		res = db.transact(sql, params)
-		return res
+		if res == 0:
+			db.commit()
+			return res
+
+		db.rollback()
+		return DATABASE_ERROR
 
 	def export_to_csv(self, source_id='ALL'):
 		db = DatabaseHelper()
@@ -181,11 +224,14 @@ class MaintainBusinessRulesController(Resource):
 		 # keys=business_rules[0].keys()
 
 		keys = [i[0] for i in cur.description]
+		filename="business_rules"+str(time.time())+".csv"
 
-		with open('./static/business_rules.csv', 'wt') as output_file:
+		with open('./static/'+filename, 'wt') as output_file:
 			dict_writer = csv.DictWriter(output_file, keys)
 			dict_writer.writeheader()
 			dict_writer.writerows(business_rules)
+		return { "file_name": filename }
+
 	def list_reports_for_rule(self,**kwargs):
 
 		parameter_list = ['business_rule']

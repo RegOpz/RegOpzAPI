@@ -10,6 +10,7 @@ class DatabaseHelper(object):
         self.type = dbconfig.DATABASE['type'];
         self.cnx = mysql.connector.connect(user=self.user, password=self.password, host=self.host,database=self.db)
         self.cursor = self.cnx.cursor(dictionary=True)
+        self.cursor.execute('set global max_allowed_packet=524288000')
 
     def query(self,queryString, queryParams=None):
         if queryParams != None:
@@ -17,22 +18,31 @@ class DatabaseHelper(object):
         else:
             self.cursor.execute(queryString)
         print(self.cursor.statement)
-        return self.cursor        
+        return self.cursor
+
+    def connection(self):
+        return self.cnx
+
+    def _cursor(self):
+        return self.cursor
 
     def transact(self,queryString, queryParams=()):
         self.cursor.execute(queryString, queryParams)
         print(self.cursor.statement)
-        self.commit()
         return self.cursor.lastrowid
 
     def commit(self):
         self.cnx.commit()
 
+    def rollback(self):
+        self.cnx.rollback()
+
     def transactmany(self,queryString,queryParams):
         self.cursor.executemany(queryString,queryParams)
-        print(self.cursor.statement)
+        #print(self.cursor.statement)
         return self.cursor.lastrowid
 
     def __del__(self):
+        self.commit()
         self.cursor.close()
         self.cnx.close()

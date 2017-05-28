@@ -43,7 +43,7 @@ def get_keycolumn(cur,table_name):
     cur.execute("select br.python_implementation from business_rules br,data_source_information ds where \
                  br.source_id = ds.source_id and ds.source_table_name =\'"+table_name+"\'  and br.rule_type='KEYCOLUMN'")
     keycolumn = cur.fetchone()
-    return keycolumn["python_implementation"]
+    return keycolumn["python_implementation"].replace("[","").replace("]","")
 
 def clean_table(cur,table_name,business_date,reporting_date):
     sql='delete from  '+table_name+' where 1=1'
