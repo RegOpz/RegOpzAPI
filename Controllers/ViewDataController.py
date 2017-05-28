@@ -29,6 +29,11 @@ class ViewDataController(Resource):
             business_date = request.args['business_date']
             page = request.args['page']
             return self.getDataSource(source_id=source_id,business_date=business_date,page=page)
+        if(request.endpoint == 'table_data_ep'):
+            table = request.args['table']
+            filter = request.args['filter']
+            page = request.args['page']
+            return self.getTableData(table=table,filter=filter,page=page)
         if(request.endpoint == 'get_source_ep'):
             business_date = request.args['business_date']
             return self.render_data_source_list(business_date=business_date)
@@ -184,6 +189,41 @@ class ViewDataController(Resource):
         data_dict['rows'] = data
         data_dict['count'] = count['count']
         data_dict['table_name'] = table['source_table_name']
+        data_dict['sql'] = sql
+
+        # print(data_dict)
+        return data_dict
+
+    def getTableData(self,**kwargs):
+        parameter_list = ['table', 'filter', 'page']
+
+        print(kwargs)
+        if set(parameter_list).issubset(set(kwargs.keys())):
+            table = kwargs['table']
+            filter = kwargs['filter']
+            page = kwargs['page']
+        else:
+            print("Please supply parameters: " + str(parameter_list))
+        db = DatabaseHelper()
+
+        if page is None:
+            page = 0
+        startPage = int(page) * 100
+        if filter is None :
+            filter = '1'
+
+        data_dict = {}
+        sql = "select * from " + table + \
+                       " where 1 and " + filter + " limit " + str(startPage) + ", 100"
+        cur = db.query(sql)
+        data = cur.fetchall()
+        cols = [i[0] for i in cur.description]
+        count = db.query(sql.replace('*','count(*) as count ')).fetchone()
+
+        data_dict['cols'] = cols
+        data_dict['rows'] = data
+        data_dict['count'] = count['count']
+        data_dict['table_name'] = table
         data_dict['sql'] = sql
 
         # print(data_dict)

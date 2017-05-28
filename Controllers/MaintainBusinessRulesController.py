@@ -99,7 +99,7 @@ class MaintainBusinessRulesController(Resource):
 		cur = db.query(sql + where_clause + " limit " + str(startPage) + ", 100")
 		data = cur.fetchall()
 		cols = [i[0] for i in cur.description]
-		count = db.query(sql.replace('*','count(*) as count ')).fetchone()
+		count = db.query(sql.replace('*','count(*) as count ') + where_clause).fetchone()
 		data_dict['cols'] = cols
 		data_dict['rows'] = data
 		data_dict['count'] = count['count']

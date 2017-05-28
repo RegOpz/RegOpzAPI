@@ -101,6 +101,10 @@ api.add_resource(ViewDataController,
     endpoint="report_ep"
 )
 api.add_resource(ViewDataController,
+    apiPath+"/view-data/table-data",
+    endpoint="table_data_ep"
+)
+api.add_resource(ViewDataController,
     apiPath+"/view-data/report/<string:id>",
     endpoint="report_update_ep"
 )
