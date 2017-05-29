@@ -12,9 +12,13 @@ class MaintainReportRulesController(Resource):
 		if request.endpoint == 'get_business_rules_suggestion_list_ep':
 			source_id = request.args.get('source_id')
 			return self.get_business_rules_suggestion_list(source_id=source_id)
+		if request.endpoint == 'get_source_suggestion_list_ep':
+			source_id = request.args.get('source_id')
+			return self.get_source_suggestion_list(source_id=source_id)
 		if request.endpoint == 'get_cell_calc_ref_suggestion_list_ep':
 			report_id = request.args.get('report_id')
 			return self.get_cell_calc_ref_suggestion_list(report_id=report_id)
+
 
 	def post(self):
 		data = request.get_json(force=True)
@@ -118,6 +122,29 @@ class MaintainReportRulesController(Resource):
 	    if data:
 	        return data
 	    return NO_BUSINESS_RULE_FOUND
+
+	def get_source_suggestion_list(self,source_id='ALL'):
+
+		db=DatabaseHelper()
+		data_dict={}
+		where_clause = ''
+
+		sql = "select source_id, source_table_name " + \
+		        " from data_source_information " + \
+				" where 1 "
+		country_suggestion = db.query(sql).fetchall()
+		if source_id is not None and source_id !='ALL':
+		     where_clause =  " and source_id = " + source_id
+
+		source = db.query(sql + where_clause).fetchall()
+
+
+		data_dict['source_suggestion'] = source
+
+		if not data_dict:
+		    return {"msg":"No report matched found"},404
+		else:
+		    return data_dict
 
 	def get_business_rules_suggestion_list(self,source_id='ALL'):
 

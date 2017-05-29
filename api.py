@@ -139,6 +139,10 @@ api.add_resource(MaintainReportRulesController,
     endpoint="get_business_rules_suggestion_list_ep"
 )
 api.add_resource(MaintainReportRulesController,
+    apiPath+"/report-rule/get-source-suggestion-list",
+    endpoint="get_source_suggestion_list_ep"
+)
+api.add_resource(MaintainReportRulesController,
     apiPath+"/report-rule/get-cell-calc-ref-suggestion-list",
     endpoint="get_cell_calc_ref_suggestion_list_ep"
 )
