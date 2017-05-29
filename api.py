@@ -1,6 +1,7 @@
 from Controllers.Info import Info
 from Controllers.DocumentController import DocumentController
 from Controllers.MaintainBusinessRulesController import MaintainBusinessRulesController
+from Controllers.MaintainReportRulesController import MaintainReportRulesController
 from Controllers.UserController import UserController
 from Controllers.ViewDataController import ViewDataController
 from Controllers.GenerateReportController import GenerateReportController
@@ -128,6 +129,20 @@ api.add_resource(GenerateReportController,
     apiPath+"/view-data/generate-report",
     endpoint="generate_report_ep"
 )
+api.add_resource(MaintainReportRulesController,
+    apiPath+"/report-rule",
+    apiPath+"/report-rule/<int:id>",
+    endpoint="report_rule_ep"
+)
+api.add_resource(MaintainReportRulesController,
+    apiPath+"/report-rule/get-business-rules-suggestion-list",
+    endpoint="get_business_rules_suggestion_list_ep"
+)
+api.add_resource(MaintainReportRulesController,
+    apiPath+"/report-rule/get-cell-calc-ref-suggestion-list",
+    endpoint="get_cell_calc_ref_suggestion_list_ep"
+)
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=APIConfig.API['port'], threaded=True)

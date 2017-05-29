@@ -392,7 +392,7 @@ class ViewDataController(Resource):
                          #fields names in the python_implementation should be within the tag <fld>field</fld>
                          #no space allowed between tags and the fields name
                          #final_str=final_str.replace("<fld>" + field + "</fld>",new_str)
-                         final_str=final_str.replace("["+field+"]",new_str)
+                         final_str=final_str.replace("["+field+"]",new_str).replace(new_str,'str('+ new_str +')')
                          NoneType_chk_str=NoneType_chk_str.replace("["+field+"]",new_str)
                      ##################################################################################
                      # Some specific literals to be used while defining rules

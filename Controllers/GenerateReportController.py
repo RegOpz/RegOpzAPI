@@ -142,7 +142,7 @@ class GenerateReportController(Resource):
         exch_rt_dict=defaultdict(dict)
 
         for er in exch_rt:
-            exch_rt_dict[er["business_date"]+er["from_currency"]][er["business_date"]+er["to_currency"]]=er["rate"]
+            exch_rt_dict[str(er["business_date"])+er["from_currency"]][str(er["business_date"])+er["to_currency"]]=er["rate"]
 
 
         #print(exch_rt_dict)

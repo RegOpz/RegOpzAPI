@@ -469,9 +469,10 @@ class DocumentController(Resource):
         print(cols)
         sql = "select count(1) as count from " + src_inf['source_table_name'] + " a, report_qualified_data_link b\
              where a." + key_column + "=b.qualifying_key and b.report_id='" + report_id + "' and b.source_id='" + str(
-            source_id) + \
-              "' and b.sheet_id='" + sheet_id + "' and b.cell_id='" + cell_id + "' and b.reporting_date='" + reporting_date + "'\
+            source_id) + "' and a.business_date = b.business_date "\
+              " and b.sheet_id='" + sheet_id + "' and b.cell_id='" + cell_id + "' and b.reporting_date='" + reporting_date + "'\
                 and b.cell_calc_ref='"+cell_calc_ref+"'"
+        print(sql)
         count = db.query(sql).fetchone()
         sql = sql = "select a.* from " + src_inf['source_table_name'] + " a, report_qualified_data_link b\
              where a." + key_column + "=b.qualifying_key and b.report_id='" + report_id + "' and b.source_id='" + str(
