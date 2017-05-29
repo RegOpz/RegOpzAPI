@@ -123,6 +123,7 @@ class MaintainReportRulesController(Resource):
 
 		db=DatabaseHelper()
 		data_dict={}
+		where_clause = ''
 
 		sql = "select source_id, source_table_name " + \
 		        " from data_source_information " + \
