@@ -71,6 +71,14 @@ api.add_resource(MaintainBusinessRulesController,
     apiPath + "/business-rule/export_to_csv",
     endpoint="business_rule_export_to_csv_ep"
 )
+api.add_resource(MaintainBusinessRulesController,
+    apiPath + "/business-rule/get-br-source-suggestion-list",
+    endpoint="get_br_source_suggestion_list_ep"
+)
+api.add_resource(MaintainBusinessRulesController,
+    apiPath + "/business-rule/get-br-source-column-suggestion-list",
+    endpoint="get_br_source_column_suggestion_list_ep"
+)
 api.add_resource(UserController,
     apiPath + "/users",
     endpoint="users_ep"

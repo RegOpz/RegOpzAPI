@@ -19,6 +19,12 @@ class MaintainBusinessRulesController(Resource):
 			rules = request.args.get('rules')
 			page = request.args.get('page')
 			return self.get_business_rules_list_by_source(rules=rules,source=source,page=page)
+		if request.endpoint == 'get_br_source_suggestion_list_ep':
+			source_id = request.args.get('source_id')
+			return self.get_source_suggestion_list(source_id=source_id)
+		if request.endpoint == 'get_br_source_column_suggestion_list_ep':
+			table_name = request.args.get('table_name')
+			return self.get_source_column_suggestion_list(table_name=table_name)
 		if id:
 			return self.render_business_rule_json(id)
 		elif page and col_name == None:
@@ -278,3 +284,34 @@ class MaintainBusinessRulesController(Resource):
 				result_set.append(data)
 
 		return result_set
+
+	def get_source_suggestion_list(self,source_id='ALL'):
+
+		db=DatabaseHelper()
+		data_dict={}
+		where_clause = ''
+
+		sql = "select source_id, source_table_name " + \
+		        " from data_source_information " + \
+				" where 1 "
+		country_suggestion = db.query(sql).fetchall()
+		if source_id is not None and source_id !='ALL':
+		     where_clause =  " and source_id = " + source_id
+
+		source = db.query(sql + where_clause).fetchall()
+
+
+		data_dict['source_suggestion'] = source
+
+		if not data_dict:
+		    return {"msg":"No report matched found"},404
+		else:
+		    return data_dict
+
+
+	def get_source_column_suggestion_list(self,table_name):
+		db=DatabaseHelper()
+		data_dict = db.query("describe " + table_name).fetchall()
+
+		#Now build the agg column list
+		return data_dict
