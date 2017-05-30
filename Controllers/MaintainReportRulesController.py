@@ -132,7 +132,6 @@ class MaintainReportRulesController(Resource):
 		sql = "select source_id, source_table_name " + \
 		        " from data_source_information " + \
 				" where 1 "
-		country_suggestion = db.query(sql).fetchall()
 		if source_id is not None and source_id !='ALL':
 		     where_clause =  " and source_id = " + source_id
 
