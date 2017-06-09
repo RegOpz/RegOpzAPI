@@ -106,16 +106,6 @@ class GenerateReportController(Resource):
 
         db=DatabaseHelper()
 
-        all_qualified_trade=db.query('select source_id,qualifying_key,business_rules,buy_currency,sell_currency,mtm_currency,\
-                    %s as reporting_currency,business_date,%s as reporting_date,%s as business_date_to, \
-                    %s as ref_date_rate \
-                     from qualified_data where business_date between %s and %s',\
-                    (reporting_currency,reporting_date,business_date_to,ref_date_rate,business_date_from,business_date_to)).fetchall()
-
-        start = time.time()
-        all_qual_trd_dict_split = util.split(all_qualified_trade, 1000)
-        print('Time taken for converting to dictionary and spliting all_qual_trd '+str((time.time() - start)*1000))
-
         all_business_rules=db.query('select report_id,sheet_id,cell_id,cell_calc_ref,cell_business_rules \
                     from report_calc_def where report_id=%s',(report_id,)).fetchall()
 
@@ -144,31 +134,48 @@ class GenerateReportController(Resource):
         for er in exch_rt:
             exch_rt_dict[str(er["business_date"])+er["from_currency"]][str(er["business_date"])+er["to_currency"]]=er["rate"]
 
-
-        #print(exch_rt_dict)
-        start=time.time()
-
-        #mp=partial(map_data_to_cells,all_bus_rl_dict,exch_rt_dict,reporting_currency)
-        mp = partial(self.map_data_to_cells, all_business_rules, exch_rt_dict, reporting_currency)
-
-        print('CPU Count: ' + str(cpu_count()))
-        pool=Pool(cpu_count()-1)
-        result_set=pool.map(mp,all_qual_trd_dict_split)
-        pool.close()
-        pool.join()
-
-        print('Time taken by pool processes '+str((time.time() - start)*1000))
         #Clean the link table before populating for same reporting date
+        print('Before clean_table report_qualified_data_link')
+        start = time.time()
         util.clean_table(db._cursor(), 'report_qualified_data_link', '', reporting_date)
-        start=time.time()
-        result_set_flat_all=util.flatten(result_set)
-        #split large no of data into smaller chunks to avoid sql connection error
-        #mysql.connector.errors.OperationalError: 2055: Lost connection to MySQL
-        rs = all_qual_trd_dict_split = util.split(result_set_flat_all, 100000)
-        print('Time taken by result set split '+ str((time.time() - start) * 1000))
-        start=time.time()
-        for result_set_flat in rs:
-            print('Database inserts for 100000 .....')
+        print('Time taken for clean_table report_qualified_data_link ' + str((time.time() - start) * 1000))
+
+        dbqd=DatabaseHelper()
+        curdata =dbqd.query('select source_id,qualifying_key,business_rules,buy_currency,sell_currency,mtm_currency,\
+                    %s as reporting_currency,business_date,%s as reporting_date,%s as business_date_to, \
+                    %s as ref_date_rate \
+                     from qualified_data where business_date between %s and %s',\
+                    (reporting_currency,reporting_date,business_date_to,ref_date_rate,business_date_from,business_date_to))
+        startcur = time.time()
+        while True:
+            all_qualified_trade=curdata.fetchmany(50000)
+            if not all_qualified_trade:
+                break
+
+            print('Before converting to dictionary')
+            start = time.time()
+            all_qual_trd_dict_split = util.split(all_qualified_trade, 1000)
+            print('Time taken for converting to dictionary and spliting all_qual_trd '+str((time.time() - start)*1000))
+
+            #print(exch_rt_dict)
+            start=time.time()
+
+            #mp=partial(map_data_to_cells,all_bus_rl_dict,exch_rt_dict,reporting_currency)
+            mp = partial(self.map_data_to_cells, all_business_rules, exch_rt_dict, reporting_currency)
+
+            print('CPU Count: ' + str(cpu_count()))
+            pool=Pool(cpu_count()-1)
+            result_set=pool.map(mp,all_qual_trd_dict_split)
+            pool.close()
+            pool.join()
+
+            print('Time taken by pool processes '+str((time.time() - start)*1000))
+
+            start=time.time()
+            result_set_flat=util.flatten(result_set)
+            start=time.time()
+            #for result_set_flat in rs:
+            print('Database inserts for 50000 .....')
             db.transactmany('insert into report_qualified_data_link \
                             (report_id,sheet_id ,cell_id ,cell_calc_ref,source_id ,qualifying_key,\
                              buy_currency,sell_currency,mtm_currency,business_date,reporting_date,\
@@ -176,9 +183,10 @@ class GenerateReportController(Resource):
                              buy_usd_rate,sell_usd_rate,mtm_usd_rate)\
                               values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',result_set_flat)
 
-        print('Time taken by database inserts '+ str((time.time() - start) * 1000))
-        db.commit()
-        #return
+            print('Time taken by database inserts '+ str((time.time() - start) * 1000))
+            db.commit()
+            #return
+        print('Time taken by complete loop of qualified data '+ str((time.time() - startcur) * 1000))
 
 
     def apply_formula_to_frame(self, df, excel_formula,new_field_name):
