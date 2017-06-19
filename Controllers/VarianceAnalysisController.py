@@ -161,10 +161,12 @@ class VarianceAnalysisController(Resource):
                 if idx==None:
                     cell_d['cell']=row['cell_id']
                     cell_d['type']='DATA_VALUE'
-                    cell_d['value']={row['reporting_date']:cell_summary}
+                    cell_d['value']={str(row['reporting_date']):cell_summary}
+                    #print(cell_d)
                     matrix_list.append(cell_d)
                 else:
-                    matrix_list[idx]['value'][row['reporting_date']]=cell_summary
+                    matrix_list[idx]['value'][str(row['reporting_date'])]=cell_summary
+                    #print(idx,row['reporting_date'],matrix_list[idx]['value'])
 
                     if matrix_list[idx]['value'][first_reporting_date]==0 :
                         matrix_list[idx]['value'][first_reporting_date] = 1e-15
@@ -186,7 +188,3 @@ class VarianceAnalysisController(Resource):
             sheet_d_list.append(sheet_d)
 
         return sheet_d_list
-
-
-
-
