@@ -65,7 +65,7 @@ class GenerateReportController(Resource):
                     # B - business_date exchange rate
                     # R - Reporting date exchange rate
                     erd = lambda rr: qd["business_date"] if rr == 'B' else qd["business_date_to"]
-                    ref_date = erd(qd["ref_date_rate"])
+                    ref_date = str(erd(qd["ref_date_rate"]))
 
                     for k in d_r.keys():
                         key1 = qd[k[:k.find('_')] + "_currency"]

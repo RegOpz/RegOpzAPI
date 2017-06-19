@@ -9,6 +9,7 @@ from app import *
 from Controllers.ResourceController import ResourceController
 from Controllers.RoleController import RoleController
 from Controllers.RoleController import RoleController
+from Controllers.MaintainSourcesController import MaintainSourcesController
 from flask_cors import CORS, cross_origin
 app = Flask(__name__)
 CORS(app)
@@ -151,8 +152,25 @@ api.add_resource(MaintainReportRulesController,
     endpoint="get_source_suggestion_list_ep"
 )
 api.add_resource(MaintainReportRulesController,
+    apiPath+"/report-rule/get-agg-function-column-suggestion-list",
+    endpoint="get_agg_function_column_suggestion_list_ep"
+)
+api.add_resource(MaintainReportRulesController,
     apiPath+"/report-rule/get-cell-calc-ref-suggestion-list",
     endpoint="get_cell_calc_ref_suggestion_list_ep"
+)
+api.add_resource(MaintainSourcesController,
+    apiPath+"/maintain-sources",
+    apiPath+"/maintain-sources/<int:id>",
+    endpoint="maintain_sources_ep"
+)
+api.add_resource(MaintainSourcesController,
+    apiPath+"/maintain-sources/get-source-feed-suggestion-list",
+    endpoint="get_source_feed_suggestion_list_ep"
+)
+api.add_resource(MaintainSourcesController,
+    apiPath+"/maintain-sources/get-sourcetable-column-suggestion-list",
+    endpoint="get_sourcetable_column_suggestion_list_ep"
 )
 
 

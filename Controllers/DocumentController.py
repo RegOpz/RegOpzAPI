@@ -410,18 +410,25 @@ class DocumentController(Resource):
 
         agg_rules=[]
 
-        sql = "select b.source_table_name, a.* from report_calc_def a,\
+        sql = "select  a.* from report_calc_def a,\
             data_source_information b where a.source_id=b.source_id and \
             report_id='" + report_id + "' and sheet_id='" + sheet_id + "' and \
             cell_id='" + cell_id + "'"
         if cell_calc_ref_list != '':
             sql += " union " + \
-            "select b.source_table_name, a.* from report_calc_def a,\
+            "select  a.* from report_calc_def a,\
                 data_source_information b where a.source_id=b.source_id and \
                 report_id='" + report_id + "' and cell_calc_ref in (" + cell_calc_ref_list + ")"
 
         print(sql)
         cell_rules=db.query(sql).fetchall()
+
+        for i,c in enumerate(cell_rules):
+            print('Processing index ',i)
+            for k,v in c.items():
+                if isinstance(v,datetime):
+                    c[k] = c[k].isoformat()
+                    print(c[k], type(c[k]))
 
         display_dict={}
 

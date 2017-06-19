@@ -3,6 +3,7 @@ from flask_restful import Resource
 from Helpers.DatabaseHelper import DatabaseHelper
 import csv
 import time
+from datetime import datetime
 from Constants.Status import *
 
 
@@ -18,6 +19,9 @@ class MaintainReportRulesController(Resource):
 		if request.endpoint == 'get_cell_calc_ref_suggestion_list_ep':
 			report_id = request.args.get('report_id')
 			return self.get_cell_calc_ref_suggestion_list(report_id=report_id)
+		if request.endpoint == 'get_agg_function_column_suggestion_list_ep':
+			table_name = request.args.get('table_name')
+			return self.get_agg_function_column_suggestion_list(table_name=table_name)
 
 
 	def post(self):
@@ -77,8 +81,8 @@ class MaintainReportRulesController(Resource):
 	    sql+=") values "+ placeholders
 
 	    params_tuple=tuple(params)
-	    #print(sql)
-	    #print(params_tuple)
+	    print(sql)
+	    print(params_tuple)
 	    res=db.transact(sql,params_tuple)
 	    db.commit()
 
@@ -119,6 +123,10 @@ class MaintainReportRulesController(Resource):
 	    query = 'select * from ' + table_name + ' where id = %s'
 	    cur = db.query(query, (id, ))
 	    data = cur.fetchone()
+	    for k,v in data.items():
+	    	if isinstance(v,datetime):
+	    		data[k] = data[k].isoformat()
+	    		print(data[k], type(data[k]))
 	    if data:
 	        return data
 	    return NO_BUSINESS_RULE_FOUND
@@ -156,14 +164,14 @@ class MaintainReportRulesController(Resource):
 				" where 1 "
 		country_suggestion = db.query(sql).fetchall()
 		if source_id is not None and source_id !='ALL':
-		     where_clause =  " and source_id = " + source_id
+		     where_clause =  " and source_id = " + str(source_id)
 
 		source = db.query(sql + where_clause).fetchall()
 
 
 		data_dict['source_suggestion'] = source
 		for i,s in enumerate(data_dict['source_suggestion']):
-		    sql = "select * from business_rules where source_id = '" + s['source_id'] + "'"
+		    sql = "select * from business_rules where source_id = '" + str(s['source_id']) + "'"
 		    rules_suggestion = db.query(sql).fetchall()
 		    data_dict['source_suggestion'][i]['rules_suggestion'] = rules_suggestion
 
@@ -171,6 +179,14 @@ class MaintainReportRulesController(Resource):
 		    return {"msg":"No report matched found"},404
 		else:
 		    return data_dict
+
+	def get_agg_function_column_suggestion_list(self,table_name):
+		db=DatabaseHelper()
+		data_dict_report_link = db.query("describe report_qualified_data_link").fetchall()
+		data_dict = db.query("describe " + table_name).fetchall()
+
+		#Now build the agg column list
+		return data_dict + data_dict_report_link
 
 	def get_cell_calc_ref_suggestion_list(self,report_id):
 
