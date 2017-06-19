@@ -5,6 +5,7 @@ from Controllers.MaintainReportRulesController import MaintainReportRulesControl
 from Controllers.UserController import UserController
 from Controllers.ViewDataController import ViewDataController
 from Controllers.GenerateReportController import GenerateReportController
+from Controllers.VarianceAnalysisController import VarianceAnalysisController
 from app import *
 from Controllers.ResourceController import ResourceController
 from Controllers.RoleController import RoleController
@@ -138,6 +139,22 @@ api.add_resource(GenerateReportController,
     apiPath+"/view-data/generate-report",
     endpoint="generate_report_ep"
 )
+
+api.add_resource(GenerateReportController,
+    apiPath+"/create-report/get-report-list",
+    endpoint="get_report_list_ep"
+)
+
+api.add_resource(GenerateReportController,
+    apiPath+"/create-report/get-country-list",
+    endpoint="get_country_list_ep"
+)
+
+api.add_resource(GenerateReportController,
+    apiPath+"/create-report/generate-report",
+    endpoint="create_report_ep"
+)
+
 api.add_resource(MaintainReportRulesController,
     apiPath+"/report-rule",
     apiPath+"/report-rule/<int:id>",
@@ -172,6 +189,30 @@ api.add_resource(MaintainSourcesController,
     apiPath+"/maintain-sources/get-sourcetable-column-suggestion-list",
     endpoint="get_sourcetable_column_suggestion_list_ep"
 )
+
+api.add_resource(VarianceAnalysisController,
+    apiPath+"/analytics/variance-analysis/get-country-suggestion-list",
+    endpoint="get_variance_country_suggestion_list"
+)
+
+api.add_resource(VarianceAnalysisController,
+    apiPath+"/analytics/variance-analysis/get-report-suggestion-list",
+    endpoint="get_variance_report_suggestion_list"
+)
+
+api.add_resource(VarianceAnalysisController,
+    apiPath+"/analytics/variance-analysis/get-date-suggestion-list",
+    endpoint="get_variance_date_suggestion_list"
+)
+
+api.add_resource(VarianceAnalysisController,
+    apiPath+"/analytics/variance-analysis/get-variance-report",
+    endpoint="get_variance_report"
+)
+
+
+
+
 
 
 if __name__ == '__main__':

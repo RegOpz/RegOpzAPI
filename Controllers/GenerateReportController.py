@@ -19,7 +19,46 @@ from datetime import datetime
 from numpy import where
 
 class GenerateReportController(Resource):
+
+    def get(self):
+        if(request.endpoint=='get_report_list_ep'):
+            return self.get_report_list()
+        if (request.endpoint == 'get_country_list_ep'):
+            return self.get_country_list()
+
     def post(self):
+        if (request.endpoint=='create_report_ep'):
+            report_info=request.get_json(force=True)
+            report_id=report_info['report_id']
+            reporting_date=report_info['reporting_date']
+            as_of_reporting_date=report_info['as_of_reporting_date']
+            report_create_date=report_info['report_create_date']
+            report_create_status=report_info['report_create_status']
+            country=report_info['country']
+
+            report_parameters = "'business_date_from':'" + report_info["business_date_from"] + "'," + \
+                                "'business_date_to':'" + report_info["business_date_to"] + "'," + \
+                                "'reporting_currency':'" + report_info["reporting_currency"] + "'," + \
+                                "'ref_date_rate':'" + report_info["ref_date_rate"] + "'," + \
+                                "'rate_type':'" + report_info["rate_type"] +"'"
+            if(report_info["report_parameters"]):
+                report_parameters=report_parameters+","+report_info["report_parameters"]
+            print(report_parameters)
+            report_kwargs=eval("{"+"'report_id':'" + report_id + "',"+ report_parameters + "}")
+            print(report_kwargs)
+
+            self.create_report_catalog(report_id,reporting_date,report_create_date,
+                                       report_parameters,report_create_status,as_of_reporting_date,country)
+            self.update_report_catalog(status='RUNNING', report_id=report_id, reporting_date=reporting_date)
+            self.create_report_detail(**report_kwargs)
+            print("create_report_summary_by_source")
+            self.create_report_summary_by_source(**report_kwargs)
+            print("create_report_summary_final")
+            self.create_report_summary_final(**report_kwargs)
+            self.update_report_catalog(status='SUCCESS', report_id=report_id, reporting_date=reporting_date)
+
+
+
         if(request.endpoint == 'generate_report_ep'):
             report_info = request.get_json(force=True)
             report_id = report_info['report_id']
@@ -43,6 +82,24 @@ class GenerateReportController(Resource):
                 #db.rollback()
             #finally:
                 #return report_kwargs
+
+    def get_report_list(self):
+        db=DatabaseHelper()
+        report_list=db.query("select distinct report_id from report_def").fetchall()
+        return report_list
+
+    def get_country_list(self):
+        db=DatabaseHelper()
+        country_list=db.query("select distinct country from report_def").fetchall()
+        return country_list
+
+    def create_report_catalog(self,report_id,reporting_date,report_create_date,
+                              report_parameters,report_create_status,as_of_reporting_date,country):
+        db=DatabaseHelper()
+        sql="insert into report_catalog(report_id,reporting_date,report_create_date,\
+            report_parameters,report_create_status,as_of_reporting_date,country,id) values(%s,%s,%s,%s,%s,%s,%s,%s)"
+        db.transact(sql,(report_id,reporting_date,report_create_date,report_parameters,report_create_status,as_of_reporting_date,country,0))
+        db.commit()
 
     def update_report_catalog(self,status,report_id,reporting_date):
         db=DatabaseHelper()
@@ -91,6 +148,8 @@ class GenerateReportController(Resource):
 
 
     def create_report_detail(self,**kwargs):
+
+        print(kwargs)
 
         parameter_list=['report_id','reporting_currency','business_date_from','business_date_to','ref_date_rate','rate_type']
         if set(parameter_list).issubset(set(kwargs.keys())):
