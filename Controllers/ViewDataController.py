@@ -217,6 +217,13 @@ class ViewDataController(Resource):
                        " where 1 and " + filter + " limit " + str(startPage) + ", 100"
         cur = db.query(sql)
         data = cur.fetchall()
+        for i,d in enumerate(data):
+            print('Processing index ',i)
+            for k,v in d.items():
+                if isinstance(v,datetime):
+                    d[k] = d[k].isoformat()
+                    print(d[k], type(d[k]))
+
         cols = [i[0] for i in cur.description]
         count = db.query(sql.replace('*','count(*) as count ')).fetchone()
 
@@ -359,9 +366,9 @@ class ViewDataController(Resource):
             data=db.query('select * from business_rules where source_id=%s order by rule_execution_order asc',(src["source_id"],)).fetchall()
 
             code = 'if business_or_validation in [\'ALL\',\'BUSINESSRULES\']:\n'
-            code += '\tdb.transact("delete from qualified_data where source_id='+src["source_id"]+' and business_date=%s",(business_date,))\n'
+            code += '\tdb.transact("delete from qualified_data where source_id='+str(src["source_id"])+' and business_date=%s",(business_date,))\n'
             code += 'if business_or_validation in [\'ALL\',\'VALIDATION\']:\n'
-            code += '\tdb.transact("delete from invalid_data where source_id=' + src["source_id"] + ' and business_date=%s",(business_date,))\n'
+            code += '\tdb.transact("delete from invalid_data where source_id=' + str(src["source_id"]) + ' and business_date=%s",(business_date,))\n'
             code += 'curdata=dbsf.query("SELECT * FROM  '+src["source_table_name"]+' where business_date=%s",(business_date,))\n'
             code += 'start_process=time.time()\n'
             code += 'while True:\n'
@@ -392,7 +399,7 @@ class ViewDataController(Resource):
                          #fields names in the python_implementation should be within the tag <fld>field</fld>
                          #no space allowed between tags and the fields name
                          #final_str=final_str.replace("<fld>" + field + "</fld>",new_str)
-                         final_str=final_str.replace("["+field+"]",new_str)
+                         final_str=final_str.replace("["+field+"]",new_str).replace(new_str,'str('+ new_str +')')
                          NoneType_chk_str=NoneType_chk_str.replace("["+field+"]",new_str)
                      ##################################################################################
                      # Some specific literals to be used while defining rules

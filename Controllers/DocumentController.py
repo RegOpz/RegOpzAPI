@@ -410,18 +410,25 @@ class DocumentController(Resource):
 
         agg_rules=[]
 
-        sql = "select b.source_table_name, a.* from report_calc_def a,\
+        sql = "select  a.* from report_calc_def a,\
             data_source_information b where a.source_id=b.source_id and \
             report_id='" + report_id + "' and sheet_id='" + sheet_id + "' and \
             cell_id='" + cell_id + "'"
         if cell_calc_ref_list != '':
             sql += " union " + \
-            "select b.source_table_name, a.* from report_calc_def a,\
+            "select  a.* from report_calc_def a,\
                 data_source_information b where a.source_id=b.source_id and \
                 report_id='" + report_id + "' and cell_calc_ref in (" + cell_calc_ref_list + ")"
 
         print(sql)
         cell_rules=db.query(sql).fetchall()
+
+        for i,c in enumerate(cell_rules):
+            print('Processing index ',i)
+            for k,v in c.items():
+                if isinstance(v,datetime):
+                    c[k] = c[k].isoformat()
+                    print(c[k], type(c[k]))
 
         display_dict={}
 
@@ -469,14 +476,15 @@ class DocumentController(Resource):
         print(cols)
         sql = "select count(1) as count from " + src_inf['source_table_name'] + " a, report_qualified_data_link b\
              where a." + key_column + "=b.qualifying_key and b.report_id='" + report_id + "' and b.source_id='" + str(
-            source_id) + \
-              "' and b.sheet_id='" + sheet_id + "' and b.cell_id='" + cell_id + "' and b.reporting_date='" + reporting_date + "'\
+            source_id) + "' and a.business_date = b.business_date " + \
+              " and b.sheet_id='" + sheet_id + "' and b.cell_id='" + cell_id + "' and b.reporting_date='" + reporting_date + "'\
                 and b.cell_calc_ref='"+cell_calc_ref+"'"
+        print(sql)
         count = db.query(sql).fetchone()
         sql = sql = "select a.* from " + src_inf['source_table_name'] + " a, report_qualified_data_link b\
              where a." + key_column + "=b.qualifying_key and b.report_id='" + report_id + "' and b.source_id='" + str(
-            source_id) + \
-              "' and b.sheet_id='" + sheet_id + "' and b.cell_id='" + cell_id + "' and b.reporting_date='" + reporting_date + "'\
+            source_id)  + "' and a.business_date = b.business_date " + \
+              " and b.sheet_id='" + sheet_id + "' and b.cell_id='" + cell_id + "' and b.reporting_date='" + reporting_date + "'\
                 and b.cell_calc_ref='"+cell_calc_ref+"'"
         data_dict['cols'] = cols
         data_dict['rows'] = data

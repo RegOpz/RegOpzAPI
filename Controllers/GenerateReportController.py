@@ -19,7 +19,46 @@ from datetime import datetime
 from numpy import where
 
 class GenerateReportController(Resource):
+
+    def get(self):
+        if(request.endpoint=='get_report_list_ep'):
+            return self.get_report_list()
+        if (request.endpoint == 'get_country_list_ep'):
+            return self.get_country_list()
+
     def post(self):
+        if (request.endpoint=='create_report_ep'):
+            report_info=request.get_json(force=True)
+            report_id=report_info['report_id']
+            reporting_date=report_info['reporting_date']
+            as_of_reporting_date=report_info['as_of_reporting_date']
+            report_create_date=report_info['report_create_date']
+            report_create_status=report_info['report_create_status']
+            country=report_info['country']
+
+            report_parameters = "'business_date_from':'" + report_info["business_date_from"] + "'," + \
+                                "'business_date_to':'" + report_info["business_date_to"] + "'," + \
+                                "'reporting_currency':'" + report_info["reporting_currency"] + "'," + \
+                                "'ref_date_rate':'" + report_info["ref_date_rate"] + "'," + \
+                                "'rate_type':'" + report_info["rate_type"] +"'"
+            if(report_info["report_parameters"]):
+                report_parameters=report_parameters+","+report_info["report_parameters"]
+            print(report_parameters)
+            report_kwargs=eval("{"+"'report_id':'" + report_id + "',"+ report_parameters + "}")
+            print(report_kwargs)
+
+            self.create_report_catalog(report_id,reporting_date,report_create_date,
+                                       report_parameters,report_create_status,as_of_reporting_date,country)
+            self.update_report_catalog(status='RUNNING', report_id=report_id, reporting_date=reporting_date)
+            self.create_report_detail(**report_kwargs)
+            print("create_report_summary_by_source")
+            self.create_report_summary_by_source(**report_kwargs)
+            print("create_report_summary_final")
+            self.create_report_summary_final(**report_kwargs)
+            self.update_report_catalog(status='SUCCESS', report_id=report_id, reporting_date=reporting_date)
+
+
+
         if(request.endpoint == 'generate_report_ep'):
             report_info = request.get_json(force=True)
             report_id = report_info['report_id']
@@ -44,6 +83,24 @@ class GenerateReportController(Resource):
             #finally:
                 #return report_kwargs
 
+    def get_report_list(self):
+        db=DatabaseHelper()
+        report_list=db.query("select distinct report_id from report_def").fetchall()
+        return report_list
+
+    def get_country_list(self):
+        db=DatabaseHelper()
+        country_list=db.query("select distinct country from report_def").fetchall()
+        return country_list
+
+    def create_report_catalog(self,report_id,reporting_date,report_create_date,
+                              report_parameters,report_create_status,as_of_reporting_date,country):
+        db=DatabaseHelper()
+        sql="insert into report_catalog(report_id,reporting_date,report_create_date,\
+            report_parameters,report_create_status,as_of_reporting_date,country,id) values(%s,%s,%s,%s,%s,%s,%s,%s)"
+        db.transact(sql,(report_id,reporting_date,report_create_date,report_parameters,report_create_status,as_of_reporting_date,country,0))
+        db.commit()
+
     def update_report_catalog(self,status,report_id,reporting_date):
         db=DatabaseHelper()
         db.transact("update report_catalog set report_create_status=%s \
@@ -65,7 +122,7 @@ class GenerateReportController(Resource):
                     # B - business_date exchange rate
                     # R - Reporting date exchange rate
                     erd = lambda rr: qd["business_date"] if rr == 'B' else qd["business_date_to"]
-                    ref_date = erd(qd["ref_date_rate"])
+                    ref_date = str(erd(qd["ref_date_rate"]))
 
                     for k in d_r.keys():
                         key1 = qd[k[:k.find('_')] + "_currency"]
@@ -92,6 +149,8 @@ class GenerateReportController(Resource):
 
     def create_report_detail(self,**kwargs):
 
+        print(kwargs)
+
         parameter_list=['report_id','reporting_currency','business_date_from','business_date_to','ref_date_rate','rate_type']
         if set(parameter_list).issubset(set(kwargs.keys())):
             report_id=kwargs["report_id"]
@@ -105,16 +164,6 @@ class GenerateReportController(Resource):
             print("Please supply parameters: "+str(parameter_list))
 
         db=DatabaseHelper()
-
-        all_qualified_trade=db.query('select source_id,qualifying_key,business_rules,buy_currency,sell_currency,mtm_currency,\
-                    %s as reporting_currency,business_date,%s as reporting_date,%s as business_date_to, \
-                    %s as ref_date_rate \
-                     from qualified_data where business_date between %s and %s',\
-                    (reporting_currency,reporting_date,business_date_to,ref_date_rate,business_date_from,business_date_to)).fetchall()
-
-        start = time.time()
-        all_qual_trd_dict_split = util.split(all_qualified_trade, 1000)
-        print('Time taken for converting to dictionary and spliting all_qual_trd '+str((time.time() - start)*1000))
 
         all_business_rules=db.query('select report_id,sheet_id,cell_id,cell_calc_ref,cell_business_rules \
                     from report_calc_def where report_id=%s',(report_id,)).fetchall()
@@ -142,33 +191,50 @@ class GenerateReportController(Resource):
         exch_rt_dict=defaultdict(dict)
 
         for er in exch_rt:
-            exch_rt_dict[er["business_date"]+er["from_currency"]][er["business_date"]+er["to_currency"]]=er["rate"]
+            exch_rt_dict[str(er["business_date"])+er["from_currency"]][str(er["business_date"])+er["to_currency"]]=er["rate"]
 
-
-        #print(exch_rt_dict)
-        start=time.time()
-
-        #mp=partial(map_data_to_cells,all_bus_rl_dict,exch_rt_dict,reporting_currency)
-        mp = partial(self.map_data_to_cells, all_business_rules, exch_rt_dict, reporting_currency)
-
-        print('CPU Count: ' + str(cpu_count()))
-        pool=Pool(cpu_count()-1)
-        result_set=pool.map(mp,all_qual_trd_dict_split)
-        pool.close()
-        pool.join()
-
-        print('Time taken by pool processes '+str((time.time() - start)*1000))
         #Clean the link table before populating for same reporting date
+        print('Before clean_table report_qualified_data_link')
+        start = time.time()
         util.clean_table(db._cursor(), 'report_qualified_data_link', '', reporting_date)
-        start=time.time()
-        result_set_flat_all=util.flatten(result_set)
-        #split large no of data into smaller chunks to avoid sql connection error
-        #mysql.connector.errors.OperationalError: 2055: Lost connection to MySQL
-        rs = all_qual_trd_dict_split = util.split(result_set_flat_all, 100000)
-        print('Time taken by result set split '+ str((time.time() - start) * 1000))
-        start=time.time()
-        for result_set_flat in rs:
-            print('Database inserts for 100000 .....')
+        print('Time taken for clean_table report_qualified_data_link ' + str((time.time() - start) * 1000))
+
+        dbqd=DatabaseHelper()
+        curdata =dbqd.query('select source_id,qualifying_key,business_rules,buy_currency,sell_currency,mtm_currency,\
+                    %s as reporting_currency,business_date,%s as reporting_date,%s as business_date_to, \
+                    %s as ref_date_rate \
+                     from qualified_data where business_date between %s and %s',\
+                    (reporting_currency,reporting_date,business_date_to,ref_date_rate,business_date_from,business_date_to))
+        startcur = time.time()
+        while True:
+            all_qualified_trade=curdata.fetchmany(50000)
+            if not all_qualified_trade:
+                break
+
+            print('Before converting to dictionary')
+            start = time.time()
+            all_qual_trd_dict_split = util.split(all_qualified_trade, 1000)
+            print('Time taken for converting to dictionary and spliting all_qual_trd '+str((time.time() - start)*1000))
+
+            #print(exch_rt_dict)
+            start=time.time()
+
+            #mp=partial(map_data_to_cells,all_bus_rl_dict,exch_rt_dict,reporting_currency)
+            mp = partial(self.map_data_to_cells, all_business_rules, exch_rt_dict, reporting_currency)
+
+            print('CPU Count: ' + str(cpu_count()))
+            pool=Pool(cpu_count()-1)
+            result_set=pool.map(mp,all_qual_trd_dict_split)
+            pool.close()
+            pool.join()
+
+            print('Time taken by pool processes '+str((time.time() - start)*1000))
+
+            start=time.time()
+            result_set_flat=util.flatten(result_set)
+            start=time.time()
+            #for result_set_flat in rs:
+            print('Database inserts for 50000 .....')
             db.transactmany('insert into report_qualified_data_link \
                             (report_id,sheet_id ,cell_id ,cell_calc_ref,source_id ,qualifying_key,\
                              buy_currency,sell_currency,mtm_currency,business_date,reporting_date,\
@@ -176,9 +242,10 @@ class GenerateReportController(Resource):
                              buy_usd_rate,sell_usd_rate,mtm_usd_rate)\
                               values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',result_set_flat)
 
-        print('Time taken by database inserts '+ str((time.time() - start) * 1000))
-        db.commit()
-        #return
+            print('Time taken by database inserts '+ str((time.time() - start) * 1000))
+            db.commit()
+            #return
+        print('Time taken by complete loop of qualified data '+ str((time.time() - startcur) * 1000))
 
 
     def apply_formula_to_frame(self, df, excel_formula,new_field_name):
