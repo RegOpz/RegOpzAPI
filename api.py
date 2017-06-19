@@ -1,9 +1,11 @@
 from Controllers.Info import Info
 from Controllers.DocumentController import DocumentController
 from Controllers.MaintainBusinessRulesController import MaintainBusinessRulesController
+from Controllers.MaintainReportRulesController import MaintainReportRulesController
 from Controllers.UserController import UserController
 from Controllers.ViewDataController import ViewDataController
 from Controllers.GenerateReportController import GenerateReportController
+from Controllers.VarianceAnalysisController import VarianceAnalysisController
 from app import *
 from Controllers.ResourceController import ResourceController
 from Controllers.RoleController import RoleController
@@ -70,6 +72,14 @@ api.add_resource(MaintainBusinessRulesController,
     apiPath + "/business-rule/export_to_csv",
     endpoint="business_rule_export_to_csv_ep"
 )
+api.add_resource(MaintainBusinessRulesController,
+    apiPath + "/business-rule/get-br-source-suggestion-list",
+    endpoint="get_br_source_suggestion_list_ep"
+)
+api.add_resource(MaintainBusinessRulesController,
+    apiPath + "/business-rule/get-br-source-column-suggestion-list",
+    endpoint="get_br_source_column_suggestion_list_ep"
+)
 api.add_resource(UserController,
     apiPath + "/users",
     endpoint="users_ep"
@@ -128,6 +138,64 @@ api.add_resource(GenerateReportController,
     apiPath+"/view-data/generate-report",
     endpoint="generate_report_ep"
 )
+
+api.add_resource(GenerateReportController,
+    apiPath+"/create-report/get-report-list",
+    endpoint="get_report_list_ep"
+)
+
+api.add_resource(GenerateReportController,
+    apiPath+"/create-report/get-country-list",
+    endpoint="get_country_list_ep"
+)
+
+api.add_resource(GenerateReportController,
+    apiPath+"/create-report/generate-report",
+    endpoint="create_report_ep"
+)
+
+api.add_resource(MaintainReportRulesController,
+    apiPath+"/report-rule",
+    apiPath+"/report-rule/<int:id>",
+    endpoint="report_rule_ep"
+)
+api.add_resource(MaintainReportRulesController,
+    apiPath+"/report-rule/get-business-rules-suggestion-list",
+    endpoint="get_business_rules_suggestion_list_ep"
+)
+api.add_resource(MaintainReportRulesController,
+    apiPath+"/report-rule/get-source-suggestion-list",
+    endpoint="get_source_suggestion_list_ep"
+)
+api.add_resource(MaintainReportRulesController,
+    apiPath+"/report-rule/get-cell-calc-ref-suggestion-list",
+    endpoint="get_cell_calc_ref_suggestion_list_ep"
+)
+
+api.add_resource(VarianceAnalysisController,
+    apiPath+"/analytics/variance-analysis/get-country-suggestion-list",
+    endpoint="get_variance_country_suggestion_list"
+)
+
+api.add_resource(VarianceAnalysisController,
+    apiPath+"/analytics/variance-analysis/get-report-suggestion-list",
+    endpoint="get_variance_report_suggestion_list"
+)
+
+api.add_resource(VarianceAnalysisController,
+    apiPath+"/analytics/variance-analysis/get-date-suggestion-list",
+    endpoint="get_variance_date_suggestion_list"
+)
+
+api.add_resource(VarianceAnalysisController,
+    apiPath+"/analytics/variance-analysis/get-variance-report",
+    endpoint="get_variance_report"
+)
+
+
+
+
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=APIConfig.API['port'], threaded=True)
