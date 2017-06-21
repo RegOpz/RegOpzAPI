@@ -176,7 +176,12 @@ class GenerateReportController(Resource):
             if k.startswith('_'):
                 report_parameter[k]=v
 
+        for i,rl in enumerate(all_business_rules):
+            #check for possible report parameter token replacement
+            for key, value in report_parameter.items():
+                all_business_rules[i]['cell_business_rules'] = all_business_rules[i]['cell_business_rules'].replace(key, key + ':' + value)
 
+        #print('All business rules after report parameter', all_business_rules)
         print('Time taken for converting to dictionary all_business_rules ' + str((time.time() - start) * 1000))
 
         #Changes required for incoporating exchange rates
