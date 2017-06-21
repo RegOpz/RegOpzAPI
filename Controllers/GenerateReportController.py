@@ -223,7 +223,11 @@ class GenerateReportController(Resource):
             mp = partial(self.map_data_to_cells, all_business_rules, exch_rt_dict, reporting_currency)
 
             print('CPU Count: ' + str(cpu_count()))
-            pool=Pool(cpu_count()-1)
+            if cpu_count()>1 :
+                pool=Pool(cpu_count()-1)
+            else:
+                print('No of CPU is only 1, ... Inside else....')
+                pool=Pool(1)
             result_set=pool.map(mp,all_qual_trd_dict_split)
             pool.close()
             pool.join()
@@ -388,7 +392,8 @@ class GenerateReportController(Resource):
         #Now get the required column list for data frames
         col_list = ''
         col_list = self.get_list_of_columns_for_dataframe(all_agg_cls,'report_qualified_data_link')
-        col_list = 'a.' + col_list.replace(',',',a.')
+        if col_list != '1 as const':
+            col_list = 'a.' + col_list.replace(',',',a.')
 
         sql= "select a.sheet_id, a.cell_id, a.cell_calc_ref,a.source_id,a.qualifying_key,\
               a.business_date,COLUMN_LIST,b.source_table_name from report_qualified_data_link a , data_source_information b\
