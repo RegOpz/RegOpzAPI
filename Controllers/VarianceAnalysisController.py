@@ -165,17 +165,22 @@ class VarianceAnalysisController(Resource):
                     #print(cell_d)
                     matrix_list.append(cell_d)
                 else:
-                    matrix_list[idx]['value'][str(row['reporting_date'])]=cell_summary
-                    #print(idx,row['reporting_date'],matrix_list[idx]['value'])
+                    if matrix_list[idx]['type'] != 'DATA_VALUE':
+                        #Already exits in te matrix list as STATIC_TEXT, so realign it as DATA_VALUE
+                        matrix_list[idx]['type']='DATA_VALUE'
+                        matrix_list[idx]['value']={str(row['reporting_date']):cell_summary}
+                    else:
+                        matrix_list[idx]['value'][str(row['reporting_date'])]=cell_summary
+                        #print(idx,row['reporting_date'],matrix_list[idx]['value'])
 
-                    if matrix_list[idx]['value'][first_reporting_date]==0 :
-                        matrix_list[idx]['value'][first_reporting_date] = 1e-15
+                        if matrix_list[idx]['value'][first_reporting_date]==0 :
+                            matrix_list[idx]['value'][first_reporting_date] = 1e-15
 
-                    if matrix_list[idx]['value'][subsequent_reporting_date] == 0:
-                        matrix_list[idx]['value'][subsequent_reporting_date] = 1e-15
+                        if matrix_list[idx]['value'][subsequent_reporting_date] == 0:
+                            matrix_list[idx]['value'][subsequent_reporting_date] = 1e-15
 
-                    matrix_list[idx]['pct']=util.round_value((matrix_list[idx]['value'][subsequent_reporting_date]/
-                                                     matrix_list[idx]['value'][first_reporting_date] -1)*100,row['rounding_option'])
+                        matrix_list[idx]['pct']=util.round_value((matrix_list[idx]['value'][subsequent_reporting_date]/
+                                                         matrix_list[idx]['value'][first_reporting_date] -1)*100,row['rounding_option'])
 
 
 
