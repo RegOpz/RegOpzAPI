@@ -45,12 +45,14 @@ def get_keycolumn(cur,table_name):
     keycolumn = cur.fetchone()
     return keycolumn["python_implementation"].replace("[","").replace("]","")
 
-def clean_table(cur,table_name,business_date,reporting_date):
+def clean_table(cur,table_name,business_date,reporting_date,where_condition=''):
     sql='delete from  '+table_name+' where 1=1'
     if business_date!='':
         sql+=' and business_date =' + business_date
     if reporting_date!='':
         sql+=' and reporting_date =' + reporting_date
+    if where_condition!='':
+        sql+=' and ' + where_condition
     cur.execute(sql)
 
 def round_value(number_to_round,option):
