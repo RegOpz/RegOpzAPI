@@ -196,7 +196,7 @@ class GenerateReportController(Resource):
         #Clean the link table before populating for same reporting date
         print('Before clean_table report_qualified_data_link')
         start = time.time()
-        util.clean_table(db._cursor(), 'report_qualified_data_link', '', reporting_date)
+        util.clean_table(db._cursor(), 'report_qualified_data_link', '', reporting_date,'report_id=\''+ report_id + '\'')
         print('Time taken for clean_table report_qualified_data_link ' + str((time.time() - start) * 1000))
 
         dbqd=DatabaseHelper()
@@ -449,7 +449,7 @@ class GenerateReportController(Resource):
 
         # clean summary table before populating it for reporting_date
         # util.clean_table(cur, 'report_summary', '', reporting_date)
-        util.clean_table(db._cursor(), 'report_summary_by_source', '', reporting_date)
+        util.clean_table(db._cursor(), 'report_summary_by_source', '', reporting_date,'report_id=\''+ report_id + '\'')
 
         for src in sources:
             print('Processing data frame for source id [' + str(src) + '].')
@@ -503,7 +503,7 @@ class GenerateReportController(Resource):
 
         # clean summary table before populating it for reporting_date
         # util.clean_table(cur, 'report_summary', '', reporting_date)
-        util.clean_table(db._cursor(), 'report_summary', '', reporting_date)
+        util.clean_table(db._cursor(), 'report_summary', '', reporting_date,'report_id=\''+ report_id + '\'')
 
 
         # formula='(RCDMAS1003ID001G19+RCDMAS1003ID001H19)/RCDMAS1003ID001K19+RCDMAS1003ID001G19*0.5'
