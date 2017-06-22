@@ -73,7 +73,10 @@ class MaintainReportRulesController(Resource):
 	    for col in update_info_cols:
 	        sql+=col+","
 	        placeholders+="%s,"
-	        params.append(update_info[col])
+	        if col=='id':
+	        	params.append(None)
+	        else:
+	        	params.append(update_info[col])
 
 	    placeholders=placeholders[:len(placeholders)-1]
 	    placeholders+=")"

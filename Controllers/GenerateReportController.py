@@ -97,8 +97,8 @@ class GenerateReportController(Resource):
                               report_parameters,report_create_status,as_of_reporting_date):
         db=DatabaseHelper()
         sql="insert into report_catalog(report_id,reporting_date,report_create_date,\
-            report_parameters,report_create_status,as_of_reporting_date,id) values(%s,%s,%s,%s,%s,%s,%s)"
-        db.transact(sql,(report_id,reporting_date,report_create_date,report_parameters,report_create_status,as_of_reporting_date,0))
+            report_parameters,report_create_status,as_of_reporting_date) values(%s,%s,%s,%s,%s,%s)"
+        db.transact(sql,(report_id,reporting_date,report_create_date,report_parameters,report_create_status,as_of_reporting_date))
         db.commit()
 
     def update_report_catalog(self,status,report_id,reporting_date):
