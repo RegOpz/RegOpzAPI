@@ -509,18 +509,18 @@ class DocumentController(Resource):
         data_dict={}
         where_clause = ''
 
-        sql = "select distinct country from report_def where 1 "
+        sql = "select distinct country from report_def_catalog where 1 "
         country_suggestion = db.query(sql).fetchall()
         if country is not None and country !='ALL':
              where_clause =  " and instr(upper('" + country + "'), upper(country)) > 0"
 
         country = db.query(sql + where_clause).fetchall()
 
-        sql = "select distinct report_id from report_def"
+        sql = "select distinct report_id from report_def_catalog"
         report_suggestion = db.query(sql).fetchall()
         data_dict['country'] = country
         for i,c in enumerate(data_dict['country']):
-            sql = "select distinct report_id from report_def where country = '" + c['country'] + "'"
+            sql = "select distinct report_id from report_def_catalog where country = '" + c['country'] + "'"
             if report_id is not None and report_id !='ALL':
                  where_clause +=  " and instr(upper('" + report_id + "'), upper(report_id)) > 0"
             report = db.query(sql + where_clause).fetchall()
@@ -528,7 +528,7 @@ class DocumentController(Resource):
             data_dict['country'][i]['report'] = report
             where_report = ''
             for j,r in enumerate(data_dict['country'][i]['report']):
-                sql = "select distinct report_id, valid_from, valid_to, last_updated_by from report_def where country = '" + c['country'] + "'"
+                sql = "select distinct report_id, valid_from, valid_to, last_updated_by from report_def where 1 " 
                 where_report =  " and report_id = '" + data_dict['country'][i]['report'][j]['report_id'] + "'"
                 reportversions = db.query(sql + where_clause + where_report).fetchall()
                 print(data_dict['country'][i]['report'][j])

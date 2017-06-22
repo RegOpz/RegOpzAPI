@@ -27,10 +27,9 @@ class VarianceAnalysisController(Resource):
             return self.get_report_suggestion_list(country)
 
         if request.endpoint == 'get_variance_date_suggestion_list':
-            country=request.args.get('country') if request.args.get('country') != None else 'ALL'
             report_id=request.args.get('report_id') if request.args.get('report_id') !=None else 'ALL'
             excluded_date=request.args.get('excluded_date')
-            return self.get_date_suggestion_list(country,report_id,excluded_date)
+            return self.get_date_suggestion_list(report_id,excluded_date)
         if request.endpoint == 'get_variance_report':
             report_id=request.args.get('report_id')
             first_reporting_date=request.args.get('first_date')
@@ -40,7 +39,7 @@ class VarianceAnalysisController(Resource):
     def get_country_suggestion_list(self):
         db=DatabaseHelper()
 
-        country_list=db.query("select distinct country from report_catalog").fetchall()
+        country_list=db.query("select distinct country from report_def_catalog").fetchall()
 
         if not country_list:
             return []
@@ -54,20 +53,18 @@ class VarianceAnalysisController(Resource):
         if country!='ALL':
             where_clause=" where country= '"+country+"'"
 
-        report_list=db.query("select distinct report_id from report_catalog " + where_clause).fetchall()
+        report_list=db.query("select distinct report_id from report_def_catalog " + where_clause).fetchall()
 
         if not report_list:
             return []
         else:
             return report_list
 
-    def get_date_suggestion_list(self,country,report_id,excluded_date=None):
+    def get_date_suggestion_list(self,report_id,excluded_date=None):
         db=DatabaseHelper()
 
 
         where_clause=" where 1=1 "
-        if country!="ALL":
-            where_clause+=" and country='"+country+"'"
         if report_id!="ALL":
             where_clause+=" and report_id='"+report_id+"'"
         if excluded_date:
