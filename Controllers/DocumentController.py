@@ -76,10 +76,14 @@ class DocumentController(Resource):
             return {"msg: Report capture failed. Please check."}, 400
     def insert_report_def_catalog(self):
         db = DatabaseHelper()
-        res = db.transact("insert into report_def_catalog(report_id,country,report_description) values(%s,%s,%s)",\
+        count = db.query("select count(*) as count from report_def_catalog where report_id=%s and country=%s",\
+                            (self.report_id,self.country,)).fetchone()
+        if not count['count']:
+            res = db.transact("insert into report_def_catalog(report_id,country,report_description) values(%s,%s,%s)",\
                     (self.report_id,self.country,self.report_description,))
-        db.commit()
-        return res
+            db.commit()
+            return res
+        return 1
 
     def load_report_template(self,template_file_name):
         formula_dict = {'SUM': 'CALCULATE_FORMULA',
