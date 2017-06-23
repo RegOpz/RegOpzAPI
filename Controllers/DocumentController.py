@@ -50,8 +50,12 @@ class DocumentController(Resource):
         if 'file' not in request.files:
             return NO_FILE_SELECTED
         self.report_id = request.form.get('report_id')
+        self.country = request.form.get('country').upper()
+        self.report_description = request.form.get('report_description')
         if self.report_id == None or self.report_id == "":
             return REPORT_ID_EMPTY
+        if self.country == None or self.country == "":
+            return COUNTRY_EMPTY
         file = request.files['file']
         if file and not self.allowed_file(file.filename):
             return FILE_TYPE_IS_NOT_ALLOWED
@@ -65,8 +69,18 @@ class DocumentController(Resource):
             'ip': '1.1.1.1',
             'comment': "Sample comment by model"
         })'''
-        self.load_report_template(filename)
-        return self.render_report_json()
+        if self.insert_report_def_catalog():
+            self.load_report_template(filename)
+            return self.render_report_json()
+        else:
+            return {"msg: Report capture failed. Please check."}, 400
+    def insert_report_def_catalog(self):
+        db = DatabaseHelper()
+        res = db.transact("insert into report_def_catalog(report_id,country,report_description) values(%s,%s,%s)",\
+                    (self.report_id,self.country,self.report_description,))
+        db.commit()
+        return res
+
     def load_report_template(self,template_file_name):
         formula_dict = {'SUM': 'CALCULATE_FORMULA',
                         '=SUM': 'CALCULATE_FORMULA',
@@ -509,18 +523,18 @@ class DocumentController(Resource):
         data_dict={}
         where_clause = ''
 
-        sql = "select distinct country from report_def where 1 "
+        sql = "select distinct country from report_def_catalog where 1 "
         country_suggestion = db.query(sql).fetchall()
         if country is not None and country !='ALL':
              where_clause =  " and instr(upper('" + country + "'), upper(country)) > 0"
 
         country = db.query(sql + where_clause).fetchall()
 
-        sql = "select distinct report_id from report_def"
+        sql = "select distinct report_id from report_def_catalog"
         report_suggestion = db.query(sql).fetchall()
         data_dict['country'] = country
         for i,c in enumerate(data_dict['country']):
-            sql = "select distinct report_id from report_def where country = '" + c['country'] + "'"
+            sql = "select distinct report_id from report_def_catalog where country = '" + c['country'] + "'"
             if report_id is not None and report_id !='ALL':
                  where_clause +=  " and instr(upper('" + report_id + "'), upper(report_id)) > 0"
             report = db.query(sql + where_clause).fetchall()
@@ -528,7 +542,7 @@ class DocumentController(Resource):
             data_dict['country'][i]['report'] = report
             where_report = ''
             for j,r in enumerate(data_dict['country'][i]['report']):
-                sql = "select distinct report_id, valid_from, valid_to, last_updated_by from report_def where country = '" + c['country'] + "'"
+                sql = "select distinct report_id, valid_from, valid_to, last_updated_by from report_def where 1 "
                 where_report =  " and report_id = '" + data_dict['country'][i]['report'][j]['report_id'] + "'"
                 reportversions = db.query(sql + where_clause + where_report).fetchall()
                 print(data_dict['country'][i]['report'][j])

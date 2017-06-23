@@ -105,6 +105,8 @@ class ViewDataController(Resource):
             placeholders+="%s,"
             if col=='business_date':
                 params.append(business_date)
+            elif col=='id':
+                params.append(None)
             else:
                 params.append(update_info[col])
 

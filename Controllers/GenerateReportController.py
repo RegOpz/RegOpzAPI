@@ -22,7 +22,8 @@ class GenerateReportController(Resource):
 
     def get(self):
         if(request.endpoint=='get_report_list_ep'):
-            return self.get_report_list()
+            country=request.args.get('country') if request.args.get('country') != None else 'ALL'
+            return self.get_report_list(country)
         if (request.endpoint == 'get_country_list_ep'):
             return self.get_country_list()
 
@@ -34,7 +35,6 @@ class GenerateReportController(Resource):
             as_of_reporting_date=report_info['as_of_reporting_date']
             report_create_date=report_info['report_create_date']
             report_create_status=report_info['report_create_status']
-            country=report_info['country']
 
             report_parameters = "'business_date_from':'" + report_info["business_date_from"] + "'," + \
                                 "'business_date_to':'" + report_info["business_date_to"] + "'," + \
@@ -48,7 +48,7 @@ class GenerateReportController(Resource):
             print(report_kwargs)
 
             self.create_report_catalog(report_id,reporting_date,report_create_date,
-                                       report_parameters,report_create_status,as_of_reporting_date,country)
+                                       report_parameters,report_create_status,as_of_reporting_date)
             self.update_report_catalog(status='RUNNING', report_id=report_id, reporting_date=reporting_date)
             self.create_report_detail(**report_kwargs)
             print("create_report_summary_by_source")
@@ -83,22 +83,22 @@ class GenerateReportController(Resource):
             #finally:
                 #return report_kwargs
 
-    def get_report_list(self):
+    def get_report_list(self,country='ALL'):
         db=DatabaseHelper()
-        report_list=db.query("select distinct report_id from report_def").fetchall()
+        report_list=db.query("select distinct report_id from report_def_catalog where country='"+country+"'").fetchall()
         return report_list
 
     def get_country_list(self):
         db=DatabaseHelper()
-        country_list=db.query("select distinct country from report_def").fetchall()
+        country_list=db.query("select distinct country from report_def_catalog").fetchall()
         return country_list
 
     def create_report_catalog(self,report_id,reporting_date,report_create_date,
-                              report_parameters,report_create_status,as_of_reporting_date,country):
+                              report_parameters,report_create_status,as_of_reporting_date):
         db=DatabaseHelper()
         sql="insert into report_catalog(report_id,reporting_date,report_create_date,\
-            report_parameters,report_create_status,as_of_reporting_date,country,id) values(%s,%s,%s,%s,%s,%s,%s,%s)"
-        db.transact(sql,(report_id,reporting_date,report_create_date,report_parameters,report_create_status,as_of_reporting_date,country,0))
+            report_parameters,report_create_status,as_of_reporting_date) values(%s,%s,%s,%s,%s,%s)"
+        db.transact(sql,(report_id,reporting_date,report_create_date,report_parameters,report_create_status,as_of_reporting_date))
         db.commit()
 
     def update_report_catalog(self,status,report_id,reporting_date):

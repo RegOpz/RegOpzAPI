@@ -45,7 +45,10 @@ class MaintainSourcesController(Resource):
 	    for col in update_info_cols:
 	        sql+=col+","
 	        placeholders+="%s,"
-	        params.append(update_info[col])
+	        if col=='id':
+	        	params.append(None)
+	        else:
+	        	params.append(update_info[col])
 
 	    placeholders=placeholders[:len(placeholders)-1]
 	    placeholders+=")"
@@ -57,8 +60,10 @@ class MaintainSourcesController(Resource):
 	    #print(params_tuple)
 	    res=db.transact(sql,params_tuple)
 	    db.commit()
+	    data['update_info']=self.ret_source_data_by_id(table_name,res)
+	    data['update_info']['source_id'] = data['update_info']['id']
 
-	    return self.ret_source_data_by_id(table_name,res)
+	    return self.update_data(data, res)
 
 	def update_data(self,data,id):
 	    db=DatabaseHelper()
