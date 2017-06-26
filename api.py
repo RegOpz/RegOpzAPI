@@ -41,6 +41,14 @@ api.add_resource(DocumentController,
     apiPath + "/document/get-report-template-suggestion-list",
     endpoint = "get_report_template_suggestion_list_ep"
 )
+api.add_resource(DocumentController,
+    apiPath + "/document/get-report-export-to-excel",
+    endpoint = "get_report_export_to_excel_ep"
+)
+api.add_resource(DocumentController,
+    apiPath + "/document/get-report-rule-export-to-excel",
+    endpoint = "get_report_rule_export_to_excel_ep"
+)
 api.add_resource(MaintainBusinessRulesController,
     apiPath + "/business-rules/<string:page>",
     endpoint="business_rules_ep"
