@@ -16,6 +16,7 @@ import json
 import ast
 from operator import itemgetter
 from datetime import datetime
+import time
 UPLOAD_FOLDER = './uploads/templates'
 ALLOWED_EXTENSIONS = set(['txt', 'xls', 'xlsx'])
 class DocumentController(Resource):
@@ -42,6 +43,16 @@ class DocumentController(Resource):
             reports = request.args.get('reports')
             country = request.args.get('country')
             return self.report_template_suggesstion_list(report_id=reports,country=country)
+        if request.endpoint == 'get_report_export_to_excel_ep':
+            self.report_id = request.args.get('report_id')
+            reporting_date = request.args.get('reporting_date')
+            cell_format_yn = request.args.get('cell_format_yn')
+            if cell_format_yn == None or cell_format_yn == "":
+                cell_format_yn = 'N'
+            return self.export_to_excel(reporting_date=reporting_date,cell_format_yn=cell_format_yn)
+        if request.endpoint == 'get_report_rule_export_to_excel_ep':
+            self.report_id = request.args.get('report_id')
+            return self.export_rules_to_excel()
         self.report_id = doc_id
         reporting_date = request.args.get('reporting_date')
         print(reporting_date)
@@ -305,14 +316,14 @@ class DocumentController(Resource):
             report_id = self.report_id
             reporting_date=kwargs['reporting_date']
             cell_format_yn=kwargs['cell_format_yn']
-            target_file_name = report_id+ '_' + reporting_date + '.xlsx'
+            target_file_name = report_id+ '_' + reporting_date + str(time.time())+ '.xlsx'
         else:
             print("Please supply parameters: " + str(parameter_list))
 
         #Create report template
         wr = xls.Workbook()
         # target_dir='../output/'
-        target_dir = './'
+        target_dir = './static/'
         db=DatabaseHelper()
 
         sheets=db.query('select distinct sheet_id from report_def where report_id=%s', (report_id,)).fetchall()
@@ -328,8 +339,8 @@ class DocumentController(Resource):
             else:
                 ws = wr.create_sheet(title=sheet["sheet_id"])
 
-            report_template=db.query('select cell_id,cell_render_def,cell_calc_ref from report_def where report_id=? and sheet_id=?',
-                        (report_id, sheet["sheet_id"])).fetchall()
+            report_template=db.query('select cell_id,cell_render_def,cell_calc_ref from report_def where report_id=%s and sheet_id=%s',
+                        (report_id, sheet["sheet_id"],)).fetchall()
 
             for row in report_template:
                 if row["cell_render_def"] == 'MERGED_CELL':
@@ -351,7 +362,7 @@ class DocumentController(Resource):
                 elif row["cell_render_def"] == 'CALCULATE_FORMULA':
                     ws[row["cell_id"]].fill = PatternFill("solid", fgColor="DDDDDD")
                     ws[row["cell_id"]].font = Font(bold=True, size=9)
-                    if '=' in ro>w["cell_calc_ref"]:
+                    if '=' in row["cell_calc_ref"]:
                         ws[row["cell_id"]].value = row["cell_calc_ref"]
                     else:
                         ws[row["cell_id"]].value = '=' + row["cell_calc_ref"]
@@ -368,7 +379,7 @@ class DocumentController(Resource):
         #End create report template
 
         #Create report body
-        wb = xls.load_workbook(target_dir + report_file_name)
+        wb = xls.load_workbook(target_dir + target_file_name)
         data=db.query('select b.report_id,b.sheet_id,b.cell_id,a.cell_summary,\
                     b.reporting_scale,b.rounding_option \
                     from report_comp_agg_def b left join report_summary a\
@@ -397,7 +408,52 @@ class DocumentController(Resource):
 
         #End create report body
 
-        return
+        return { "file_name": target_file_name }
+
+    def export_rules_to_excel(self):
+        if self.report_id != None and self.report_id != "":
+            report_id = self.report_id
+            target_file_name = report_id+ '_report_rules' + str(time.time())+ '.xlsx'
+        else:
+            print("Please supply parameters: report_id")
+
+        #Create report template
+        wr = xls.Workbook()
+        # target_dir='../output/'
+        target_dir = './static/'
+        db=DatabaseHelper()
+
+        # print sheets
+        # The default sheet of the workbook
+        al = Alignment(horizontal="center", vertical="center", wrap_text=True, shrink_to_fit=True)
+        ws = wr.worksheets[0]
+        for sheet in [{'table_name':'report_calc_def'},{'table_name':'report_comp_agg_def'}]:
+            # The first sheet title will be Sheet, so do not create any sheet, just rename the title
+            if ws.title == 'Sheet':
+                ws.title = sheet["table_name"]
+            else:
+                ws = wr.create_sheet(title=sheet["table_name"])
+
+            cur = db.query('select * from ' + sheet["table_name"]+ ' where report_id=%s ',
+                        (report_id,))
+            report_rules=cur.fetchall()
+
+            cols = []
+            for i,c in enumerate(cur.description):
+                cols.append({'cell_id': get_column_letter(i + 1) ,'cell_name':c[0]})
+                print(cols,cols[i]['cell_id']+'1')
+                ws[cols[i]['cell_id']+'1'].value = cols[i]['cell_name']
+                ws[cols[i]['cell_id']+'1'].fill = PatternFill("solid", fgColor="DDDDDD")
+                ws[cols[i]['cell_id']+'1'].font = Font(bold=True, size=9)
+            for row,rule in enumerate(report_rules):
+                for c in cols:
+                    ws[c['cell_id']+str(row+2)].value = rule[c['cell_name']]
+                    ws[cols[i]['cell_id']+str(row+2)].font = Font(bold=True, size=9)
+
+        wr.save(target_dir + target_file_name)
+        #End create report template
+
+        return { "file_name": target_file_name }
 
     def cell_drill_down_rules(self,**kwargs):
         parameter_list = ['report_id', 'sheet_id', 'cell_id']
