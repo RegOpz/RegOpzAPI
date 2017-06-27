@@ -473,11 +473,11 @@ class DocumentController(Resource):
         comp_agg_rules=db.query(sql).fetchall()
         if comp_agg_rules:
             formula = comp_agg_rules[0]['comp_agg_ref']
-            variables = list(set([node.id for node in ast.walk(ast.parse(formula)) if isinstance(node, ast.Name)]))
-            cell_calc_ref_list = ''
-            for v in variables:
-                cell_calc_ref_list += ',\'' + v + '\''
-            cell_calc_ref_list = cell_calc_ref_list[1:]
+            # variables = list(set([node.id for node in ast.walk(ast.parse(formula)) if isinstance(node, ast.Name)]))
+            # cell_calc_ref_list = ''
+            # for v in variables:
+            #     cell_calc_ref_list += ',\'' + v + '\''
+            # cell_calc_ref_list = cell_calc_ref_list[1:]
 
         #sql="select * from report_agg_def where report_id='"+report_id+"' and sheet_id='"+sheet_id+"' and\
         #    cell_id='"+cell_id+"'"
@@ -586,7 +586,9 @@ class DocumentController(Resource):
         sql = "select distinct country from report_def_catalog where 1 "
         country_suggestion = db.query(sql).fetchall()
         if country is not None and country !='ALL':
-             where_clause =  " and instr(upper('" + country + "'), upper(country)) > 0"
+             where_clause =  " and instr('" + country.upper() + "', upper(country)) > 0"
+        if report_id is not None and report_id !='ALL':
+             where_clause +=  " and instr('" + report_id.upper() + "', upper(report_id)) > 0"
 
         country = db.query(sql + where_clause).fetchall()
 
@@ -596,7 +598,7 @@ class DocumentController(Resource):
         for i,c in enumerate(data_dict['country']):
             sql = "select distinct report_id from report_def_catalog where country = '" + c['country'] + "'"
             if report_id is not None and report_id !='ALL':
-                 where_clause +=  " and instr(upper('" + report_id + "'), upper(report_id)) > 0"
+                 where_clause =  " and instr(upper('" + report_id + "'), upper(report_id)) > 0"
             report = db.query(sql + where_clause).fetchall()
             print(data_dict['country'][i])
             data_dict['country'][i]['report'] = report
@@ -604,7 +606,7 @@ class DocumentController(Resource):
             for j,r in enumerate(data_dict['country'][i]['report']):
                 sql = "select distinct report_id, valid_from, valid_to, last_updated_by from report_def where 1 "
                 where_report =  " and report_id = '" + data_dict['country'][i]['report'][j]['report_id'] + "'"
-                reportversions = db.query(sql + where_clause + where_report).fetchall()
+                reportversions = db.query(sql + where_report).fetchall()
                 print(data_dict['country'][i]['report'][j])
                 data_dict['country'][i]['report'][j]['reportversions'] = reportversions
             print(data_dict)

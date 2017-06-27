@@ -113,7 +113,9 @@ class MaintainSourcesController(Resource):
 		sql = "select distinct country from data_source_information where 1 "
 		country_suggestion = db.query(sql).fetchall()
 		if country is not None and country !='ALL':
-			 where_clause =  " and instr(upper('" + country + "'), upper(country)) > 0"
+			 where_clause =  " and instr('" + country.upper() + "', upper(country)) > 0"
+		if source_table_name is not None and source_table_name !='ALL':
+			 where_clause +=  " and instr('" + source_table_name.upper() + "', upper(source_table_name)) > 0"
 
 		country = db.query(sql + where_clause).fetchall()
 		data_dict['country'] = country
@@ -124,7 +126,7 @@ class MaintainSourcesController(Resource):
 		for i,c in enumerate(data_dict['country']):
 			sql = "select * from data_source_information where country = '" + c['country'] + "'"
 			if source_table_name is not None and source_table_name !='ALL':
-				 where_clause +=  " and instr(upper('" + source_table_name + "'), upper(source_table_name)) > 0"
+				 where_clause =  " and instr('" + source_table_name.upper() + "', upper(source_table_name)) > 0"
 			source = db.query(sql + where_clause).fetchall()
 			print(data_dict['country'][i])
 			data_dict['country'][i]['source'] = source
