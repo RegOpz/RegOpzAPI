@@ -3,6 +3,7 @@ from flask_restful import Resource
 from Helpers.DatabaseHelper import DatabaseHelper
 import csv
 import time
+from datetime import datetime
 from Constants.Status import *
 
 
@@ -122,86 +123,80 @@ class MaintainBusinessRulesController(Resource):
 		if data:
 			return data
 		return NO_BUSINESS_RULE_FOUND
-	def render_business_rule_json_by_id(self, id):
-		db = DatabaseHelper()
-		query = 'select * from business_rules where id = %s'
-		cur = db.query(query, (id, ))
-		data = cur.fetchone()
-		if data:
-			return data
-		return NO_BUSINESS_RULE_FOUND
+	def ret_source_data_by_id(self, table_name,id):
+	    db = DatabaseHelper()
+	    query = 'select * from ' + table_name + ' where id = %s'
+	    cur = db.query(query, (id, ))
+	    data = cur.fetchone()
+	    for k,v in data.items():
+	    	if isinstance(v,datetime):
+	    		data[k] = data[k].isoformat()
+	    		print(data[k], type(data[k]))
+	    if data:
+	        return data
+	    return NO_BUSINESS_RULE_FOUND
 
-	def insert_business_rules(self, br):
-		db = DatabaseHelper()
-		sql = \
-			"insert into business_rules(rule_execution_order,business_rule,source_id,rule_description,\
-						logical_condition,data_fields_list,python_implementation,business_or_validation,\
-					rule_type,valid_from,valid_to) values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
+	def insert_business_rules(self, data):
+	    db = DatabaseHelper()
 
-		if bool(br):
-			params = tuple((
-				br['rule_execution_order'],
-				br['business_rule'],
-				br['source_id'],
-				br['rule_description'],
-				br['logical_condition'],
-				br['data_fields_list'],
-				br['python_implementation'],
-				br['business_or_validation'],
-				br['rule_type'],
-				br['valid_from'],
-				br['valid_to'],
-				))
-		else:
-			params = tuple((
-				0,
-				'null',
-				'null',
-				'null',
-				'null',
-				'null',
-				'null',
-				'null',
-				'null',
-				'null',
-				'null',
-				))
+	    table_name = data['table_name']
+	    update_info = data['update_info']
+	    update_info_cols = update_info.keys()
 
-		res = db.transact(sql, params)
-		if res:
-			db.commit()
-			return self.render_business_rule_json_by_id(res)
+	    sql="insert into "+table_name + "("
+	    placeholders="("
+	    params=[]
 
-		db.rollback()
-		return UPDATE_ERROR
+	    for col in update_info_cols:
+	        sql+=col+","
+	        placeholders+="%s,"
+	        if col=='id':
+	        	params.append(None)
+	        else:
+	        	params.append(update_info[col])
 
-	def update_business_rules(self, br, id):
-		db = DatabaseHelper()
-		sql = \
-			'Update business_rules set rule_execution_order=%s,              business_rule=%s,             source_id=%s,             rule_description=%s,             logical_condition=%s,             data_fields_list=%s,             python_implementation=%s,             business_or_validation=%s,             rule_type=%s,             valid_from=%s,             valid_to=%s where id=%s'
+	    placeholders=placeholders[:len(placeholders)-1]
+	    placeholders+=")"
+	    sql=sql[:len(sql)-1]
+	    sql+=") values "+ placeholders
 
-		params = (
-			br['rule_execution_order'],
-			br['business_rule'],
-			br['source_id'],
-			br['rule_description'],
-			br['logical_condition'],
-			br['data_fields_list'],
-			br['python_implementation'],
-			br['business_or_validation'],
-			br['rule_type'],
-			br['valid_from'],
-			br['valid_to'],
-			id,
-			)
+	    params_tuple=tuple(params)
+	    print(sql)
+	    print(params_tuple)
+	    res=db.transact(sql,params_tuple)
+	    db.commit()
 
-		res = db.transact(sql, params)
-		if res == 0:
-			db.commit()
-			return {"id":res}
+	    return self.ret_source_data_by_id(table_name,res)
 
-		db.rollback()
-		return UPDATE_ERROR
+	def update_business_rules(self, data, id):
+	    db=DatabaseHelper()
+
+	    table_name=data['table_name']
+	    update_info=data['update_info']
+	    update_info_cols=update_info.keys()
+
+	    sql= 'update '+table_name+ ' set '
+	    params=[]
+	    for col in update_info_cols:
+	        sql+=col +'=%s,'
+	        params.append(update_info[col])
+
+	    sql=sql[:len(sql)-1]
+	    sql+=" where id=%s"
+	    params.append(id)
+	    params_tuple=tuple(params)
+
+	    print(sql)
+	    print(params_tuple)
+
+	    res=db.transact(sql,params_tuple)
+
+	    if res==0:
+	        db.commit()
+	        return self.ret_source_data_by_id(table_name,id)
+
+	    db.rollback()
+	    return UPDATE_ERROR
 
 	def delete_business_rules(self, id):
 		db = DatabaseHelper()
