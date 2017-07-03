@@ -23,9 +23,39 @@ class DatabaseOps(object):
         # #print(params)
         # res = self.db.transact(sql, params)
         # self.db.commit()
-        audit_info=data['audit_info']
-        res=self.audit.audit_delete(audit_info,id)
+         res=self.audit.audit_delete(data,id)
 
+         return res
+
+    def update_data(self, data, id):
+        # table_name = data['table_name']
+        # update_info = data['update_info']
+        # update_info_cols = update_info.keys()
+        #
+        # sql = 'update ' + table_name + ' set '
+        # params = []
+        # for col in update_info_cols:
+        #     sql += col + '=%s,'
+        #     params.append(update_info[col])
+        #
+        # sql = sql[:len(sql) - 1]
+        # sql += " where id=%s"
+        # params.append(id)
+        # params_tuple = tuple(params)
+        #
+        # print(sql)
+        # print(params_tuple)
+        #
+        # res = self.db.transact(sql, params_tuple)
+        #
+        # if res == 0:
+        #     self.db.commit()
+        #     return self.ret_source_data_by_id(table_name, id)
+        #
+        # self.db.rollback()
+        # return UPDATE_ERROR
+
+        res = self.audit.audit_update(data, id)
         return res
 
     def insert_data(self, data):
@@ -53,38 +83,12 @@ class DatabaseOps(object):
         params_tuple = tuple(params)
         print(sql)
         print(params_tuple)
-        res = self.db.transact(sql, params_tuple)
+        id = self.db.transact(sql, params_tuple)
         self.db.commit()
 
-        return self.ret_source_data_by_id(table_name, res)
+        res=self.audit.audit_insert(data,id)
 
-    def update_data(self, data, id):
-        table_name = data['table_name']
-        update_info = data['update_info']
-        update_info_cols = update_info.keys()
-
-        sql = 'update ' + table_name + ' set '
-        params = []
-        for col in update_info_cols:
-            sql += col + '=%s,'
-            params.append(update_info[col])
-
-        sql = sql[:len(sql) - 1]
-        sql += " where id=%s"
-        params.append(id)
-        params_tuple = tuple(params)
-
-        print(sql)
-        print(params_tuple)
-
-        res = self.db.transact(sql, params_tuple)
-
-        if res == 0:
-            self.db.commit()
-            return self.ret_source_data_by_id(table_name, id)
-
-        self.db.rollback()
-        return UPDATE_ERROR
+        return res
 
     def ret_source_data_by_id(self, table_name, id):
         query = 'select * from ' + table_name + ' where id = %s'
