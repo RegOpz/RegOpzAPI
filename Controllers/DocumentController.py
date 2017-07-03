@@ -473,11 +473,11 @@ class DocumentController(Resource):
         comp_agg_rules=db.query(sql).fetchall()
         if comp_agg_rules:
             formula = comp_agg_rules[0]['comp_agg_ref']
-            # variables = list(set([node.id for node in ast.walk(ast.parse(formula)) if isinstance(node, ast.Name)]))
-            # cell_calc_ref_list = ''
-            # for v in variables:
-            #     cell_calc_ref_list += ',\'' + v + '\''
-            # cell_calc_ref_list = cell_calc_ref_list[1:]
+            variables = list(set([node.id for node in ast.walk(ast.parse(formula)) if isinstance(node, ast.Name)]))
+            cell_calc_ref_list = ''
+            for v in variables:
+                cell_calc_ref_list += ',\'' + v + '\''
+            cell_calc_ref_list = cell_calc_ref_list[1:]
 
         #sql="select * from report_agg_def where report_id='"+report_id+"' and sheet_id='"+sheet_id+"' and\
         #    cell_id='"+cell_id+"'"
