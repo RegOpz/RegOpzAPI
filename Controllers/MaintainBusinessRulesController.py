@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request
 from flask_restful import Resource
 from Helpers.DatabaseHelper import DatabaseHelper
+from Helpers.DatabaseOps import DatabaseOps
 import csv
 import time
 from datetime import datetime
@@ -8,6 +9,9 @@ from Constants.Status import *
 
 
 class MaintainBusinessRulesController(Resource):
+	def __init__(self):
+		self.dbOps=DatabaseOps()
+
 	def get(self, id=None, page=0, col_name=None,business_rule=None):
 		print(request.endpoint)
 		if request.endpoint == "business_rule_export_to_csv_ep":
@@ -43,22 +47,23 @@ class MaintainBusinessRulesController(Resource):
 		if request.endpoint == "business_rules_ep_filtered":
 			filter_conditions = request.get_json(force=True)
 			return self.get_business_rules_filtered(filter_conditions)
+
 		br = request.get_json(force=True)
-		res = self.insert_business_rules(br)
+		res = self.dbOps.insert_data(br)
 		return res
 
 	def put(self, id=None):
 		if id == None:
 			return BUSINESS_RULE_EMPTY
-		br = request.get_json(force=True)
-		res = self.update_business_rules(br, id)
+		data = request.get_json(force=True)
+		res = self.dbOps.update_or_delete_data(data, id)
 		return res
 
-	def delete(self, id=None):
-		if id == None:
-			return BUSINESS_RULE_EMPTY
-		res = self.delete_business_rules(id)
-		return res
+	# def delete(self, id=None):
+	# 	if id == None:
+	# 		return BUSINESS_RULE_EMPTY
+	# 	res = self.delete_business_rules(id)
+	# 	return res
 	def render_business_rules_json(self, page=0, order=None):
 		db = DatabaseHelper()
 		startPage =  int(page)*100

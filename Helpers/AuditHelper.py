@@ -36,14 +36,17 @@ class AuditHelper(object):
             new_val = update_info[col]
             print(col,old_val,new_val)
 
+            def_change_insert=0
             if old_val != new_val and col!='approval_status':
                 print(col, old_val, new_val)
                 sql="insert into def_change_log(id,table_name,field_name,old_val,new_val,change_type,maker_comment,status)\
                     values(%s,%s,%s,%s,%s,%s,%s,%s)"
                 params=(id,audit_info['table_name'],col,old_val,new_val,audit_info['change_type'],audit_info['comment'],'PENDING')
                 res=self.db.transact(sql,params)
+                def_change_insert+=1
 
-        self.update_approval_status(audit_info['table_name'], id, 'U')
+        if def_change_insert >0:
+            self.update_approval_status(audit_info['table_name'], id, 'U')
 
         self.db.commit()
 
