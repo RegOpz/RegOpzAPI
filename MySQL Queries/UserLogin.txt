@@ -1,0 +1,15 @@
+RegOpzUser:
+	alter table RegOpzUser drop role;
+	alter table RegOpzUser add role_id int not null;
+
+roles:
+	create table roles (id int not null auto_increment, role varchar(36) not null, primary key(id));
+
+components:
+	create table components (id int not null auto_increment, component varchar(20) not null, primary key(id));
+
+permissions:
+	create table components (id int not null auto_increment, role_id int not null, component_id int not null, permission enum('r', 'w', 'x') not null default 'r', primary key(id));
+
+vUserPermissions:
+	create algorithm=merge view vUserPermissions as select permissions.id as id, name as username, role, component, permission from RegOpzUser join (roles, permissions, components) on (RegOpzUser.role_id=roles.id and roles.id=permissions.role_id and permissions.component_id=components.id) with local check option;

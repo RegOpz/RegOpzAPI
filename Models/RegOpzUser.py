@@ -2,12 +2,14 @@ from Helpers.DatabaseHelper import DatabaseHelper
 from flask import url_for
 from Models.Token import Token
 from Constants.Status import *
+
 class RegOpzUser(object):
     def __init__(self, user=None):
         if user:
             self.id = None
             self.name = user['name']
             self.password = user['password']
+            self.role_id = user['role_id']
             self.first_name = user['first_name']
             self.last_name = user['last_name']
             self.contact_number = user['contact_number']
@@ -15,12 +17,14 @@ class RegOpzUser(object):
             self.ip = user['ip']
             self.image = None
             #5201json = {"name":"admin","first_name":"admin","last_name":"admin","password":"admin","contact_number":"8420403988","email":"admin@admin.com","ip":"1.1.1.1"}
+
     def save(self):
         queryString = \
-            'INSERT INTO RegOpzUser (name,password,first_name,last_name,contact_number,email,ip,image) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)'
+            'INSERT INTO RegOpzUser (name,password,role_id,first_name,last_name,contact_number,email,ip,image) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)'
         values = (
             self.name,
             self.password,
+            self.role_id,
             self.first_name,
             self.last_name,
             self.contact_number,
@@ -31,9 +35,10 @@ class RegOpzUser(object):
         dbhelper = DatabaseHelper()
         rowid = dbhelper.transact(queryString, values)
         return self.get(rowid)
-    def get(self,userId=None):        
+
+    def get(self,userId=None):
         if userId:
-            queryString = 'SELECT * FROM RegOpzUser WHERE id=%s'            
+            queryString = 'SELECT * FROM RegOpzUser WHERE id=%s'
             dbhelper = DatabaseHelper()
             cur = dbhelper.query(queryString, (userId, ))
             data = cur.fetchone()
@@ -41,6 +46,7 @@ class RegOpzUser(object):
                 self.id = data['id']
                 self.name = data['name']
                 self.password = data['password']
+                self.role_id = data['role_id']
                 self.first_name = data['first_name']
                 self.last_name = data['last_name']
                 self.contact_number = data['contact_number']
@@ -50,22 +56,21 @@ class RegOpzUser(object):
                 return self.__dict__
             return NO_USER_FOUND
         else:
-            queryString = 'SELECT * FROM RegOpzUser'            
+            queryString = 'SELECT * FROM RegOpzUser'
             dbhelper = DatabaseHelper()
             cur = dbhelper.query(queryString)
             data = cur.fetchall()
             if data:
                 return data
             return NO_USER_FOUND
+
     def login(self,username, password):
-        queryString = 'SELECT * FROM RegOpzUser WHERE name=%s AND password=%s'            
+        # This process cannot distinguish between Invalid password and Invalid username
+        queryString = 'SELECT * FROM RegOpzUser WHERE name=%s AND password=%s'
         dbhelper = DatabaseHelper()
         cur = dbhelper.query(queryString, (username,password, ))
-        data = cur.fetchone()        
+        data = cur.fetchone()
         if data:
             return Token().create(data['id'])
+            # Send username and full name instead
         return {"msg": "Login failed"},403
-
-
-
-			
