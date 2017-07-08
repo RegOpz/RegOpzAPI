@@ -1,6 +1,7 @@
 from Helpers.DatabaseHelper import DatabaseHelper
 from flask import url_for
 from Models.Token import Token
+import bcrypt
 from Constants.Status import *
 
 class RegOpzUser(object):
@@ -20,7 +21,7 @@ class RegOpzUser(object):
 
     def save(self):
         queryString = \
-            'INSERT INTO RegOpzUser (name,password,role_id,first_name,last_name,contact_number,email,ip,image) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)'
+            'INSERT INTO regopzuser (name,password,role_id,first_name,last_name,contact_number,email,ip,image) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)'
         values = (
             self.name,
             self.password,
@@ -38,7 +39,7 @@ class RegOpzUser(object):
 
     def get(self,userId=None):
         if userId:
-            queryString = 'SELECT * FROM RegOpzUser WHERE id=%s'
+            queryString = 'SELECT * FROM regopzuser WHERE id=%s'
             dbhelper = DatabaseHelper()
             cur = dbhelper.query(queryString, (userId, ))
             data = cur.fetchone()
@@ -56,7 +57,7 @@ class RegOpzUser(object):
                 return self.__dict__
             return NO_USER_FOUND
         else:
-            queryString = 'SELECT * FROM RegOpzUser'
+            queryString = 'SELECT * FROM regopzuser'
             dbhelper = DatabaseHelper()
             cur = dbhelper.query(queryString)
             data = cur.fetchall()
@@ -64,13 +65,13 @@ class RegOpzUser(object):
                 return data
             return NO_USER_FOUND
 
-    def login(self,username, password):
+    def login(self, username, password):
         # This process cannot distinguish between Invalid password and Invalid username
-        queryString = 'SELECT * FROM RegOpzUser WHERE name=%s AND password=%s'
+        # hashpass = bcrypt.hashpw(base64.b64encode(hashlib.sha256(password).digest()), username)
+        queryString = 'SELECT * FROM regopzuser WHERE name=%s AND password=%s'
         dbhelper = DatabaseHelper()
-        cur = dbhelper.query(queryString, (username,password, ))
+        cur = dbhelper.query(queryString, (username, password, ))
         data = cur.fetchone()
         if data:
-            return Token().create(data['id'])
-            # Send username and full name instead
+            return Token().create(data['name'])
         return {"msg": "Login failed"},403

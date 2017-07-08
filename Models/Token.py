@@ -1,7 +1,8 @@
 from Helpers.DatabaseHelper import DatabaseHelper
-# from Models.UserPermission import UserPermission
+from Models.UserPermission import UserPermission
 import uuid
 from datetime import datetime, timedelta
+from jwt import JWT, jwk_from_dict, jwk_from_pem
 from flask import request
 from Constants.Status import *
 
@@ -10,46 +11,47 @@ class Token(object):
 		pass
 
 	def create(self, user_id):
-	# def create(self, userId, name)
-		self.tokenId = str(uuid.uuid4())
-		self.lease_start = datetime.now()
-		self.lease_end = datetime.now() + timedelta(hours=24)
-		self.ip = request.remote_addr
-		self.user_agent = request.headers.get('User-Agent')
-		self.user_id = user_id
-		dbhelper = DatabaseHelper()
-		queryString = "INSERT INTO token(id,token,lease_start,lease_end,ip,user_agent,user_id) VALUES (%s,%s,%s,%s,%s,%s,%s)"
-		values = (None,self.tokenId,self.lease_start,self.lease_end,self.ip,self.user_agent,self.user_id)
 		try:
-			rowid = dbhelper.transact(queryString,values)
-			self.get(rowid)
-			# Get role and permission
-			# user_permission = UserPermission().get(userId)
-			# user['tokenId'] = self.tokenId
-			# user['name'] = name
-			# user['role'] = user_permission['role']
-			# user['permission'] = user_permission['permission']
-			# Encrypt before sending
-			return self.tokenId
-		except Exception as e:
-			return NO_USER_FOUND
+			self.tokenId = self.get(user_id)
+		except ValueError:
+			self.tokenId = str(uuid.uuid4())
+			self.lease_start = datetime.now()
+			self.lease_end = datetime.now() + timedelta(hours=24)
+			self.ip = request.remote_addr
+			self.user_agent = request.headers.get('User-Agent')
+			self.user_id = user_id
+			queryString = "INSERT INTO token(token, lease_start, lease_end, ip, user_agent, user_id) VALUES (%s,%s,%s,%s,%s,%s)"
+			values = (self.tokenId, self.lease_start, self.lease_end, self.ip, self.user_agent, self.user_id, )
+			tokenId = DatabaseHelper().transact(queryString, values)
+		user_permission = UserPermission().get(user_id)
+		user = {
+			'tokenId': tokenId,
+			'role': user_permission['role'],
+			'permission': user_permission['permission']
+		}
+		with open('private_key', 'rb') as fh:
+			salt = jwk_from_pem(fh.read())
+		jwt = JWT().encode(user, salt, 'RS512')
+		return jwt
 
-	def get(self, tokenId):
-		dbhelper = DatabaseHelper()
-		cur = dbhelper.query("SELECT * FROM token WHERE id=%s",(tokenId, ))
+	def get(self, userId):
+		queryString = "SELECT token FROM token WHERE user_id=%s and lease_end > %s"
+		queryParams = (userId, datetime.now(), )
+		cur = DatabaseHelper().query(queryString, queryParams)
 		data = cur.fetchone()
-		self.token = data['token']
-		self.lease_start = data['lease_start']
-		self.lease_end = data['lease_end']
-		self.ip = data['ip']
-		self.user_agent = data['user_agent']
-		self.user_id = data['user_id']
+		if data:
+			return data['token']
+		else:
+			raise ValueError("User not logged in!")
 
 	def authenticate(self, token):
 		extracted_token = token.replace("Bearer ","")
-		# Decrypt here
-		dbhelper = DatabaseHelper()
-		cur = dbhelper.query("SELECT * FROM token WHERE token=%s AND lease_end > %s",(extracted_token,datetime.now()))
+		with open('public_key', 'r') as fh:
+			salt = jwk_from_pem(fh.read())
+		token_decode = JWT().decode(extracted_token, salt)
+		queryString = "SELECT * FROM token WHERE token=%s AND lease_end > %s"
+		queryParams = (token_decode.tokenId, datetime.now(), )
+		cur = DatabaseHelper().query(queryString, queryParams)
 		data = cur.fetchone()
 		if data:
 			return data['user_id']

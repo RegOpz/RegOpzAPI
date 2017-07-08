@@ -4,9 +4,9 @@ class UserPermission(object):
     def __init__(self):
         pass
 
-    def get(self, usedId=None):
+    def get(self, userId=None):
         if userId:
-            queryString = 'SELECT * FROM vUserPermissions WHERE username=%s'
+            queryString = 'SELECT * FROM vuserpermissions WHERE username=%s'
             queryParams = (userId, )
             dbhelper = DatabaseHelper()
             permissions = dbhelper.query(queryString, queryParams)
@@ -14,9 +14,9 @@ class UserPermission(object):
             if len(permissionList) == 0:
                 return { 'msg': 'No Permission Granted for this user' }
             self.role = permissionList[0]['role']
-            self.permission = []
+            self.permission = {}
             for entry in permissionList:
-                self.permission.append({ entry['component'] : entry['permission'] })
+                self.permission[entry['component']] = entry['permission']
             return self.__dict__
         else:
             raise ValueError('UserId not specified!')
