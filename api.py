@@ -229,6 +229,11 @@ api.add_resource(DefChangeController,
     endpoint="get_record_detail"
 )
 
+api.add_resource(DefChangeController,
+    apiPath+"/workflow/def-change/audit-decision",
+    endpoint="audit_decision"
+)
+
 
 
 
