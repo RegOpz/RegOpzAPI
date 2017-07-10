@@ -15,8 +15,6 @@ class UserController(Resource):
 	def post(self):
 		auth = request.authorization
 		if auth:
-			#it is login called
-			print('Auth', auth)
 			return RegOpzUser().login(auth['username'], auth['password'])
 		user = request.get_json(force=True)
 		regOpzUser = RegOpzUser(user)

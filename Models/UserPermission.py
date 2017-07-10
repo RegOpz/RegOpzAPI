@@ -12,7 +12,7 @@ class UserPermission(object):
             permissions = dbhelper.query(queryString, queryParams)
             permissionList = permissions.fetchall()
             if len(permissionList) == 0:
-                return { 'msg': 'No Permission Granted for this user' }
+                return False
             self.role = permissionList[0]['role']
             self.permission = {}
             for entry in permissionList:

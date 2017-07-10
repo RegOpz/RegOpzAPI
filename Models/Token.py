@@ -2,7 +2,7 @@ from Helpers.DatabaseHelper import DatabaseHelper
 from Models.UserPermission import UserPermission
 import uuid
 from datetime import datetime, timedelta
-from jwt import JWT, jwk_from_dict, jwk_from_pem
+from jwt import JWT, jwk_from_pem
 from flask import request
 from Constants.Status import *
 
@@ -12,32 +12,45 @@ class Token(object):
 
 	def create(self, user_id):
 		try:
-			self.tokenId = self.get(user_id)
+			tokenId = self.get(user_id)
 		except ValueError:
 			self.tokenId = str(uuid.uuid4())
 			self.lease_start = datetime.now()
-			self.lease_end = datetime.now() + timedelta(hours=24)
+			self.lease_end = self.lease_start + timedelta(hours=24)
 			self.ip = request.remote_addr
 			self.user_agent = request.headers.get('User-Agent')
 			self.user_id = user_id
+			dbhelper = DatabaseHelper()
 			queryString = "INSERT INTO token(token, lease_start, lease_end, ip, user_agent, user_id) VALUES (%s,%s,%s,%s,%s,%s)"
 			values = (self.tokenId, self.lease_start, self.lease_end, self.ip, self.user_agent, self.user_id, )
-			tokenId = DatabaseHelper().transact(queryString, values)
+			try:
+				tokenId = dbhelper.transact(queryString, values)
+			except Exception:
+				return NO_USER_FOUND
 		user_permission = UserPermission().get(user_id)
-		user = {
-			'tokenId': tokenId,
-			'role': user_permission['role'],
-			'permission': user_permission['permission']
-		}
-		with open('private_key', 'rb') as fh:
-			salt = jwk_from_pem(fh.read())
-		jwt = JWT().encode(user, salt, 'RS512')
-		return jwt
+		if user_permission:
+			user = {
+				'tokenId': tokenId,
+				'role': user_permission['role'],
+				'permission': user_permission['permission']
+			}
+			jwtObject = JWT()
+			with open('private_key', 'rb') as fh:
+				salt = jwk_from_pem(fh.read())
+			jwt = jwtObject.encode(user, salt, 'RS256')
+			#with open('public_key', 'r') as ft:
+				#key = jwk_from_pem(ft.read().encode())
+			#test = jwtObject.decode(jwt, key)
+			#print(test['tokenId'])
+			return jwt
+		else:
+			return { "msg": "Permission Denied" },301
 
 	def get(self, userId):
+		dbhelper = DatabaseHelper()
 		queryString = "SELECT token FROM token WHERE user_id=%s and lease_end > %s"
 		queryParams = (userId, datetime.now(), )
-		cur = DatabaseHelper().query(queryString, queryParams)
+		cur = dbhelper.query(queryString, queryParams)
 		data = cur.fetchone()
 		if data:
 			return data['token']
@@ -47,11 +60,12 @@ class Token(object):
 	def authenticate(self, token):
 		extracted_token = token.replace("Bearer ","")
 		with open('public_key', 'r') as fh:
-			salt = jwk_from_pem(fh.read())
+			salt = jwk_from_pem(fh.read().encode())
 		token_decode = JWT().decode(extracted_token, salt)
+		dbhelper = DatabaseHelper()
 		queryString = "SELECT * FROM token WHERE token=%s AND lease_end > %s"
-		queryParams = (token_decode.tokenId, datetime.now(), )
-		cur = DatabaseHelper().query(queryString, queryParams)
+		queryParams = (token_decode['tokenId'], datetime.now(), )
+		cur = dbhelper.query(queryString, queryParams)
 		data = cur.fetchone()
 		if data:
 			return data['user_id']

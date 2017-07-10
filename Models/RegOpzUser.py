@@ -1,7 +1,7 @@
 from Helpers.DatabaseHelper import DatabaseHelper
 from flask import url_for
 from Models.Token import Token
-import bcrypt
+# import bcrypt
 from Constants.Status import *
 
 class RegOpzUser(object):
@@ -39,7 +39,7 @@ class RegOpzUser(object):
 
     def get(self,userId=None):
         if userId:
-            queryString = 'SELECT * FROM regopzuser WHERE id=%s'
+            queryString = 'SELECT * FROM regopzuser WHERE name=%s'
             dbhelper = DatabaseHelper()
             cur = dbhelper.query(queryString, (userId, ))
             data = cur.fetchone()
