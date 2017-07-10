@@ -2,11 +2,11 @@ from Helpers.DatabaseHelper import DatabaseHelper
 from datetime import datetime
 from Constants.Status import *
 
-# approval_status  'U' - update
+# approval_status  'U' -update
 #                  'D' -delete
-#                  'I' - insert
+#                  'I' -insert
 #                  'A'-appoved
-#                  'R' - rejected
+#                  'R' -rejected
 
 class AuditHelper(object):
     def __init__(self):
