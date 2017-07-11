@@ -31,6 +31,7 @@ class Token(object):
 		if user_permission:
 			user = {
 				'tokenId': tokenId,
+				'userId': user_id,
 				'role': user_permission['role'],
 				'permission': user_permission['permission']
 			}
@@ -61,12 +62,15 @@ class Token(object):
 		extracted_token = token.replace("Bearer ","")
 		with open('public_key', 'r') as fh:
 			salt = jwk_from_pem(fh.read().encode())
-		token_decode = JWT().decode(extracted_token, salt)
+		try:
+			token_decode = JWT().decode(extracted_token, salt)
+		except Exception:
+			raise ValueError('Invalid Token Recieved for Authentication')
 		dbhelper = DatabaseHelper()
 		queryString = "SELECT * FROM token WHERE token=%s AND lease_end > %s"
 		queryParams = (token_decode['tokenId'], datetime.now(), )
 		cur = dbhelper.query(queryString, queryParams)
 		data = cur.fetchone()
-		if data:
+		if data and data['user_id'] == token_decode['userId']:
 			return data['user_id']
-		raise ValueError('Invalid Credentials')
+		raise ValueError('Invalid Credentials Recieved for Authentication')
