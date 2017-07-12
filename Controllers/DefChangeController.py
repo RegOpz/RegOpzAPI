@@ -14,7 +14,9 @@ class DefChangeController(Resource):
 
     def get(self):
         if request.endpoint=="get_audit_list":
-            return self.get_audit_list()
+            table_name=request.args.get("table_name")
+            id_list=request.args.get("id_list")
+            return self.get_audit_list(id_list,table_name)
         if request.endpoint=="get_record_detail":
             table_name=request.args.get("table_name")
             id=request.args.get("id")
@@ -25,10 +27,17 @@ class DefChangeController(Resource):
         return self.audit_decision(data)
 
 
-    def get_audit_list(self):
-        audit_list=self.db.query("select distinct id,table_name,change_type,\
+    def get_audit_list(self,id_list=None,table_name=None):
+        sql = "select distinct id,table_name,change_type,\
                                 date_of_change,maker,maker_comment,checker,checker_comment,status,date_of_checking\
-                                 from def_change_log where status='PENDING'").fetchall()
+                                 from def_change_log where 1"
+        if id_list == "id" or ((id_list is None or id_list == 'undefined') and (table_name is None or table_name=='undefined')):
+            sql = sql + " and status='PENDING'"
+        if id_list is not None and id_list != 'undefined':
+            sql = sql + " and id in (" + id_list + ")"
+        if table_name is not None and table_name != 'undefined':
+            sql = sql + " and table_name = '" + table_name + "'"
+        audit_list=self.db.query(sql).fetchall()
 
         for idx,item in enumerate(audit_list):
             if item["change_type"]=="UPDATE":
@@ -51,4 +60,3 @@ class DefChangeController(Resource):
         if data["status"]=="REJECTED":
             print(data)
         return data
-
