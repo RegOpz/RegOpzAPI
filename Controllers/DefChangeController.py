@@ -2,6 +2,7 @@ from flask import Flask, jsonify, request
 from flask_restful import Resource
 from Helpers.DatabaseHelper import DatabaseHelper
 from Helpers.DatabaseOps import DatabaseOps
+from Helpers.AuditHelper import AuditHelper
 import csv
 import time
 from datetime import datetime
@@ -11,6 +12,8 @@ from operator import itemgetter
 class DefChangeController(Resource):
     def __init__(self):
         self.db=DatabaseHelper()
+        self.audit=AuditHelper()
+
 
     def get(self):
         if request.endpoint=="get_audit_list":
@@ -42,7 +45,7 @@ class DefChangeController(Resource):
         for idx,item in enumerate(audit_list):
             if item["change_type"]=="UPDATE":
                 values=self.db.query("select field_name,old_val,new_val from def_change_log  where id="+str(item["id"])+
-                                     " and table_name='"+str(item["table_name"])+"'").fetchall()
+                                     " and table_name='"+str(item["table_name"])+"' and status='"+item["status"]+"'").fetchall()
                 update_info_list=[]
                 for val in values:
                     update_info_list.append({"field_name":val["field_name"],"old_val":val["old_val"],"new_val":val["new_val"]})
@@ -55,8 +58,8 @@ class DefChangeController(Resource):
         return record_detail
 
     def audit_decision(self,data):
-        if data["status"]=="APPROVED":
-            print(data)
         if data["status"]=="REJECTED":
-            print(data)
+            self.audit.reject_dml(data)
+        if data["status"]=="APPROVED":
+            self.audit.approve_dml(data)
         return data
