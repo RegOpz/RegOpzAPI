@@ -73,5 +73,5 @@ class RegOpzUser(object):
         cur = dbhelper.query(queryString, (username, password, ))
         data = cur.fetchone()
         if data:
-            return Token().create(data['name'])
+            return Token().create(data)
         return {"msg": "Login failed"},403

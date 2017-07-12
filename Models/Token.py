@@ -10,7 +10,9 @@ class Token(object):
 	def __init__(self):
 		pass
 
-	def create(self, user_id):
+	def create(self, user):
+		user_id = user['name']
+		firstname = user['first_name']
 		try:
 			self.tokenId = self.get(user_id)
 		except ValueError:
@@ -32,6 +34,7 @@ class Token(object):
 			user = {
 				'tokenId': self.tokenId,
 				'userId': user_id,
+				'name': firstname,
 				'role': user_permission['role'],
 				'permission': user_permission['permission']
 			}
@@ -39,10 +42,6 @@ class Token(object):
 			with open('private_key', 'rb') as fh:
 				salt = jwk_from_pem(fh.read())
 			jwt = jwtObject.encode(user, salt, 'RS256')
-			#with open('public_key', 'r') as ft:
-				#key = jwk_from_pem(ft.read().encode())
-			#test = jwtObject.decode(jwt, key)
-			#print(test['tokenId'])
 			return jwt
 		else:
 			return { "msg": "Permission Denied" },301
