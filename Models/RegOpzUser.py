@@ -10,7 +10,7 @@ class RegOpzUser(object):
             self.id = None
             self.name = user['name']
             self.password = user['password']
-            self.role_id = user['role_id']
+            self.role = user['role']
             self.first_name = user['first_name']
             self.last_name = user['last_name']
             self.contact_number = user['contact_number']
@@ -21,11 +21,11 @@ class RegOpzUser(object):
 
     def save(self):
         queryString = \
-            'INSERT INTO regopzuser (name,password,role_id,first_name,last_name,contact_number,email,ip,image) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)'
+            "INSERT INTO regopzuser (name,password,role_id,first_name,last_name,contact_number,email,ip,image) VALUES (%s,%s,(SELECT id from roles where role=%s),%s,%s,%s,%s,%s)"
         values = (
             self.name,
             self.password,
-            self.role_id,
+            self.role,
             self.first_name,
             self.last_name,
             self.contact_number,
@@ -34,36 +34,20 @@ class RegOpzUser(object):
             self.image,
             )
         dbhelper = DatabaseHelper()
-        rowid = dbhelper.transact(queryString, values)
-        return self.get(rowid)
+        try:
+            rowid = dbhelper.transact(queryString, values)
+            return self.get(rowid)
+        except Exception:
+            return { "msg": "Cannot add this user, please review the details" },400
 
     def get(self,userId=None):
-        if userId:
-            queryString = 'SELECT * FROM regopzuser WHERE name=%s'
-            dbhelper = DatabaseHelper()
-            cur = dbhelper.query(queryString, (userId, ))
-            data = cur.fetchone()
-            if data:
-                self.id = data['id']
-                self.name = data['name']
-                self.password = data['password']
-                self.role_id = data['role_id']
-                self.first_name = data['first_name']
-                self.last_name = data['last_name']
-                self.contact_number = data['contact_number']
-                self.email = data['email']
-                self.ip = data['ip']
-                self.image = data['image']
-                return self.__dict__
-            return NO_USER_FOUND
-        else:
-            queryString = 'SELECT * FROM regopzuser'
-            dbhelper = DatabaseHelper()
-            cur = dbhelper.query(queryString)
-            data = cur.fetchall()
-            if data:
-                return data
-            return NO_USER_FOUND
+        queryString = 'SELECT * FROM vuserdetails'
+        dbhelper = DatabaseHelper()
+        cur = dbhelper.query(queryString)
+        data = cur.fetchall()
+        if data:
+            return data
+        return NO_USER_FOUND
 
     def login(self, username, password):
         # This process cannot distinguish between Invalid password and Invalid username

@@ -29,7 +29,7 @@ class Token(object):
 				rowid = dbhelper.transact(queryString, values)
 			except Exception:
 				return NO_USER_FOUND
-		user_permission = UserPermission().get(user_id)
+		user_permission = UserPermission().obtain(user_id)
 		if user_permission:
 			user = {
 				'tokenId': self.tokenId,

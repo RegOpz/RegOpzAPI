@@ -1,5 +1,6 @@
 import mysql.connector
 from Configs import dbconfig
+
 class DatabaseHelper(object):
     def __init__(self):
         self.db = dbconfig.DATABASE['db'];

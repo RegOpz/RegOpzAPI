@@ -1,8 +1,1 @@
-alter table token drop foreign key fk_token_1;
-alter table token drop user_id;
-alter table token add user_id varchar(20) not null after id;
-alter table token drop id;
-alter table token add primary key(token);
-alter table regopzuser drop id;
-alter table regopzuser drop unique key name;
-alter table regopzuser add primary key(name);
+create algorithm=merge view vuserdetails as select role, first_name, last_name, email, contact_number, image from regopzuser join roles on (regopzuser.role_id=roles.id) with local check option;
