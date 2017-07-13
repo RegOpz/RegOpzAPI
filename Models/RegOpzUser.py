@@ -41,7 +41,9 @@ class RegOpzUser(object):
             return { "msg": "Cannot add this user, please review the details" },400
 
     def get(self):
-        queryString = "SELECT role, first_name, last_name, email, contact_number, image, status FROM regopzuser JOIN (roles, status_def) ON (regopzuser.role_id = roles.id AND regopzuser.status_id = status_def.id)"
+        queryString = "SELECT role, first_name, last_name, email, contact_number, image, status FROM regopzuser\
+            JOIN (roles, status_def) ON (regopzuser.role_id = roles.id AND regopzuser.status_id = status_def.id)\
+            WHERE status_def.status != 'Deleted'"
         dbhelper = DatabaseHelper()
         cur = dbhelper.query(queryString)
         data = cur.fetchall()
