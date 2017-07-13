@@ -11,6 +11,7 @@ from Controllers.ResourceController import ResourceController
 from Controllers.RoleController import RoleController
 from Controllers.RoleController import RoleController
 from Controllers.MaintainSourcesController import MaintainSourcesController
+from Controllers.DefChangeController import DefChangeController
 from flask_cors import CORS, cross_origin
 app = Flask(__name__)
 CORS(app)
@@ -218,6 +219,20 @@ api.add_resource(VarianceAnalysisController,
     endpoint="get_variance_report"
 )
 
+api.add_resource(DefChangeController,
+    apiPath+"/workflow/def-change/get-audit-list",
+    endpoint="get_audit_list"
+)
+
+api.add_resource(DefChangeController,
+    apiPath+"/workflow/def-change/get-record-detail",
+    endpoint="get_record_detail"
+)
+
+api.add_resource(DefChangeController,
+    apiPath+"/workflow/def-change/audit-decision",
+    endpoint="audit_decision"
+)
 
 
 
