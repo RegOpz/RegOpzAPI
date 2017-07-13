@@ -11,4 +11,5 @@ INVALID_JSON = {"msg":"Invalid JSON data"}, 400
 NO_USER_FOUND = {"msg":"No User found"}, 404
 RESOURCE_EMPTY = {"msg":"Resource id is empty"}, 400
 ROLE_EMPTY = {"msg":"Role id is empty"}, 400
+PERMISSION_EMPTY = {"msg":"No Permission supplied"},400
 DATA_NOT_FOUND = {"msg":"Data not found"}, 400
