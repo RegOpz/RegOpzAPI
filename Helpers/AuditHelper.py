@@ -17,10 +17,10 @@ class AuditHelper(object):
 
     def update_audit_record(self,data):
         print(data)
-        sql="update def_change_log set status='"+data["status"]+"', checker_comment='"+data["checker_comment"]+\
-            "' where table_name='"+data["table_name"]+"' and id="+str(data["id"])
+        sql="update def_change_log set status=%s,checker_comment=%s where table_name=%s and id=%s"
         print(sql)
-        res = self.db.transact(sql)
+        params=(data["status"],data["checker_comment"],data["table_name"],data["id"])
+        res = self.db.transact(sql,params)
         self.db.commit()
         return res
 
@@ -64,10 +64,11 @@ class AuditHelper(object):
         audit_info = data['audit_info']
         sql = "insert into def_change_log(id,table_name,change_type,maker_comment,status) values(%s,%s,%s,%s,%s)"
         res = self.db.transact(sql, (id, audit_info['table_name'], audit_info['change_type'], audit_info['comment'], 'PENDING'))
-        self.update_approval_status(table_name=['table_name'],id=id, dml_allowed='N',in_use='N')
+        print("this should be id of the record inserted..what it actually is ",res)
+        self.update_approval_status(table_name=audit_info['table_name'],id=id, dml_allowed='N',in_use='N')
         self.db.commit()
 
-        return id
+        return res
 
     def reject_dml(self,data):
         if data["change_type"]=="INSERT":
