@@ -6,12 +6,9 @@ from Models.RegOpzUser import RegOpzUser
 import json
 
 class UserController(Resource):
-	def get(self, userId=None):
-		if userId:
-			regOpzUser = RegOpzUser()
-			res = regOpzUser.get(userId)
-			return res
+	def get(self):
 		return RegOpzUser().get()
+
 	def post(self):
 		auth = request.authorization
 		if auth:

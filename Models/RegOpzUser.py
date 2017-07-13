@@ -40,8 +40,8 @@ class RegOpzUser(object):
         except Exception:
             return { "msg": "Cannot add this user, please review the details" },400
 
-    def get(self,userId=None):
-        queryString = 'SELECT * FROM vuserdetails'
+    def get(self):
+        queryString = "SELECT role, first_name, last_name, email, contact_number, image, status FROM regopzuser JOIN (roles, status_def) ON (regopzuser.role_id = roles.id AND regopzuser.status_id = status_def.id)"
         dbhelper = DatabaseHelper()
         cur = dbhelper.query(queryString)
         data = cur.fetchall()
@@ -52,7 +52,8 @@ class RegOpzUser(object):
     def login(self, username, password):
         # This process cannot distinguish between Invalid password and Invalid username
         # hashpass = bcrypt.hashpw(base64.b64encode(hashlib.sha256(password).digest()), username)
-        queryString = 'SELECT * FROM regopzuser WHERE name=%s AND password=%s'
+        queryString = "SELECT * FROM regopzuser JOIN status_def ON (regopzuser.status_id = status_def.id) \
+            WHERE name=%s AND password=%s AND status='Active'"
         dbhelper = DatabaseHelper()
         cur = dbhelper.query(queryString, (username, password, ))
         data = cur.fetchone()
