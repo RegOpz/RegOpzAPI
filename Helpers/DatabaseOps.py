@@ -88,7 +88,7 @@ class DatabaseOps(object):
 
         res=self.audit.audit_insert(data,id)
 
-        return res
+        return self.ret_source_data_by_id(table_name,id)
 
     def ret_source_data_by_id(self, table_name, id):
         query = 'select * from ' + table_name + ' where id = %s'
