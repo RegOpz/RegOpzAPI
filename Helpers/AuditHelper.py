@@ -17,7 +17,7 @@ class AuditHelper(object):
 
     def update_audit_record(self,data):
         print(data)
-        sql="update def_change_log set status=%s,checker_comment=%s where table_name=%s and id=%s"
+        sql="update def_change_log set status=%s,checker_comment=%s where table_name=%s and id=%s and status='PENDING'"
         print(sql)
         params=(data["status"],data["checker_comment"],data["table_name"],data["id"])
         res = self.db.transact(sql,params)
@@ -29,7 +29,7 @@ class AuditHelper(object):
         audit_info=data['audit_info']
         sql="insert into def_change_log(id,table_name,change_type,maker_comment,status) values(%s,%s,%s,%s,%s)"
         res=self.db.transact(sql,(id,audit_info['table_name'],audit_info['change_type'],audit_info['comment'],'PENDING'))
-        self.update_approval_status(table_name=['table_name'], id=id, dml_allowed='N')
+        self.update_approval_status(table_name=audit_info['table_name'], id=id, dml_allowed='N')
         self.db.commit()
 
         return id
@@ -101,5 +101,3 @@ class AuditHelper(object):
 
         self.update_audit_record(data)
         return data
-
-
