@@ -20,10 +20,9 @@ class UserPermission(object):
             permQuery = self.dbhelper.query(queryString_2, queryParams)
             permissions = permQuery.fetchall()
             data = {
-                'role': role['role']
+                'role': role['role'],
+                'permissions': permissions
             }
-            for perm in permissions:
-                data[perm['component']] = perm['permission']
             dataList.append(data)
         if len(dataList) == 0:
             return PERMISSION_EMPTY
