@@ -365,7 +365,7 @@ class ViewDataController(Resource):
 
         for src in tables:
             # Select the data in the rule ececution order to facilitate derived rules definitions in the rule
-            data=db.query('select * from business_rules where source_id=%s order by rule_execution_order asc',(src["source_id"],)).fetchall()
+            data=db.query('select * from business_rules where source_id=%s and in_use=\'Y\' order by rule_execution_order asc',(src["source_id"],)).fetchall()
 
             code = 'if business_or_validation in [\'ALL\',\'BUSINESSRULES\']:\n'
             code += '\tdb.transact("delete from qualified_data where source_id='+str(src["source_id"])+' and business_date=%s",(business_date,))\n'

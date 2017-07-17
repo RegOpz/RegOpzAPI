@@ -249,7 +249,7 @@ class MaintainBusinessRulesController(Resource):
 			return BUSINESS_RULE_EMPTY
 
 		db = DatabaseHelper()
-		sql = "select distinct report_id,sheet_id,cell_id from report_calc_def \
+		sql = "select distinct report_id,sheet_id,cell_id from report_calc_def, in_use \
 		where cell_business_rules like '%," + business_rule + ",%'"
 		cur=db.query(sql)
 		report_list = cur.fetchall()
@@ -269,7 +269,7 @@ class MaintainBusinessRulesController(Resource):
 
 		db=DatabaseHelper()
 
-		sql = "select report_id,sheet_id,cell_id,cell_business_rules from report_calc_def where source_id=" + str(
+		sql = "select report_id,sheet_id,cell_id,cell_business_rules,in_use from report_calc_def where source_id=" + str(
 			source_id)
 		cur=db.query(sql)
 		data_list = cur.fetchall()

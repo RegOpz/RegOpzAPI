@@ -166,7 +166,7 @@ class GenerateReportController(Resource):
         db=DatabaseHelper()
 
         all_business_rules=db.query('select report_id,sheet_id,cell_id,cell_calc_ref,cell_business_rules \
-                    from report_calc_def where report_id=%s',(report_id,)).fetchall()
+                    from report_calc_def where report_id=%s and in_use=\'Y\'',(report_id,)).fetchall()
 
 
         start = time.time()
@@ -383,7 +383,8 @@ class GenerateReportController(Resource):
         sql = "select a.report_id,a.sheet_id,a.cell_id,b.source_id,\
                         b.source_table_name,a.aggregation_ref,a.cell_calc_ref,a.aggregation_func\
                         from report_calc_def a,data_source_information b\
-                        where  a.source_id=b.source_id and report_id='REPORT_ID' order by a.source_id".replace(
+                        where  a.source_id=b.source_id and a.in_use='Y' \
+                        and a.report_id='REPORT_ID' order by a.source_id".replace(
             'REPORT_ID', report_id)
         all_agg_cls = pd.read_sql(sql, db.connection())
         #Convert to float where possible to reduce memory usage
@@ -522,7 +523,7 @@ class GenerateReportController(Resource):
 
         summ_by_src=pd.read_sql(sql,db.connection())
 
-        comp_agg_cls=db.query("select * from report_comp_agg_def where report_id=%s",(report_id,)).fetchall()
+        comp_agg_cls=db.query("select * from report_comp_agg_def where report_id=%s and in_use='Y'",(report_id,)).fetchall()
 
         result_set=[]
         for cls in comp_agg_cls:
