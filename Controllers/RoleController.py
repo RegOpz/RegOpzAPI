@@ -2,8 +2,7 @@ from flask_restful import Resource,request
 from Models.UserPermission import UserPermission
 
 class RoleController(Resource):
-    def get(self):
-        role = request.args.get('role')
+    def get(self, role = None):
         return UserPermission().get(role)
 
     def post(self):

@@ -136,11 +136,5 @@ class UserPermission(object):
                     lastRowId = self.dbhelper.transact(queryString_2, queryParams_2)
                 except Exception:
                     return { "msg": "Failed to remove permissions for role " + self.role },403
-                queryString_3 = "DELETE FROM roles WHERE id=%s"
-                try:
-                    lastRowId = self.dbhelper.transact(queryString_3, queryParams_2)
-                    return { "msg": "Role and Permission deletion successful" },200
-                except Exception:
-                    return { "msg": "Failed to remove role " + self.role },403
             return ROLE_EMPTY
         return ROLE_EMPTY

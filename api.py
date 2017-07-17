@@ -110,6 +110,7 @@ api.add_resource(ResourceController,
 )
 api.add_resource(RoleController,
     apiPath+"/roles",
+    apiPath+"/roles/<string:role>",
     endpoint="role_ep"
 )
 api.add_resource(ComponentController,
