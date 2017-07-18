@@ -43,6 +43,8 @@ class UserPermission(object):
                 'role': role['role'],
                 'components': componentList
             }
+            if roleId:
+                return data
             dataList.append(data)
         if len(dataList) == 0:
             return PERMISSION_EMPTY
