@@ -6,35 +6,47 @@ class UserPermission(object):
         self.dbhelper = DatabaseHelper()
 
     def get(self, roleId = None):
-        queryString = "SELECT component, permission FROM roles JOIN (permissions, components, permission_def) ON\
-            (roles.id = permissions.role_id AND permissions.component_id = components.id AND permissions.permission_id = permission_def.id)\
-            WHERE roles.role=%s"
+        queryString_1 = "SELECT * FROM roles"
+        queryParams = ()
         if roleId:
-            queryParams = (roleId, )
-            cur = self.dbhelper.query(queryString, queryParams)
-            data = cur.fetchall()
-            if len(data) == 0:
-                return PERMISSION_EMPTY
-            return data
-        else:
-            queryString_1 = "SELECT role FROM roles"
-            roleQuery = self.dbhelper.query(queryString_1)
-            roles = roleQuery.fetchall()
-            if len(roles) == 0:
-                return ROLE_EMPTY
-            dataList = []
-            for role in roles:
-                queryParams = (role['role'], )
+            queryString_1 += " where role=%s"
+            queryParams = (roleId,)
+        roleQuery = self.dbhelper.query(queryString_1,queryParams)
+        roles = roleQuery.fetchall()
+        if len(roles) == 0:
+            return ROLE_EMPTY
+        dataList = []
+        for role in roles:
+            queryParams = (role['id'], )
+            queryString = "SELECT p.*,c.component FROM components c \
+                           JOIN permissions p ON\
+                          p.component_id = c.id AND p.role_id = %s"
+            if roleId:
+                queryString = queryString.replace("JOIN","LEFT JOIN")
+            compQuery = self.dbhelper.query(queryString, queryParams)
+            components = compQuery.fetchall()
+            print(components)
+            componentList=[]
+            for component in components:
+                queryParams = (role['id'],component['component_id'], )
+                queryString = "SELECT p.permission_id,pd.permission FROM permission_def pd \
+                              LEFT JOIN permissions p ON\
+                              p.permission_id = pd.id AND p.role_id = %s and p.component_id=%s"
                 permQuery = self.dbhelper.query(queryString, queryParams)
                 permissions = permQuery.fetchall()
-                data = {
-                    'role': role['role'],
-                    'permissions': permissions
+                compData = {
+                    'component':component['component'],
+                    'permissions':permissions
                 }
-                dataList.append(data)
-            if len(dataList) == 0:
-                return PERMISSION_EMPTY
-            return dataList
+                componentList.append(compData)
+            data = {
+                'role': role['role'],
+                'components': componentList
+            }
+            dataList.append(data)
+        if len(dataList) == 0:
+            return PERMISSION_EMPTY
+        return dataList
 
     def obtain(self, userId=None):
         if userId:
