@@ -6,9 +6,9 @@ class PermissionController(Resource):
         dbhelper = DatabaseHelper()
         permissions_list = []
         queryString = "SELECT * FROM components"
-        components = dbhelper.query(query).fetchall()
+        components = dbhelper.query(queryString).fetchall()
         for component in components:
-            queryString = "SELECT * FROM permission_def \
+            queryString = "SELECT id AS permission_id, permission FROM permission_def \
                      WHERE component_id = %s"
             queryParams = (component['id'],)
             permissions = dbhelper.query(queryString, queryParams).fetchall()
