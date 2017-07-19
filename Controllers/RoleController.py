@@ -7,7 +7,7 @@ class RoleController(Resource):
 
     def post(self):
         res = request.get_json(force=True)
-        return UserPermission().save(res)
+        return UserPermission().post(res)
 
     def delete(self, role = None):
         return UserPermission().remove(role)

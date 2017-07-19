@@ -9,7 +9,6 @@ from Controllers.VarianceAnalysisController import VarianceAnalysisController
 from app import *
 from Controllers.ResourceController import ResourceController
 from Controllers.RoleController import RoleController
-from Controllers.ComponentController import ComponentController
 from Controllers.PermissionController import PermissionController
 from Controllers.MaintainSourcesController import MaintainSourcesController
 from Controllers.DefChangeController import DefChangeController
@@ -112,10 +111,6 @@ api.add_resource(RoleController,
     apiPath+"/roles",
     apiPath+"/roles/<string:role>",
     endpoint="role_ep"
-)
-api.add_resource(ComponentController,
-    apiPath+"/components",
-    endpoint="component_ep"
 )
 api.add_resource(PermissionController,
     apiPath+"/permissions",

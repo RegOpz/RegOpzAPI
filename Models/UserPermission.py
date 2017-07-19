@@ -26,17 +26,18 @@ class UserPermission(object):
             compQuery = self.dbhelper.query(queryString, queryParams)
             components = compQuery.fetchall()
             print(components)
-            componentList=[]
+            componentList = []
             for component in components:
-                queryParams = (role['id'],component['component_id'], )
                 queryString = "SELECT p.permission_id,pd.permission FROM permission_def pd \
                               LEFT JOIN permissions p ON\
-                              p.permission_id = pd.id AND p.role_id = %s and p.component_id=%s"
+                              (p.permission_id = pd.id AND p.role_id = %s \
+                              AND p.component_id=%s) WHERE pd.component_id=%s AND p.in_use='Y'"
+                queryParams = (role['id'],component['component_id'],component['component_id'], )
                 permQuery = self.dbhelper.query(queryString, queryParams)
                 permissions = permQuery.fetchall()
                 compData = {
-                    'component':component['component'],
-                    'permissions':permissions
+                    'component': component['component'],
+                    'permissions': permissions
                 }
                 componentList.append(compData)
             data = {
@@ -50,7 +51,106 @@ class UserPermission(object):
             return PERMISSION_EMPTY
         return dataList
 
-    def obtain(self, userId=None):
+    def post(self, entry = None, delete = None):
+        if entry:
+            print("Data recieved via POST in permissions:", entry)
+            self.role = entry['role']
+            self.data = entry['components']
+            roleId = self.getRoleId()
+            if not roleId:
+                roleId = self.setRoleId(True)
+                print("New Role Added.")
+            if not roleId:
+                return ROLE_EMPTY
+            for item in self.data:
+                component = item['component']
+                componentId = self.getComponentId(component)
+                if not componentId:
+                    print("Invalid component specified.")
+                    continue
+                permissions = item['permissions']
+                for permission in permissions:
+                    permissionId = self.getPermissionId(permission['permission'], component);
+                    if permissionId:
+                        Permissionflag = permission['permission_id']
+                        Queryflag = not delete and Permissionflag
+                        rowId = self.setPermission(roleId, componentId, permissionId, Queryflag)
+                        if not rowId:
+                            print("Error occured while updating permissions")
+                    else:
+                        print("Invalid permissions given against", component)
+                        continue
+            return { "msg": "Permission update successful." },200
+        else:
+            return ROLE_EMPTY
+
+    def delete(self, role = None):
+        if role:
+            data = self.get(role)
+            if data:
+                res = self.post(self, data, True)
+                rowId = self.setRoleId(False)
+                if not rowId:
+                    print("Error occured while deleting role:", role)
+                return res
+        return ROLE_EMPTY
+
+    def getRoleId(self):
+        if self.role:
+            queryString = "SELECT id FROM roles WHERE role=%s and in_use='Y'"
+            cur = self.dbhelper.query(queryString, (self.role, ))
+            data = cur.fetchone()
+            if data:
+                return data['id']
+            return False
+
+    def setRoleId(self, inUseFlag = None):
+        # Need to add who added it
+        inUse = 'Y' if inUseFlag else 'N'
+        queryString = "INSERT INTO roles (role, in_use) VALUES(%s,%s) ON DUPLICATE KEY UPDATE in_use=%s"
+        try:
+            rowId = self.dbhelper.transact(queryString, (self.role, inUse, inUse ))
+            self.dbhelper.commit()
+            return rowId
+        except Exception:
+            return False
+
+    def getComponentId(self, component = None):
+        if component:
+            queryString = "SELECT id FROM components WHERE component=%s"
+            queryParams = (component, )
+            cur = self.dbhelper.query(queryString, queryParams)
+            data = cur.fetchone()
+            if data:
+                return data['id']
+        return False
+
+    def getPermissionId(self, permission = None, componentId = None):
+        if permission and componentId:
+            queryString = "SELECT id FROM permission_def WHERE permission=%s"
+            queryParams = (permission, )
+            cur = self.dbhelper.query(queryString, queryParams)
+            data = cur.fetchone()
+            if data:
+                return data['id']
+        return False
+
+    def setPermission(self, roleId = None, componentId = None, permissionId = None, flag = None):
+        # Get user id from token
+        inUse = 'Y' if flag else 'N'
+        if roleId and componentId and permissionId:
+            queryString = "INSERT INTO permissions (role_id, component_id, permission_id, in_use) VALUES\
+                (%s,%s,%s,'Y') ON DUPLICATE KEY UPDATE in_use=%s"
+            queryParams = (roleId, componentId, permissionId, inUse, )
+            try:
+                rowId = self.dbhelper.transact(queryString, queryParams)
+                self.dbhelper.commit()
+                return rowId
+            except Exception:
+                return False
+        return False
+
+    def obtain(self, userId = None):
         if userId:
             queryString = "SELECT permissions.id AS id, regopzuser.name AS username, role, component, permission\
                 FROM regopzuser JOIN (roles, components, permissions, permission_def) ON\
@@ -68,87 +168,3 @@ class UserPermission(object):
             return self.__dict__
         else:
             raise ValueError('UserId not specified!')
-
-    def save(self, entry = None):
-        if entry:
-            self.role = entry['role']
-            self.permissions = entry['permissions']
-            if len(self.permissions) == 0:
-                return PERMISSION_EMPTY
-            try:
-                roleId = self.getRoleId()
-            except ValueError as e:
-                print("Error in Get Role", e)
-                return { "msg": "Failed to create role " + self.role },403
-            queryString = "INSERT INTO permissions (role_id, component_id, permission_id) VALUES\
-                (%s,(SELECT id FROM components WHERE component=%s),%s)"
-            queryParams = []
-            for permission in self.permissions:
-                component = permission['component']
-                try:
-                    permissionId = self.getPermissionId(permission['permission'])
-                except ValueError as e:
-                    print("Error in Get Permission", e)
-                    continue
-                queryParams.append( (roleId, component, permissionId, ) )
-            try:
-                if len(queryParams) > 1:
-                    lastRowId = self.dbhelper.transactmany(queryString, queryParams)
-                else:
-                    rowId = self.dbhelper.transact(queryString, queryParams[0])
-            except Exception as e:
-                print("Error in save permission", e)
-                return { "msg": "Failed to add permission for role " + self.role },403
-            return { "msg": "Permission updation successful" },200
-        return ROLE_EMPTY
-
-    def getRoleId(self):
-        if self.role:
-            queryString = "SELECT id FROM roles WHERE role=%s"
-            queryParams = (self.role, )
-            cur = self.dbhelper.query(queryString, queryParams)
-            data = cur.fetchone()
-            if data:
-                return data['id']
-            else:
-                queryString1 = "INSERT INTO roles (role) VALUES(%s)"
-                try:
-                    return self.dbhelper.transact(queryString1, queryParams)
-                except Exception:
-                    raise ValueError("Cannot create role from given data!")
-        raise ValueError("Cannot find role from given data!")
-
-    def getPermissionId(self, permission = None):
-        if permission:
-            queryString = "SELECT id FROM permission_def WHERE permission=%s"
-            queryParams = (permission, )
-            cur = self.dbhelper.query(queryString, queryParams)
-            data = cur.fetchone()
-            if data:
-                return data['id']
-            else:
-                queryString1 = "INSERT INTO permission_def (permission) VALUES(%s)"
-                try:
-                    self.dbhelper.transact(queryString1, queryParams)
-                except Exception:
-                    raise ValueError("Cannot create permission from given data!")
-        raise ValueError("Cannot find permission from given data!")
-
-    def remove(self, role = None):
-        self.dbhelper = DatabaseHelper()
-        if role:
-            self.role = role
-            queryString_1 = "SELECT id FROM roles WHERE role=%s"
-            queryParams_1 = (self.role, )
-            cur = self.dbhelper.query(queryString_1, queryParams_1)
-            data = cur.fetchone()
-            if data:
-                rowId = data['id']
-                queryString_2 = "DELETE FROM permissions WHERE role_id=%s"
-                queryParams_2 = (rowId, )
-                try:
-                    lastRowId = self.dbhelper.transact(queryString_2, queryParams_2)
-                except Exception:
-                    return { "msg": "Failed to remove permissions for role " + self.role },403
-            return ROLE_EMPTY
-        return ROLE_EMPTY
