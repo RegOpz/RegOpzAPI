@@ -10,4 +10,4 @@ class RoleController(Resource):
         return UserPermission().post(res)
 
     def delete(self, role = None):
-        return UserPermission().remove(role)
+        return UserPermission().delete(role)

@@ -6,10 +6,11 @@ class UserPermission(object):
         self.dbhelper = DatabaseHelper()
 
     def get(self, roleId = None):
-        queryString_1 = "SELECT * FROM roles"
+        print("\nRecieved GET request in Permissions")
+        queryString_1 = "SELECT * FROM roles WHERE in_use='Y'"
         queryParams = ()
         if roleId:
-            queryString_1 += " where role=%s"
+            queryString_1 += " AND role=%s"
             queryParams = (roleId,)
         roleQuery = self.dbhelper.query(queryString_1,queryParams)
         roles = roleQuery.fetchall()
@@ -20,7 +21,7 @@ class UserPermission(object):
             queryParams = (role['id'], )
             queryString = "SELECT p.*,c.component FROM components c \
                            JOIN permissions p ON\
-                          p.component_id = c.id AND p.role_id = %s"
+                          p.component_id = c.id AND p.role_id = %s AND p.in_use='Y'"
             if roleId:
                 queryString = queryString.replace("JOIN","LEFT JOIN")
             compQuery = self.dbhelper.query(queryString, queryParams)
@@ -31,15 +32,16 @@ class UserPermission(object):
                 queryString = "SELECT p.permission_id,pd.permission FROM permission_def pd \
                               LEFT JOIN permissions p ON\
                               (p.permission_id = pd.id AND p.role_id = %s \
-                              AND p.component_id=%s) WHERE pd.component_id=%s AND p.in_use='Y'"
-                queryParams = (role['id'],component['component_id'],component['component_id'], )
+                              AND p.component_id = %s) WHERE p.in_use = 'Y'"
+                queryParams = (role['id'], component['component_id'], )
                 permQuery = self.dbhelper.query(queryString, queryParams)
                 permissions = permQuery.fetchall()
                 compData = {
                     'component': component['component'],
                     'permissions': permissions
                 }
-                componentList.append(compData)
+                if compData not in componentList:
+                    componentList.append(compData)
             data = {
                 'role': role['role'],
                 'components': componentList
@@ -53,15 +55,13 @@ class UserPermission(object):
 
     def post(self, entry = None, delete = None):
         if entry:
-            print("Data recieved via POST in permissions:", entry)
+            print("\nData recieved via", "DELETE" if delete else "POST", "in permissions:", entry)
             self.role = entry['role']
             self.data = entry['components']
             roleId = self.getRoleId()
             if not roleId:
                 roleId = self.setRoleId(True)
                 print("New Role Added.")
-            if not roleId:
-                return ROLE_EMPTY
             for item in self.data:
                 component = item['component']
                 componentId = self.getComponentId(component)
@@ -88,7 +88,7 @@ class UserPermission(object):
         if role:
             data = self.get(role)
             if data:
-                res = self.post(self, data, True)
+                res = self.post(data, True)
                 rowId = self.setRoleId(False)
                 if not rowId:
                     print("Error occured while deleting role:", role)
@@ -140,8 +140,8 @@ class UserPermission(object):
         inUse = 'Y' if flag else 'N'
         if roleId and componentId and permissionId:
             queryString = "INSERT INTO permissions (role_id, component_id, permission_id, in_use) VALUES\
-                (%s,%s,%s,'Y') ON DUPLICATE KEY UPDATE in_use=%s"
-            queryParams = (roleId, componentId, permissionId, inUse, )
+                (%s,%s,%s,%s) ON DUPLICATE KEY UPDATE in_use=%s"
+            queryParams = (roleId, componentId, permissionId, inUse, inUse )
             try:
                 rowId = self.dbhelper.transact(queryString, queryParams)
                 self.dbhelper.commit()
