@@ -8,7 +8,7 @@ from Constants.Status import *
 
 class Token(object):
 	def __init__(self):
-		pass
+		self.dbhelper = DatabaseHelper()
 
 	def create(self, user):
 		user_id = user['name']
@@ -22,11 +22,10 @@ class Token(object):
 			self.ip = request.remote_addr
 			self.user_agent = request.headers.get('User-Agent')
 			self.user_id = user_id
-			dbhelper = DatabaseHelper()
 			queryString = "INSERT INTO token(token, lease_start, lease_end, ip, user_agent, user_id) VALUES (%s,%s,%s,%s,%s,%s)"
 			values = (self.tokenId, self.lease_start, self.lease_end, self.ip, self.user_agent, self.user_id, )
 			try:
-				rowid = dbhelper.transact(queryString, values)
+				rowid = self.dbhelper.transact(queryString, values)
 			except Exception:
 				return NO_USER_FOUND
 		user_permission = UserPermission().obtain(user_id)
@@ -47,10 +46,9 @@ class Token(object):
 			return { "msg": "Permission Denied" },301
 
 	def get(self, userId):
-		dbhelper = DatabaseHelper()
 		queryString = "SELECT token FROM token WHERE user_id=%s and lease_end > %s"
 		queryParams = (userId, datetime.now(), )
-		cur = dbhelper.query(queryString, queryParams)
+		cur = self.dbhelper.query(queryString, queryParams)
 		data = cur.fetchone()
 		if data:
 			return data['token']
@@ -65,10 +63,9 @@ class Token(object):
 			token_decode = JWT().decode(extracted_token, salt)
 		except Exception:
 			raise ValueError("Invalid Token Recieved for Authentication")
-		dbhelper = DatabaseHelper()
 		queryString = "SELECT * FROM token WHERE token=%s AND lease_end > %s"
 		queryParams = (token_decode['tokenId'], datetime.now(), )
-		cur = dbhelper.query(queryString, queryParams)
+		cur = self.dbhelper.query(queryString, queryParams)
 		data = cur.fetchone()
 		if data and data['user_id'] == token_decode['userId']:
 			return data['user_id']

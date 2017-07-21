@@ -9,7 +9,7 @@ from Controllers.VarianceAnalysisController import VarianceAnalysisController
 from app import *
 from Controllers.ResourceController import ResourceController
 from Controllers.RoleController import RoleController
-from Controllers.RoleController import RoleController
+from Controllers.PermissionController import PermissionController
 from Controllers.MaintainSourcesController import MaintainSourcesController
 from Controllers.DefChangeController import DefChangeController
 from flask_cors import CORS, cross_origin
@@ -108,9 +108,13 @@ api.add_resource(ResourceController,
     endpoint="resource_ep"
 )
 api.add_resource(RoleController,
-    apiPath+"/role",
-    apiPath + "/role/<int:id>",
+    apiPath+"/roles",
+    apiPath+"/roles/<string:role>",
     endpoint="role_ep"
+)
+api.add_resource(PermissionController,
+    apiPath+"/permissions",
+    endpoint="permission_ep"
 )
 api.add_resource(ViewDataController,
     apiPath+"/view-data/get-date-heads",

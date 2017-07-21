@@ -5,7 +5,8 @@ from Models.Token import Token
 from Constants.Status import *
 
 class RegOpzUser(object):
-    def __init__(self, user=None):
+    def __init__(self, user = None):
+        self.dbhelper = DatabaseHelper()
         if user:
             self.id = None
             self.name = user['name']
@@ -33,18 +34,24 @@ class RegOpzUser(object):
             self.ip,
             self.image,
             )
-        dbhelper = DatabaseHelper()
         try:
-            rowid = dbhelper.transact(queryString, values)
+            rowid = self.dbhelper.transact(queryString, values)
             return self.get(rowid)
         except Exception:
             return { "msg": "Cannot add this user, please review the details" },400
 
-    def get(self):
-        queryString = "SELECT role, first_name, last_name, email, contact_number, image, status FROM regopzuser JOIN (roles, status_def) ON (regopzuser.role_id = roles.id AND regopzuser.status_id = status_def.id)"
-        dbhelper = DatabaseHelper()
-        cur = dbhelper.query(queryString)
-        data = cur.fetchall()
+    def get(self, userId = None):
+        queryString = "SELECT role, first_name, last_name, email, contact_number, image, status FROM regopzuser\
+            JOIN (roles, status_def) ON (regopzuser.role_id = roles.id AND regopzuser.status_id = status_def.id)\
+            WHERE status_def.status != 'Deleted'"
+        if userId:
+            queryString += " AND regopzuser.name = %s"
+            queryParams = (userId, )
+            cur = self.dbhelper.query(queryString, queryParams)
+            data = cur.fetchone
+        else:
+            cur = self.dbhelper.query(queryString)
+            data = cur.fetchall()
         if data:
             return data
         return NO_USER_FOUND
