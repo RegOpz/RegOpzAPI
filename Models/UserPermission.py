@@ -124,7 +124,6 @@ class UserPermission(object):
         try:
             rowId = self.dbhelper.transact(queryString, queryParams)
             self.dbhelper.commit()
-            print(rowId)
             return rowId
         except Exception:
             return False
