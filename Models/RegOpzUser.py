@@ -1,5 +1,5 @@
 from Helpers.DatabaseHelper import DatabaseHelper
-from flask import url_for
+from flask import url_for, request
 from Models.Token import Token
 # import bcrypt
 from Constants.Status import *
@@ -7,37 +7,33 @@ from Constants.Status import *
 class RegOpzUser(object):
     def __init__(self, user = None):
         self.dbhelper = DatabaseHelper()
-        if user:
-            self.id = None
+        if user and user['password'] == user['passwordConfirm']:
+            self.id = True
             self.name = user['name']
             self.password = user['password']
-            self.role = user['role']
+            self.role = user['role'] if 'role' in user else "Default"
+            self.status = user['status'] if 'status' in user else "Unspecified"
             self.first_name = user['first_name']
             self.last_name = user['last_name']
-            self.contact_number = user['contact_number']
+            self.contact_number = user['contact_number'] if 'contact_number' in user else None
             self.email = user['email']
-            self.ip = user['ip']
+            self.ip = request.remote_addr
             self.image = None
-            #5201json = {"name":"admin","first_name":"admin","last_name":"admin","password":"admin","contact_number":"8420403988","email":"admin@admin.com","ip":"1.1.1.1"}
+        else:
+            self.id = False
 
     def save(self):
-        queryString = \
-            "INSERT INTO regopzuser (name,password,role_id,first_name,last_name,contact_number,email,ip,image) VALUES (%s,%s,(SELECT id from roles where role=%s),%s,%s,%s,%s,%s)"
-        values = (
-            self.name,
-            self.password,
-            self.role,
-            self.first_name,
-            self.last_name,
-            self.contact_number,
-            self.email,
-            self.ip,
-            self.image,
-            )
+        queryString = "INSERT INTO regopzuser (name,password,role_id,status_id,first_name,last_name,\
+            contact_number,email,ip,image) VALUES (%s,%s,(SELECT id from roles where role=%s),\
+            (SELECT id from status_def where status=%s),%s,%s,%s,%s,%s,%s)"
+        queryParams = (self.name, self.password, self.role, self.status, self.first_name,
+            self.last_name, self.contact_number, self.email, self.ip, self.image,)
         try:
-            rowid = self.dbhelper.transact(queryString, values)
-            return self.get(rowid)
-        except Exception:
+            rowid = self.dbhelper.transact(queryString, queryParams)
+            self.dbhelper.commit()
+            return { "msg": "Added user successfully, please contact Admin to activate" },200
+        except Exception as e:
+            print(e)
             return { "msg": "Cannot add this user, please review the details" },400
 
     def get(self, userId = None):
@@ -55,6 +51,16 @@ class RegOpzUser(object):
         if data:
             return data
         return NO_USER_FOUND
+
+    def getUserList(self, userId = None):
+        if userId:
+            queryString = "SELECT name FROM regopzuser WHERE name LIKE %s"
+            queryParams = (userId, )
+            cur = self.dbhelper.query(queryString, queryParams)
+            data = cur.fetchone()
+            if data:
+                return False
+            return True
 
     def login(self, username, password):
         # This process cannot distinguish between Invalid password and Invalid username

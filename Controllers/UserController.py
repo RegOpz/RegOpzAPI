@@ -7,7 +7,11 @@ import json
 
 class UserController(Resource):
 	def get(self, userId = None):
-		return RegOpzUser().get(userId)
+		auth = request.authorization
+		if auth:
+			# authenticate
+			return RegOpzUser().get(userId)
+		return RegOpzUser().getUserList(userId)
 
 	def post(self):
 		auth = request.authorization
