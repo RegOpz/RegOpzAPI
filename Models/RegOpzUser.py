@@ -132,7 +132,8 @@ class RegOpzUser(object):
     def login(self, username, password):
         # This process cannot distinguish between Invalid password and Invalid username
         # hashpass = bcrypt.hashpw(base64.b64encode(hashlib.sha256(password).digest()), username)
-        queryString = "SELECT * FROM regopzuser WHERE name=%s AND password=%s AND status='Active'"
+        queryString = "SELECT r.role, u.* FROM regopzuser u JOIN (roles r) ON (u.role_id = r.id)\
+            WHERE name=%s AND password=%s AND status='Active'"
         dbhelper = DatabaseHelper()
         cur = dbhelper.query(queryString, (username, password, ))
         data = cur.fetchone()

@@ -36,12 +36,13 @@ class UserPermission(object):
                 queryParams = (role['id'], component['component_id'], )
                 permQuery = self.dbhelper.query(queryString, queryParams)
                 permissions = permQuery.fetchall()
-                compData = {
-                    'component': component['component'],
-                    'permissions': permissions
-                }
-                if compData not in componentList:
-                    componentList.append(compData)
+                if permissions:
+                    compData = {
+                        'component': component['component'],
+                        'permissions': permissions
+                    }
+                    if compData not in componentList:
+                        componentList.append(compData)
             data = {
                 'role': role['role'],
                 'components': componentList
@@ -169,22 +170,3 @@ class UserPermission(object):
             except Exception:
                 return False
         return False
-
-    def obtain(self, userId = None):
-        if userId:
-            queryString = "SELECT permissions.id AS id, regopzuser.name AS username, role, component, permission\
-                FROM regopzuser JOIN (roles, components, permissions, permission_def) ON\
-                (regopzuser.role_id = roles.id = permissions.role_id AND components.id = permissions.component_id\
-                AND permissions.permission_id = permission_def.id) WHERE regopzuser.name=%s"
-            queryParams = (userId, )
-            permissions = self.dbhelper.query(queryString, queryParams)
-            permissionList = permissions.fetchall()
-            if len(permissionList) == 0:
-                return PERMISSION_EMPTY
-            self.role = permissionList[0]['role']
-            self.permission = {}
-            for entry in permissionList:
-                self.permission[entry['component']] = entry['permission']
-            return self.__dict__
-        else:
-            raise ValueError('UserId not specified!')

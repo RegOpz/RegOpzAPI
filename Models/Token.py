@@ -13,6 +13,7 @@ class Token(object):
 	def create(self, user):
 		user_id = user['name']
 		firstname = user['first_name']
+		role = user['role']
 		try:
 			self.tokenId = self.get(user_id)
 		except ValueError:
@@ -28,14 +29,14 @@ class Token(object):
 				rowid = self.dbhelper.transact(queryString, values)
 			except Exception:
 				return NO_USER_FOUND
-		user_permission = UserPermission().obtain(user_id)
+		user_permission = UserPermission().get(role)
 		if user_permission:
 			user = {
 				'tokenId': self.tokenId,
 				'userId': user_id,
 				'name': firstname,
 				'role': user_permission['role'],
-				'permission': user_permission['permission']
+				'permission': user_permission['components']
 			}
 			jwtObject = JWT()
 			with open('private_key', 'rb') as fh:
