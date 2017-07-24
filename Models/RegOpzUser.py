@@ -54,13 +54,14 @@ class RegOpzUser(object):
 
     def getUserList(self, userId = None):
         if userId:
-            queryString = "SELECT name FROM regopzuser WHERE name LIKE %s"
+            print(userId)
+            queryString = "SELECT name FROM regopzuser WHERE name=%s"
             queryParams = (userId, )
             cur = self.dbhelper.query(queryString, queryParams)
             data = cur.fetchone()
             if data:
-                return False
-            return True
+                return { "msg": "Username already exists." },200
+            return {},200
 
     def login(self, username, password):
         # This process cannot distinguish between Invalid password and Invalid username

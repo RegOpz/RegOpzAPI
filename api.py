@@ -95,7 +95,7 @@ api.add_resource(UserController,
     endpoint="users_ep"
 )
 api.add_resource(UserController,
-    apiPath + "/user/<string:userId>",
+    apiPath + "/users/<string:userId>",
     endpoint="user_ep"
 )
 api.add_resource(UserController,
