@@ -23,3 +23,13 @@ class UserController(Resource):
 		regOpzUser = RegOpzUser(user)
 		res = regOpzUser.save()
 		return res
+
+	def put(self):
+		data = request.get_json(force=True)
+		print(data)
+		return {"msg":"Action recieved"},200
+
+	def delete(self, userId):
+		data = request.get_json(force=True)
+		print(data)
+		return {"msg":"Action recieved"},200
