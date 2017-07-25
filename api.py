@@ -92,20 +92,8 @@ api.add_resource(MaintainBusinessRulesController,
 )
 api.add_resource(UserController,
     apiPath + "/users",
-    endpoint="users_ep"
-)
-api.add_resource(UserController,
     apiPath + "/users/<string:userId>",
-    endpoint="user_ep"
-)
-api.add_resource(UserController,
-    apiPath + "/user/login",
-    endpoint="user_login_ep"
-)
-api.add_resource(ResourceController,
-    apiPath+"/resource",
-    apiPath + "/resource/<int:id>",
-    endpoint="resource_ep"
+    endpoint="users_ep"
 )
 api.add_resource(RoleController,
     apiPath+"/roles",
@@ -115,6 +103,11 @@ api.add_resource(RoleController,
 api.add_resource(PermissionController,
     apiPath+"/permissions",
     endpoint="permission_ep"
+)
+api.add_resource(ResourceController,
+    apiPath+"/resource",
+    apiPath + "/resource/<int:id>",
+    endpoint="resource_ep"
 )
 api.add_resource(ViewDataController,
     apiPath+"/view-data/get-date-heads",

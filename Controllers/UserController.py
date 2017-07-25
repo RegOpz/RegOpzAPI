@@ -5,10 +5,12 @@ from Constants.Status import *
 from Models.RegOpzUser import RegOpzUser
 import json
 
+TokenKey = 'HTTP_AUTHORIZATION'
+
 class UserController(Resource):
 	def get(self, userId = None):
-		auth = request.environ['HTTP_AUTHORIZATION']
-		if auth:
+		if TokenKey in request.environ:
+			auth = request.environ[TokenKey]
 			# authenticate
 			return RegOpzUser().get(userId)
 		return RegOpzUser().getUserList(userId)
