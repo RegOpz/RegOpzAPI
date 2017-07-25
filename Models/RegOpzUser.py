@@ -4,6 +4,15 @@ from Models.Token import Token
 # import bcrypt
 from Constants.Status import *
 
+labelList = {
+    'role': "Role",
+    'first_name': "First Name",
+    'last_name': "Last Name",
+    'email': "Email",
+    'contact_number': "Contact Number",
+    'status': "Status"
+}
+
 class RegOpzUser(object):
     def __init__(self, user = None):
         self.dbhelper = DatabaseHelper()
@@ -37,19 +46,35 @@ class RegOpzUser(object):
             return { "msg": "Cannot add this user, please review the details" },400
 
     def get(self, userId = None):
-        queryString = "SELECT role, first_name, last_name, email, contact_number, image, status FROM regopzuser\
+        queryString = "SELECT name, role, first_name, last_name, email, contact_number, image, status FROM regopzuser\
             JOIN (roles, status_def) ON (regopzuser.role_id = roles.id AND regopzuser.status_id = status_def.id)\
             WHERE status_def.status != 'Deleted'"
         if userId:
             queryString += " AND regopzuser.name = %s"
             queryParams = (userId, )
             cur = self.dbhelper.query(queryString, queryParams)
-            data = cur.fetchone
+            data = cur.fetchone()
         else:
             cur = self.dbhelper.query(queryString)
             data = cur.fetchall()
         if data:
-            return data
+            userList = []
+            for user in data:
+                infoList = []
+                for key in user:
+                    if key in labelList:
+                        infoObj = {
+                            'title': labelList[key],
+                            'value': user[key]
+                        }
+                        infoList.append(infoObj)
+                userObj = {
+                    'username': user['name'],
+                    'name': user['first_name'],
+                    'info': infoList
+                }
+                userList.append(userObj)
+            return userList
         return NO_USER_FOUND
 
     def getUserList(self, userId = None):

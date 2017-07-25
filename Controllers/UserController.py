@@ -7,7 +7,7 @@ import json
 
 class UserController(Resource):
 	def get(self, userId = None):
-		auth = request.authorization
+		auth = request.environ['HTTP_AUTHORIZATION']
 		if auth:
 			# authenticate
 			return RegOpzUser().get(userId)
