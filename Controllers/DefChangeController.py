@@ -31,7 +31,7 @@ class DefChangeController(Resource):
 
 
     def get_audit_list(self,id_list=None,table_name=None):
-        sql = "select distinct id,table_name,change_type,\
+        sql = "select distinct id,table_name,change_type,change_reference,\
                                 date_of_change,maker,maker_comment,checker,checker_comment,status,date_of_checking\
                                  from def_change_log where 1"
         if id_list == "id" or ((id_list is None or id_list == 'undefined') and (table_name is None or table_name=='undefined')):
