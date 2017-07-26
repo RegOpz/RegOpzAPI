@@ -46,17 +46,15 @@ class RegOpzUser(object):
             return { "msg": "Cannot add this user, please review the details" },400
 
     def get(self, userId = None):
-        queryString = "SELECT role, first_name, last_name, email, contact_number, image, status FROM regopzuser\
+        queryString = "SELECT name, role, first_name, last_name, email, contact_number, image, status FROM regopzuser\
             JOIN (roles, status_def) ON (regopzuser.role_id = roles.id AND regopzuser.status_id = status_def.id)\
             WHERE status_def.status != 'Deleted'"
+        queryParams = ()
         if userId:
             queryString += " AND regopzuser.name = %s"
             queryParams = (userId, )
-            cur = self.dbhelper.query(queryString, queryParams)
-            data = cur.fetchone()
-        else:
-            cur = self.dbhelper.query(queryString)
-            data = cur.fetchall()
+        cur = self.dbhelper.query(queryString, queryParams)
+        data = cur.fetchall()
         if data:
             userList = []
             for user in data:
@@ -70,6 +68,7 @@ class RegOpzUser(object):
                         infoList.append(infoObj)
                 userObj = {
                     'name': user['first_name'],
+                    'username': user['name'],
                     'info': infoList
                 }
                 userList.append(userObj)
