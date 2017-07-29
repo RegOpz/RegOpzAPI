@@ -32,9 +32,8 @@ class RegOpzUser(object):
             self.id = False
 
     def save(self):
-        queryString = "INSERT INTO regopzuser (name,password,role_id,status_id,first_name,last_name,\
-            contact_number,email,ip,image) VALUES (%s,%s,(SELECT id from roles where role=%s),\
-            (SELECT id from status_def where status=%s),%s,%s,%s,%s,%s,%s)"
+        queryString = "INSERT INTO regopzuser (name,password,role_id,status,first_name,last_name,\
+            contact_number,email,ip,image) VALUES (%s,%s,(SELECT id from roles where role=%s),%s,%s,%s,%s,%s,%s,%s)"
         queryParams = (self.name, self.password, self.role, self.status, self.first_name,
             self.last_name, self.contact_number, self.email, self.ip, self.image,)
         try:
@@ -47,8 +46,7 @@ class RegOpzUser(object):
 
     def get(self, userId = None):
         queryString = "SELECT name, role, first_name, last_name, email, contact_number, image, status FROM regopzuser\
-            JOIN (roles, status_def) ON (regopzuser.role_id = roles.id AND regopzuser.status_id = status_def.id)\
-            WHERE status_def.status != 'Deleted'"
+            JOIN (roles) ON (regopzuser.role_id = roles.id) WHERE status != 'Deleted'"
         queryParams = ()
         if userId:
             queryString += " AND regopzuser.name = %s"
@@ -92,8 +90,7 @@ class RegOpzUser(object):
     def login(self, username, password):
         # This process cannot distinguish between Invalid password and Invalid username
         # hashpass = bcrypt.hashpw(base64.b64encode(hashlib.sha256(password).digest()), username)
-        queryString = "SELECT * FROM regopzuser JOIN status_def ON (regopzuser.status_id = status_def.id) \
-            WHERE name=%s AND password=%s AND status='Active'"
+        queryString = "SELECT * FROM regopzuser WHERE name=%s AND password=%s AND status='Active'"
         dbhelper = DatabaseHelper()
         cur = dbhelper.query(queryString, (username, password, ))
         data = cur.fetchone()
