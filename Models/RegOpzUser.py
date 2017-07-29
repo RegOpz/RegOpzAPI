@@ -69,13 +69,12 @@ class RegOpzUser(object):
                     'info': infoList
                 }
                 userList.append(userObj)
-            print(userList)
             return userList
         return NO_USER_FOUND
 
     def getUserList(self, userId = None):
         if userId:
-            print(userId)
+            # print(userId)
             queryString = "SELECT name FROM regopzuser WHERE name=%s"
             queryParams = (userId, )
             cur = self.dbhelper.query(queryString, queryParams)
@@ -83,6 +82,25 @@ class RegOpzUser(object):
             if data:
                 return { "msg": "Username already exists." },200
             return {},200
+
+    def changeStatus(self, userId = None):
+        if userId:
+            queryString = "SELECT status FROM regopzuser WHERE name=%s"
+            queryParams = (userId)
+            cur = self.dbhelper.query(queryString, queryParams)
+            data = cur.fetchone()
+            if data:
+                prevStat = data['status']
+                nextStat = "Deleted" if prevStat == "Active" else "Active"
+                queryString = "UPDATE regopzuser SET status=%s WHERE name=%s"
+                queryParams = (nextStat, userId)
+                try:
+                    rowId = self.dbhelper.transact(queryString, queryParams)
+                    self.dbhelper.commit()
+                    return { "msg": "Status updated successfully." },200
+                except Exception:
+                    return { "msg": "Failed to update status." },200
+            return { "msg": "Invalid credentials recieved." },301
 
     def login(self, username, password):
         # This process cannot distinguish between Invalid password and Invalid username
