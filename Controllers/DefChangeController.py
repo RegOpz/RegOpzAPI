@@ -41,6 +41,12 @@ class DefChangeController(Resource):
         if table_name is not None and table_name != 'undefined':
             sql = sql + " and table_name = '" + table_name + "'"
         audit_list=self.db.query(sql).fetchall()
+        for i,d in enumerate(audit_list):
+            print('Processing index ',i)
+            for k,v in d.items():
+                if isinstance(v,datetime):
+                    d[k] = d[k].isoformat()
+                    print(d[k], type(d[k]))
 
         for idx,item in enumerate(audit_list):
             if item["change_type"]=="UPDATE":
