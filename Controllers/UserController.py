@@ -30,6 +30,6 @@ class UserController(Resource):
 		return {"msg":"Action recieved"},200
 
 	def delete(self, userId):
-		data = request.get_json(force=True)
-		print(data)
+		#data = request.get_json(force=True)
+		print(userId)
 		return {"msg":"Action recieved"},200

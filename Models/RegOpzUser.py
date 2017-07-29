@@ -58,7 +58,10 @@ class RegOpzUser(object):
         if data:
             userList = []
             for user in data:
-                infoList = []
+                infoList = [{
+                    'title': 'name',
+                    'value': user['name']
+                }]
                 for key in user:
                     if key in labelList:
                         infoObj = {
