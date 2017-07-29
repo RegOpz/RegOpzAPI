@@ -5,6 +5,7 @@ from Models.Token import Token
 from Constants.Status import *
 
 labelList = {
+    'name': "User Name",
     'role': "Role",
     'first_name': "First Name",
     'last_name': "Last Name",
@@ -28,8 +29,6 @@ class RegOpzUser(object):
             self.email = user['email']
             self.ip = request.remote_addr
             self.image = None
-        else:
-            self.id = False
 
     def save(self):
         queryString = "INSERT INTO regopzuser (name,password,role_id,status,first_name,last_name,\
@@ -56,10 +55,7 @@ class RegOpzUser(object):
         if data:
             userList = []
             for user in data:
-                infoList = [{
-                    'title': 'name',
-                    'value': user['name']
-                }]
+                infoList = []
                 for key in user:
                     if key in labelList:
                         infoObj = {
@@ -73,6 +69,7 @@ class RegOpzUser(object):
                     'info': infoList
                 }
                 userList.append(userObj)
+            print(userList)
             return userList
         return NO_USER_FOUND
 
