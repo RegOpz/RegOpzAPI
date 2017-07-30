@@ -26,7 +26,7 @@ class UserController(Resource):
 
 	def put(self):
 		data = request.get_json(force=True)
-		print(data)
+		RegOpzUser().update(data)
 		return {"msg":"Action recieved"},200
 
 	def delete(self, userId):

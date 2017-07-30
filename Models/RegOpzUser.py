@@ -11,7 +11,14 @@ labelList = {
     'last_name': "Last Name",
     'email': "Email",
     'contact_number': "Contact Number",
-    'status': "Status"
+    'status': "Status",
+    "User Name": 'name',
+    "Role": 'role',
+    "First Name": 'first_name',
+    "Last Name": 'last_name',
+    "Email": 'email',
+    "Contact Number": 'contact_number',
+    "Status": 'status'
 }
 
 class RegOpzUser(object):
@@ -43,7 +50,7 @@ class RegOpzUser(object):
             print(e)
             return { "msg": "Cannot add this user, please review the details" },400
 
-    def get(self, userId = None):
+    def get(self, userId = None, update = False):
         queryString = "SELECT name, role, first_name, last_name, email, contact_number, image, status FROM regopzuser\
             JOIN (roles) ON (regopzuser.role_id = roles.id) WHERE status != 'Deleted'"
         queryParams = ()
@@ -53,6 +60,8 @@ class RegOpzUser(object):
         cur = self.dbhelper.query(queryString, queryParams)
         data = cur.fetchall()
         if data:
+            if update:
+                return data
             userList = []
             for user in data:
                 infoList = []
@@ -72,9 +81,19 @@ class RegOpzUser(object):
             return userList
         return NO_USER_FOUND
 
+    def update(self, form = None):
+        if form and labelList['name'] in form:
+            data = {}
+            for key in form:
+                label = labelList[key]
+                data[label] = form[key]
+            user = self.get(data['name'], True)
+            print(data)
+            print(user)
+        return NO_USER_FOUND
+
     def getUserList(self, userId = None):
         if userId:
-            # print(userId)
             queryString = "SELECT name FROM regopzuser WHERE name=%s"
             queryParams = (userId, )
             cur = self.dbhelper.query(queryString, queryParams)
