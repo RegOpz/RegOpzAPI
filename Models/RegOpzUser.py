@@ -87,9 +87,17 @@ class RegOpzUser(object):
             for key in form:
                 label = labelList[key]
                 data[label] = form[key]
-            user = self.get(data['name'], True)
-            print(data)
-            print(user)
+            queryString = "UPDATE regopzuser SET role_id=(SELECT id from roles WHERE role=%s), first_name=%s, last_name=%s, email=%s,\
+                contact_number=%s, status=%s WHERE name=%s"
+            queryParams = (data['role'], data['first_name'], data['last_name'], data['email'], \
+                data['contact_number'], data['status'], data['name'])
+            try:
+                rowId = self.dbhelper.transact(queryString, queryParams)
+                self.dbhelper.commit()
+                return { "msg": "Successfully updated details." },200
+            except Exception as e:
+                print(e)
+                return { "msg": "Cannot update this user, please review the details" },400
         return NO_USER_FOUND
 
     def getUserList(self, userId = None):
