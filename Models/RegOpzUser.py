@@ -86,7 +86,7 @@ class RegOpzUser(object):
     def changeStatus(self, userId = None):
         if userId:
             queryString = "SELECT status FROM regopzuser WHERE name=%s"
-            queryParams = (userId)
+            queryParams = (userId,)
             cur = self.dbhelper.query(queryString, queryParams)
             data = cur.fetchone()
             if data:
