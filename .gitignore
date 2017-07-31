@@ -6,6 +6,10 @@ __pycache__/
 # C extensions
 *.so
 
+# Database Versioning
+dbv/data/meta/revision
+config.php
+
 # Distribution / packaging
 .Python
 env/
