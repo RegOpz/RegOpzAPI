@@ -74,16 +74,15 @@ class UserPermission(object):
                     continue
                 permissions = item['permissions']
                 for permission in permissions:
-                    Permissionflag = permission['permission_id']
-                    if Permissionflag:
-                        permissionId = self.getPermissionId(permission['permission'], Permissionflag)
-                        if permissionId:
-                            rowId = self.setPermission(roleId, componentId, permissionId, add)
-                            if not rowId:
-                                print("Error occured while updating permissions")
-                        else:
-                            print("Invalid permissions given against", component)
-                            continue
+                    add = True if permission['permission_id'] else False
+                    permissionId = self.getPermissionId(permission['permission'])
+                    if permissionId:
+                        rowId = self.setPermission(roleId, componentId, permissionId, add)
+                        if not rowId:
+                            print("Error occured while updating permissions")
+                    else:
+                        print("Invalid permissions given against", component)
+                        continue
             return { "msg": "Permission update successful." },200
         else:
             return ROLE_EMPTY
@@ -139,8 +138,8 @@ class UserPermission(object):
                 return data['id']
         return False
 
-    def getPermissionId(self, permission = None, componentId = None):
-        if permission and componentId:
+    def getPermissionId(self, permission = None):
+        if permission:
             queryString = "SELECT id FROM permission_def WHERE permission=%s"
             queryParams = (permission, )
             cur = self.dbhelper.query(queryString, queryParams)
@@ -166,7 +165,7 @@ class UserPermission(object):
             try:
                 rowId = self.dbhelper.transact(queryString, queryParams)
                 self.dbhelper.commit()
-                return rowId
+                return data['id'] if data else rowId
             except Exception:
                 return False
         return False
