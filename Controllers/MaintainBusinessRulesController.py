@@ -5,6 +5,7 @@ from Helpers.DatabaseOps import DatabaseOps
 import csv
 import time
 from datetime import datetime
+import traceback as tb
 from Constants.Status import *
 
 
@@ -47,6 +48,10 @@ class MaintainBusinessRulesController(Resource):
 		if request.endpoint == "business_rules_ep_filtered":
 			filter_conditions = request.get_json(force=True)
 			return self.get_business_rules_filtered(filter_conditions)
+
+		if request.endpoint == "validate_python_expr_ep":
+			expr_obj=request.get_json(force=True)
+			return self.validate_python_expression(expr_obj)
 
 		br = request.get_json(force=True)
 		res = self.dbOps.insert_data(br)
@@ -315,3 +320,33 @@ class MaintainBusinessRulesController(Resource):
 
 		#Now build the agg column list
 		return data_dict
+
+	def validate_python_expression(self,expr_obj):
+		py_expr=expr_obj['expr']
+		py_attr=expr_obj['attr']
+
+		if not py_attr:
+			status='INVALID'
+			msg="Expression can't be validated"
+		else:
+			for attr in py_attr.keys():
+				py_expr=py_expr.replace("["+attr+"]",str(py_attr[attr]))
+			try:
+				msg=''
+				status='VALID'
+				print(py_expr)
+				val=eval(py_expr)
+				msg='Excuted expression gives a value of '+str(val)
+			except:
+				status='INVALID'
+				msg=tb.format_exc()
+
+		print(msg)
+
+		return {'status':status,'msg':msg}
+
+
+
+
+
+
