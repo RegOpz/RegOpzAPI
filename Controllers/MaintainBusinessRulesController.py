@@ -322,31 +322,50 @@ class MaintainBusinessRulesController(Resource):
 		return data_dict
 
 	def validate_python_expression(self,expr_obj):
-		py_expr=expr_obj['expr']
+		py_expr_val=expr_obj['expr']
 		py_attr=expr_obj['attr']
+		py_sample=expr_obj['sample']
 
-		if not py_attr:
+		if not py_attr and not py_sample:
 			status='INVALID'
 			msg="Expression can't be validated"
 		else:
-			for attr in py_attr.keys():
-				py_expr=py_expr.replace("["+attr+"]",str(py_attr[attr]))
-			try:
-				msg=''
-				status='VALID'
-				print(py_expr)
-				val=eval(py_expr)
-				msg='Excuted expression gives a value of '+str(val)
-			except:
-				status='INVALID'
-				msg=tb.format_exc()
+			# Sampling option can also be extended for testing
+			#input would be a business_date and no of records for Sampling
+			#We need to loop through the set and publish the result array for
+			#the sampling set e.g. [{attr:{<id:,business_date:,..>},msg:,status:}]
+			#on error no need to continue with the sample, just break and display result
+			py_items=[]
+			if py_attr:
+				py_items.append({"attr":py_attr,"msg":"","status":""})
+			if py_sample:
+				table_name = py_sample['table_name']
+				business_date = py_sample['business_date']
+				columns = py_sample['columns']
+				sample_size = py_sample['sample_size']
+				db=DatabaseHelper()
+				sample_data = db.query("select " + columns + " from " + table_name + " where business_date=" + str(business_date) + " and " + columns.replace(","," is not null and ")+ " is not null LIMIT 0," + str(sample_size)).fetchall()
+				for data in sample_data:
+					py_items.append({"attr":data,"msg":"","status":""})
 
-		print(msg)
+			for py_item in py_items:
+				print(py_item)
+				py_expr = py_expr_val
+				for attr in py_item['attr'].keys():
+					py_expr=py_expr.replace("["+attr+"]","'" + str(py_item['attr'][attr]) + "'")
+				try:
+					msg=''
+					status='VALID'
+					print(py_expr)
+					val=eval(py_expr)
+					msg='Executed expression gives a value of '+str(val)
+				except:
+					status='INVALID'
+					msg=tb.format_exc().splitlines()[-3:]
 
-		return {'status':status,'msg':msg}
+				py_item["msg"] = msg
+				py_item["status"] = status
 
+		#print(msg[-3:])
 
-
-
-
-
+		return py_items
