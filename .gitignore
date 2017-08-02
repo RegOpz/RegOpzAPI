@@ -59,3 +59,7 @@ target/
 uploads/templates/*
 static/*
 .idea/
+
+# dbconfig file
+Configs/dbconfig.py
+

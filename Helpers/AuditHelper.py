@@ -27,8 +27,8 @@ class AuditHelper(object):
 
     def audit_delete(self,data,id):
         audit_info=data['audit_info']
-        sql="insert into def_change_log(id,table_name,change_type,maker_comment,status,change_reference,date_of_change) values(%s,%s,%s,%s,%s,%s,%s)"
-        res=self.db.transact(sql,(id,audit_info['table_name'],audit_info['change_type'],audit_info['comment'],'PENDING',audit_info['change_reference'],datetime.now()))
+        sql="insert into def_change_log(id,table_name,change_type,maker_comment,status,change_reference,date_of_change,maker) values(%s,%s,%s,%s,%s,%s,%s,%s)"
+        res=self.db.transact(sql,(id,audit_info['table_name'],audit_info['change_type'],audit_info['comment'],'PENDING',audit_info['change_reference'],datetime.now(),audit_info['maker']))
         self.update_approval_status(table_name=audit_info['table_name'], id=id, dml_allowed='N')
         self.db.commit()
 
@@ -47,9 +47,9 @@ class AuditHelper(object):
 
             if old_val != new_val and col not in ('dml_allowed','in_use'):
                 print(col, old_val, new_val)
-                sql="insert into def_change_log(id,table_name,field_name,old_val,new_val,change_type,maker_comment,status,change_reference,date_of_change)\
-                    values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
-                params=(id,audit_info['table_name'],col,old_val,new_val,audit_info['change_type'],audit_info['comment'],'PENDING',audit_info['change_reference'],datetime.now())
+                sql="insert into def_change_log(id,table_name,field_name,old_val,new_val,change_type,maker_comment,status,change_reference,date_of_change,maker)\
+                    values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
+                params=(id,audit_info['table_name'],col,old_val,new_val,audit_info['change_type'],audit_info['comment'],'PENDING',audit_info['change_reference'],datetime.now(),audit_info['maker'])
                 res=self.db.transact(sql,params)
                 def_change_insert+=1
 
@@ -62,8 +62,8 @@ class AuditHelper(object):
 
     def audit_insert(self, data, id):
         audit_info = data['audit_info']
-        sql = "insert into def_change_log(id,table_name,change_type,maker_comment,status,change_reference,date_of_change) values(%s,%s,%s,%s,%s,%s,%s)"
-        res = self.db.transact(sql, (id, audit_info['table_name'], audit_info['change_type'], audit_info['comment'], 'PENDING',audit_info['change_reference'],datetime.now()))
+        sql = "insert into def_change_log(id,table_name,change_type,maker_comment,status,change_reference,date_of_change,maker) values(%s,%s,%s,%s,%s,%s,%s,%s)"
+        res = self.db.transact(sql, (id, audit_info['table_name'], audit_info['change_type'], audit_info['comment'], 'PENDING',audit_info['change_reference'],datetime.now(),audit_info['maker']))
         print("this should be id of the record inserted..what it actually is ",res)
         self.update_approval_status(table_name=audit_info['table_name'],id=id, dml_allowed='N',in_use='N')
         self.db.commit()
