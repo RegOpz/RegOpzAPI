@@ -68,4 +68,6 @@ class DefChangeController(Resource):
             self.audit.reject_dml(data)
         if data["status"]=="APPROVED":
             self.audit.approve_dml(data)
+        if data["status"]=="REGRESSED":
+            self.audit.regress_dml(data)
         return data
