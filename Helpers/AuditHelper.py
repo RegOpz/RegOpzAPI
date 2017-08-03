@@ -17,9 +17,9 @@ class AuditHelper(object):
 
     def update_audit_record(self,data):
         print(data)
-        sql="update def_change_log set status=%s,checker_comment=%s,date_of_checking=%s where table_name=%s and id=%s and status='PENDING'"
+        sql="update def_change_log set status=%s,checker_comment=%s,date_of_checking=%s,checker=%s where table_name=%s and id=%s and status='PENDING'"
         print(sql)
-        params=(data["status"],data["checker_comment"],datetime.now(),data["table_name"],data["id"])
+        params=(data["status"],data["checker_comment"],datetime.now(),data["checker"],data["table_name"],data["id"])
         res = self.db.transact(sql,params)
         self.db.commit()
         return res
@@ -71,6 +71,16 @@ class AuditHelper(object):
         return res
 
     def reject_dml(self,data):
+        if data["change_type"]=="INSERT":
+            self.update_approval_status(table_name=data["table_name"],id=data["id"],dml_allowed='Y',in_use='N')
+        elif data["change_type"]=="UPDATE":
+            self.update_approval_status(table_name=data["table_name"], id=data["id"], dml_allowed='Y')
+        elif data["change_type"]=="DELETE":
+            self.update_approval_status(table_name=data["table_name"], id=data["id"], dml_allowed='Y')
+        self.update_audit_record(data)
+        return data
+
+    def regress_dml(self,data):
         if data["change_type"]=="INSERT":
             self.update_approval_status(table_name=data["table_name"],id=data["id"],dml_allowed='Y',in_use='N')
         elif data["change_type"]=="UPDATE":
