@@ -10,7 +10,7 @@ class DatabaseHelper(object):
         self.password = dbconfig.DATABASE['password'];
         self.type = dbconfig.DATABASE['type'];
         self.cnx = mysql.connector.connect(user=self.user, password=self.password, host=self.host,database=self.db)
-        self.cursor = self.cnx.cursor(dictionary=True,buffered=True)
+        self.cursor = self.cnx.cursor(dictionary=True)
         self.cursor.execute('set global max_allowed_packet=524288000')
 
     def query(self,queryString, queryParams=None):
