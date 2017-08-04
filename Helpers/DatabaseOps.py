@@ -4,9 +4,9 @@ from datetime import datetime
 from Constants.Status import *
 
 class DatabaseOps(object):
-    def __init__(self):
+    def __init__(self,audit_table_name):
         self.db=DatabaseHelper()
-        self.audit=AuditHelper()
+        self.audit=AuditHelper(audit_table_name)
 
     def update_or_delete_data(self,data,id):
         if data['change_type']=='DELETE':

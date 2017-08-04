@@ -4,7 +4,8 @@ from Constants.Status import *
 
 
 class AuditHelper(object):
-    def __init__(self):
+    def __init__(self,audit_table_name):
+        self.audit_table_name=audit_table_name
         self.db=DatabaseHelper()
 
     def update_approval_status(self,table_name,id,dml_allowed,in_use=None):
@@ -17,7 +18,7 @@ class AuditHelper(object):
 
     def update_audit_record(self,data):
         print(data)
-        sql="update def_change_log set status=%s,checker_comment=%s,date_of_checking=%s,checker=%s where table_name=%s and id=%s and status='PENDING'"
+        sql="update "+self.audit_table_name +" set status=%s,checker_comment=%s,date_of_checking=%s,checker=%s where table_name=%s and id=%s and status='PENDING'"
         print(sql)
         params=(data["status"],data["checker_comment"],datetime.now(),data["checker"],data["table_name"],data["id"])
         res = self.db.transact(sql,params)
@@ -27,7 +28,7 @@ class AuditHelper(object):
 
     def audit_delete(self,data,id):
         audit_info=data['audit_info']
-        sql="insert into def_change_log(id,table_name,change_type,maker_comment,status,change_reference,date_of_change,maker) values(%s,%s,%s,%s,%s,%s,%s,%s)"
+        sql="insert into  "+self.audit_table_name +" (id,table_name,change_type,maker_comment,status,change_reference,date_of_change,maker) values(%s,%s,%s,%s,%s,%s,%s,%s)"
         res=self.db.transact(sql,(id,audit_info['table_name'],audit_info['change_type'],audit_info['comment'],'PENDING',audit_info['change_reference'],datetime.now(),audit_info['maker']))
         self.update_approval_status(table_name=audit_info['table_name'], id=id, dml_allowed='N')
         self.db.commit()
@@ -47,7 +48,7 @@ class AuditHelper(object):
 
             if old_val != new_val and col not in ('dml_allowed','in_use'):
                 print(col, old_val, new_val)
-                sql="insert into def_change_log(id,table_name,field_name,old_val,new_val,change_type,maker_comment,status,change_reference,date_of_change,maker)\
+                sql="insert into  "+self.audit_table_name +" (id,table_name,field_name,old_val,new_val,change_type,maker_comment,status,change_reference,date_of_change,maker)\
                     values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
                 params=(id,audit_info['table_name'],col,old_val,new_val,audit_info['change_type'],audit_info['comment'],'PENDING',audit_info['change_reference'],datetime.now(),audit_info['maker'])
                 res=self.db.transact(sql,params)
@@ -62,7 +63,7 @@ class AuditHelper(object):
 
     def audit_insert(self, data, id):
         audit_info = data['audit_info']
-        sql = "insert into def_change_log(id,table_name,change_type,maker_comment,status,change_reference,date_of_change,maker) values(%s,%s,%s,%s,%s,%s,%s,%s)"
+        sql = "insert into  "+self.audit_table_name +" (id,table_name,change_type,maker_comment,status,change_reference,date_of_change,maker) values(%s,%s,%s,%s,%s,%s,%s,%s)"
         res = self.db.transact(sql, (id, audit_info['table_name'], audit_info['change_type'], audit_info['comment'], 'PENDING',audit_info['change_reference'],datetime.now(),audit_info['maker']))
         print("this should be id of the record inserted..what it actually is ",res)
         self.update_approval_status(table_name=audit_info['table_name'],id=id, dml_allowed='N',in_use='N')
@@ -111,3 +112,32 @@ class AuditHelper(object):
 
         self.update_audit_record(data)
         return data
+
+    def get_audit_list(self,id_list=None,table_name=None):
+        sql = "select distinct id,table_name,change_type,change_reference,\
+                                date_of_change,maker,maker_comment,checker,checker_comment,status,date_of_checking\
+                                 from "+self.audit_table_name +" where 1"
+        if id_list == "id" or ((id_list is None or id_list == 'undefined') and (table_name is None or table_name=='undefined')):
+            sql = sql + " and status='PENDING'"
+        if id_list is not None and id_list != 'undefined':
+            sql = sql + " and id in (" + id_list + ")"
+        if table_name is not None and table_name != 'undefined':
+            sql = sql + " and table_name = '" + table_name + "'"
+        audit_list=self.db.query(sql).fetchall()
+        for i,d in enumerate(audit_list):
+            print('Processing index ',i)
+            for k,v in d.items():
+                if isinstance(v,datetime):
+                    d[k] = d[k].isoformat()
+                    print(d[k], type(d[k]))
+
+        for idx,item in enumerate(audit_list):
+            if item["change_type"]=="UPDATE":
+                values=self.db.query("select field_name,old_val,new_val from def_change_log  where id="+str(item["id"])+
+                                     " and table_name='"+str(item["table_name"])+"' and status='"+item["status"]+"'").fetchall()
+                update_info_list=[]
+                for val in values:
+                    update_info_list.append({"field_name":val["field_name"],"old_val":val["old_val"],"new_val":val["new_val"]})
+                audit_list[idx]["update_info"]=update_info_list
+
+        return audit_list
