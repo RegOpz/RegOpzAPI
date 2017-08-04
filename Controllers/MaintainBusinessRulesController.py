@@ -11,7 +11,7 @@ from Constants.Status import *
 
 class MaintainBusinessRulesController(Resource):
 	def __init__(self):
-		self.dbOps=DatabaseOps()
+		self.dbOps=DatabaseOps('def_change_log')
 
 	def get(self, id=None, page=0, col_name=None,business_rule=None):
 		print(request.endpoint)
