@@ -26,7 +26,7 @@ class UserPermission(object):
                 queryString = queryString.replace("JOIN","LEFT JOIN")
             compQuery = self.dbhelper.query(queryString, queryParams)
             components = compQuery.fetchall()
-            # print(components)
+            print(components)
             componentList = []
             for component in components:
                 queryString = "SELECT p.permission_id,pd.permission FROM permission_def pd \
@@ -75,7 +75,7 @@ class UserPermission(object):
                 permissions = item['permissions']
                 for permission in permissions:
                     add = True if permission['permission_id'] else False
-                    permissionId = self.getPermissionId(permission['permission'], componentId)
+                    permissionId = self.getPermissionId(permission['permission'],componentId)
                     if permissionId:
                         rowId = self.setPermission(roleId, componentId, permissionId, add)
                         if not rowId:
@@ -124,9 +124,8 @@ class UserPermission(object):
         try:
             rowId = self.dbhelper.transact(queryString, queryParams)
             self.dbhelper.commit()
-            return roleId if roleId else rowId
-        except Exception as e:
-            print("Inside setRoleId", e)
+            return rowId
+        except Exception:
             return False
 
     def getComponentId(self, component = None):
@@ -139,9 +138,9 @@ class UserPermission(object):
                 return data['id']
         return False
 
-    def getPermissionId(self, permission = None, componentId = None):
-        if permission and componentId:
-            queryString = "SELECT id FROM permission_def WHERE permission=%s AND component_id=%s"
+    def getPermissionId(self, permission = None, componentId = None ):
+        if permission:
+            queryString = "SELECT id FROM permission_def WHERE permission=%s and component_id=%s"
             queryParams = (permission, componentId, )
             cur = self.dbhelper.query(queryString, queryParams)
             data = cur.fetchone()
@@ -153,24 +152,20 @@ class UserPermission(object):
         # Get user id from token
         inUse = 'Y' if flag else 'N'
         if roleId and componentId and permissionId:
-            queryString = "SELECT id, in_use FROM permissions WHERE role_id=%s AND\
-                component_id=%s AND permission_id=%s"
+            queryString = "SELECT id FROM permissions WHERE role_id=%s AND component_id=%s AND permission_id=%s"
             queryParams = (roleId, componentId, permissionId, )
             cur = self.dbhelper.query(queryString, queryParams)
             data = cur.fetchone()
             if data:
-                if data['in_use'] != inUse:
-                    queryString = "UPDATE permissions SET in_use=%s WHERE id=%s"
-                    queryParams = (inUse, data['id'], )
+                queryString = "UPDATE permissions SET in_use=%s WHERE id=%s"
+                queryParams = (inUse, data['id'], )
             else:
-                queryString = "INSERT INTO permissions (role_id, component_id,\
-                    permission_id, in_use) VALUES (%s,%s,%s,%s)"
+                queryString = "INSERT INTO permissions (role_id, component_id, permission_id, in_use) VALUES (%s,%s,%s,%s)"
                 queryParams = (roleId, componentId, permissionId, inUse, )
             try:
                 rowId = self.dbhelper.transact(queryString, queryParams)
                 self.dbhelper.commit()
                 return data['id'] if data else rowId
-            except Exception as e:
-                print("Inside setPermission", e)
+            except Exception:
                 return False
         return False
