@@ -26,7 +26,7 @@ class UserPermission(object):
                 queryString = queryString.replace("JOIN","LEFT JOIN")
             compQuery = self.dbhelper.query(queryString, queryParams)
             components = compQuery.fetchall()
-            print(components)
+            # print(components)
             componentList = []
             for component in components:
                 queryString = "SELECT p.permission_id,pd.permission FROM permission_def pd \
@@ -75,7 +75,7 @@ class UserPermission(object):
                 permissions = item['permissions']
                 for permission in permissions:
                     add = True if permission['permission_id'] else False
-                    permissionId = self.getPermissionId(permission['permission'])
+                    permissionId = self.getPermissionId(permission['permission'], componentId)
                     if permissionId:
                         rowId = self.setPermission(roleId, componentId, permissionId, add)
                         if not rowId:
@@ -124,8 +124,9 @@ class UserPermission(object):
         try:
             rowId = self.dbhelper.transact(queryString, queryParams)
             self.dbhelper.commit()
-            return rowId
-        except Exception:
+            return roleId if roleId else rowId
+        except Exception as e:
+            print("Inside setRoleId", e)
             return False
 
     def getComponentId(self, component = None):
@@ -157,18 +158,19 @@ class UserPermission(object):
             queryParams = (roleId, componentId, permissionId, )
             cur = self.dbhelper.query(queryString, queryParams)
             data = cur.fetchone()
-            if not data:
+            if data:
+                if data['in_use'] != inUse:
+                    queryString = "UPDATE permissions SET in_use=%s WHERE id=%s"
+                    queryParams = (inUse, data['id'], )
+            else:
                 queryString = "INSERT INTO permissions (role_id, component_id,\
                     permission_id, in_use) VALUES (%s,%s,%s,%s)"
                 queryParams = (roleId, componentId, permissionId, inUse, )
-            if data and data['in_use'] != inUse:
-                queryString = "UPDATE permissions SET in_use=%s WHERE id=%s"
-                queryParams = (inUse, data['id'], )
             try:
                 rowId = self.dbhelper.transact(queryString, queryParams)
                 self.dbhelper.commit()
                 return data['id'] if data else rowId
             except Exception as e:
-                print(e)
+                print("Inside setPermission", e)
                 return False
         return False
