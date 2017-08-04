@@ -74,7 +74,6 @@ class UserPermission(object):
                     continue
                 permissions = item['permissions']
                 for permission in permissions:
-<<<<<<< 4ae78c01f9df80a6ba7473ce03f32cb012700172
                     add = True if permission['permission_id'] else False
                     permissionId = self.getPermissionId(permission['permission'])
                     if permissionId:
@@ -84,18 +83,6 @@ class UserPermission(object):
                     else:
                         print("Invalid permissions given against", component)
                         continue
-=======
-                    Permissionflag = permission['permission_id']
-                    if Permissionflag:
-                        permissionId = self.getPermissionId(permission['permission'], componentId)
-                        if permissionId:
-                            rowId = self.setPermission(roleId, componentId, permissionId, add)
-                            if not rowId:
-                                print("Error occured while updating permissions")
-                        else:
-                            print("Invalid permissions given against", component)
-                            continue
->>>>>>> Role: Minor Update in Role Model
             return { "msg": "Permission update successful." },200
         else:
             return ROLE_EMPTY
@@ -151,17 +138,10 @@ class UserPermission(object):
                 return data['id']
         return False
 
-<<<<<<< 4ae78c01f9df80a6ba7473ce03f32cb012700172
-    def getPermissionId(self, permission = None):
-        if permission:
-            queryString = "SELECT id FROM permission_def WHERE permission=%s"
-            queryParams = (permission, )
-=======
     def getPermissionId(self, permission = None, componentId = None):
         if permission and componentId:
             queryString = "SELECT id FROM permission_def WHERE permission=%s AND component_id=%s"
             queryParams = (permission, componentId, )
->>>>>>> Role: Minor Update in Role Model
             cur = self.dbhelper.query(queryString, queryParams)
             data = cur.fetchone()
             if data:
@@ -187,13 +167,8 @@ class UserPermission(object):
             try:
                 rowId = self.dbhelper.transact(queryString, queryParams)
                 self.dbhelper.commit()
-<<<<<<< 4ae78c01f9df80a6ba7473ce03f32cb012700172
                 return data['id'] if data else rowId
-            except Exception:
-=======
-                return rowId
             except Exception as e:
                 print(e)
->>>>>>> Role: Minor Update in Role Model
                 return False
         return False
