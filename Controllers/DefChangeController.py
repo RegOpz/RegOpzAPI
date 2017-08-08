@@ -51,7 +51,8 @@ class DefChangeController(Resource):
         for idx,item in enumerate(audit_list):
             if item["change_type"]=="UPDATE":
                 values=self.db.query("select field_name,old_val,new_val from def_change_log  where id="+str(item["id"])+
-                                     " and table_name='"+str(item["table_name"])+"' and status='"+item["status"]+"'").fetchall()
+                                     " and table_name='"+str(item["table_name"])+"' and status='"+item["status"]+
+                                     "' and date_of_change='"+item["date_of_change"]+"'").fetchall()
                 update_info_list=[]
                 for val in values:
                     update_info_list.append({"field_name":val["field_name"],"old_val":val["old_val"],"new_val":val["new_val"]})
