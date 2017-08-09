@@ -138,11 +138,13 @@ class ViewDataController(Resource):
             params.append(update_info[col])
 
         sql=sql[:len(sql)-1]
-        sql+=" where business_date = '"+business_date+"' and id='"+id+"'"
+        sql+=" where business_date =%s and id=%s"
+        params.append(business_date)
+        params.append(id)
         params_tuple=tuple(params)
 
-        print(sql)
-        print(params_tuple)
+        #print(sql)
+        #print(params_tuple)
 
         res=db.transact(sql,params_tuple)
 
