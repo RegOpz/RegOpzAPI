@@ -325,6 +325,7 @@ class MaintainBusinessRulesController(Resource):
 		py_expr_val=expr_obj['expr']
 		py_attr=expr_obj['attr']
 		py_sample=expr_obj['sample']
+		print(py_attr)
 
 		if not py_attr and not py_sample:
 			status='INVALID'
@@ -354,11 +355,11 @@ class MaintainBusinessRulesController(Resource):
 				for attr in py_item['attr'].keys():
 					py_expr=py_expr.replace("["+attr+"]","'" + str(py_item['attr'][attr]) + "'")
 				try:
-					msg=''
+					msg=[]
 					status='VALID'
 					print(py_expr)
-					val=eval(py_expr)
-					msg='Executed expression gives a value of '+str(val)
+					val=eval(py_expr.replace("DERIVED","'DERIVED'"))
+					msg.append('Executed expression gives a value of '+str(val))
 				except:
 					status='INVALID'
 					msg=tb.format_exc().splitlines()[-3:]
