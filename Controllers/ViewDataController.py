@@ -1,23 +1,15 @@
 from flask import Flask, jsonify, request
 from flask_restful import Resource
-import openpyxl as xls
 import time
-from multiprocessing import Pool
-from functools import partial
 import csv
-import Helpers.utils as util
-from openpyxl.styles import Border, Side, PatternFill, Font, GradientFill, Alignment, Protection
-from openpyxl.utils import get_column_letter
-from collections import defaultdict
-import sys
-import ast
-import mysql.connector as mysql
-import pandas as pd
 from Helpers.DatabaseHelper import DatabaseHelper
+from Helpers.DatabaseOps import DatabaseOps
 from Constants.Status import *
 from operator import itemgetter
 from datetime import datetime
 class ViewDataController(Resource):
+    def __init__(self):
+        self.dbOps = DatabaseOps('data_change_log')
     def get(self):
         if(request.endpoint == 'get_date_heads_ep'):
             startDate = request.args.get('start_date') if request.args.get('start_date') != None else '19000101'
@@ -50,20 +42,21 @@ class ViewDataController(Resource):
 
     def put(self, id=None):
         data = request.get_json(force=True)
-        res = self.update_data(data, id)
+        if id == None:
+            return DATA_NOT_FOUND
+        res = self.dbOps.update_or_delete_data(data, id)
         return res
 
     def post(self):
         if(request.endpoint == 'report_ep'):
             data = request.get_json(force=True)
-            res = self.insert_data(data)
+            res = self.dbOps.insert_data(data)
             return res
         if(request.endpoint == 'apply_rules_ep'):
             source_info = request.get_json(force=True)
             source_id = source_info['source_id']
             business_date = source_info['business_date']
             business_or_validation = source_info['business_or_validation']
-            print(str(source_id)+ "-" + str(business_date) + "-" + business_or_validation)
             return self.run_rules_engine(source_id=source_id,business_date=business_date,business_or_validation=business_or_validation)
 
 
@@ -103,9 +96,7 @@ class ViewDataController(Resource):
         for col in update_info_cols:
             sql+=col+","
             placeholders+="%s,"
-            if col=='business_date':
-                params.append(business_date)
-            elif col=='id':
+            if col=='id':
                 params.append(None)
             else:
                 params.append(update_info[col])
