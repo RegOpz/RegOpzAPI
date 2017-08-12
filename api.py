@@ -193,6 +193,10 @@ api.add_resource(MaintainReportRulesController,
     apiPath+"/report-rule/get-cell-calc-ref-suggestion-list",
     endpoint="get_cell_calc_ref_suggestion_list_ep"
 )
+api.add_resource(MaintainReportRulesController,
+    apiPath+"/report-rule/audit-list",
+    endpoint="report_rule_audit_ep"
+)
 api.add_resource(MaintainSourcesController,
     apiPath+"/maintain-sources",
     apiPath+"/maintain-sources/<int:id>",
