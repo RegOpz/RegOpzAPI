@@ -26,7 +26,10 @@ class MaintainReportRulesController(Resource):
 		if request.endpoint == 'get_agg_function_column_suggestion_list_ep':
 			table_name = request.args.get('table_name')
 			return self.get_agg_function_column_suggestion_list(table_name=table_name)
-
+		if request.endpoint == "report_rule_audit_ep":
+			report_id = request.args.get('report_id')
+			sheet_id = request.args.get('sheet_id')
+			return self.get_report_audit_list(report_id=report_id, sheet_id=sheet_id)
 
 	def post(self):
 		data = request.get_json(force=True)
@@ -128,3 +131,37 @@ class MaintainReportRulesController(Resource):
 		    return {"msg":"No report matched found"},404
 		else:
 		    return data_dict
+
+	def get_report_audit_list(self, report_id=None, sheet_id=None):
+		if report_id:
+			dbhelper = DatabaseHelper()
+			calc_query = "SELECT id,'report_calc_def' FROM report_calc_def WHERE report_id=%s"
+			comp_query = "SELECT id,'report_comp_agg_def' FROM report_comp_agg_def WHERE report_id=%s"
+			queryParams = (report_id, report_id)
+			if sheet_id:
+				calc_query += " AND sheet_id=%s"
+				comp_query += " AND sheet_id=%s"
+				queryParams = (report_id, sheet_id, report_id, sheet_id)
+			queryString = "SELECT DISTINCT id,table_name,change_type,change_reference,date_of_change,\
+				maker,maker_comment,checker,checker_comment,status,date_of_checking FROM def_change_log\
+				WHERE (id,table_name) IN (" + calc_query + " UNION " + comp_query + " )"
+			cursor = dbhelper.query(queryString, queryParams)
+			audit_list = cursor.fetchall()
+			if audit_list:
+				for i,d in enumerate(audit_list):
+					print('Processing index ',i)
+					for k,v in d.items():
+						if isinstance(v,datetime):
+							d[k] = d[k].isoformat()
+						print(d[k], type(d[k]))
+				for idx,item in enumerate(audit_list):
+					if item["change_type"] == "UPDATE":
+						values = dbhelper.query("select field_name,old_val,new_val from def_change_log  where id="+str(item["id"])+
+						" and table_name='"+str(item["table_name"])+"' and status='"+str(item["status"])+
+						"' and date_of_change='"+str(item["date_of_change"])+"'").fetchall()
+						update_info_list = []
+						for val in values:
+							update_info_list.append({ "field_name": val["field_name"], "old_val": val["old_val"], "new_val": val["new_val"] })
+						audit_list[idx]["update_info"] = update_info_list
+			return audit_list
+		return {},200
