@@ -2,6 +2,7 @@ from flask import Flask, jsonify, request
 from flask_restful import Resource
 from Helpers.DatabaseHelper import DatabaseHelper
 from Helpers.DatabaseOps import DatabaseOps
+from Helpers.AuditHelper import AuditHelper
 import csv
 import time
 from datetime import datetime
@@ -10,7 +11,8 @@ from Constants.Status import *
 
 class MaintainReportRulesController(Resource):
 	def __init__(self):
-		self.dbOps=DatabaseOps('def_change_log')
+		self.dbOps=DatabaseOps()
+		self.audit=AuditHelper()
 
 	def get(self):
 		print(request.endpoint)
@@ -134,7 +136,6 @@ class MaintainReportRulesController(Resource):
 
 	def get_report_audit_list(self, report_id=None, sheet_id=None):
 		if report_id:
-			dbhelper = DatabaseHelper()
 			calc_query = "SELECT id,'report_calc_def' FROM report_calc_def WHERE report_id=%s"
 			comp_query = "SELECT id,'report_comp_agg_def' FROM report_comp_agg_def WHERE report_id=%s"
 			queryParams = (report_id, report_id)
@@ -145,23 +146,4 @@ class MaintainReportRulesController(Resource):
 			queryString = "SELECT DISTINCT id,table_name,change_type,change_reference,date_of_change,\
 				maker,maker_comment,checker,checker_comment,status,date_of_checking FROM def_change_log\
 				WHERE (id,table_name) IN (" + calc_query + " UNION " + comp_query + " )"
-			cursor = dbhelper.query(queryString, queryParams)
-			audit_list = cursor.fetchall()
-			if audit_list:
-				for i,d in enumerate(audit_list):
-					print('Processing index ',i)
-					for k,v in d.items():
-						if isinstance(v,datetime):
-							d[k] = d[k].isoformat()
-						print(d[k], type(d[k]))
-				for idx,item in enumerate(audit_list):
-					if item["change_type"] == "UPDATE":
-						values = dbhelper.query("select field_name,old_val,new_val from def_change_log  where id="+str(item["id"])+
-						" and table_name='"+str(item["table_name"])+"' and status='"+str(item["status"])+
-						"' and date_of_change='"+str(item["date_of_change"])+"'").fetchall()
-						update_info_list = []
-						for val in values:
-							update_info_list.append({ "field_name": val["field_name"], "old_val": val["old_val"], "new_val": val["new_val"] })
-						audit_list[idx]["update_info"] = update_info_list
-			return audit_list
-		return {},200
+			return self.audit.get_audit_list(sql=queryString, sqlparams=queryParams)
