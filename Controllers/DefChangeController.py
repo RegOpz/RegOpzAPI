@@ -9,7 +9,6 @@ class DefChangeController(Resource):
         self.db=DatabaseHelper()
         self.audit=AuditHelper('def_change_log')
 
-
     def get(self):
         if request.endpoint=="get_audit_list":
             table_name=request.args.get("table_name")
