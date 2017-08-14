@@ -10,7 +10,7 @@ from Constants.Status import *
 
 class MaintainReportRulesController(Resource):
 	def __init__(self):
-		self.dbOps=DatabaseOps()
+		self.dbOps=DatabaseOps('def_change_log')
 
 	def get(self):
 		print(request.endpoint)
