@@ -153,34 +153,28 @@ class AuditHelper(object):
         self.update_audit_record(data)
         return data
 
-    def get_audit_list(self,sql=None,sqlparams=None,id_list=None,table_name=None):
-        if not sql:
-            sql = "SELECT DISTINCT id,table_name,change_type,change_reference,\
-                                    date_of_change,maker,maker_comment,checker,checker_comment,status,date_of_checking\
-                                     FROM def_change_log WHERE 1"
-            if id_list == "id" or ((id_list is None or id_list == 'undefined') and (table_name is None or table_name=='undefined')):
-                sql += " AND status='PENDING'"
-            elif id_list is not None and id_list != 'undefined':
-                sql += " AND id IN (" + id_list + ")"
-            if table_name is not None and table_name != 'undefined':
-                sql += " AND table_name = '" + table_name + "'"
-            sqlparams = ()
-        audit_list=self.db.query(sql, sqlparams).fetchall()
-        for i,d in enumerate(audit_list):
-            #print('Processing index ',i)
-            for k,v in d.items():
-                if isinstance(v,datetime):
-                    d[k] = d[k].isoformat()
-                    #print(d[k], type(d[k]))
+    def get_audit_list(self,sql=None,sqlparams=None):
+        if sql:
+            audit_list = None
+            if sqlparams:
+                audit_list = self.db.query(sql, sqlparams).fetchall()
+            else:
+                audit_list = self.db.query(sql).fetchall()
+            for i,d in enumerate(audit_list):
+                print('Processing index ',i)
+                for k,v in d.items():
+                    if isinstance(v,datetime):
+                        d[k] = d[k].isoformat()
+                        print(d[k], type(d[k]))
 
-        for idx,item in enumerate(audit_list):
-            if item["change_type"]=="UPDATE":
-                values=self.db.query("select field_name,old_val,new_val from def_change_log  where id="+str(item["id"])+
-                                     " and table_name='"+str(item["table_name"])+"' and status='"+item["status"]+
-                                     "' and date_of_change='"+item["date_of_change"]+"'").fetchall()
-                update_info_list=[]
-                for val in values:
-                    update_info_list.append({"field_name":val["field_name"],"old_val":val["old_val"],"new_val":val["new_val"]})
-                audit_list[idx]["update_info"]=update_info_list
+            for idx,item in enumerate(audit_list):
+                if item["change_type"]=="UPDATE":
+                    values=self.db.query("select field_name,old_val,new_val from def_change_log  where id="+str(item["id"])+
+                                         " and table_name='"+str(item["table_name"])+"' and status='"+str(item["status"])+
+                                         "' and date_of_change='"+str(item["date_of_change"])+"'").fetchall()
+                    update_info_list=[]
+                    for val in values:
+                        update_info_list.append({"field_name":val["field_name"],"old_val":val["old_val"],"new_val":val["new_val"]})
+                    audit_list[idx]["update_info"]=update_info_list
 
-        return audit_list
+            return audit_list

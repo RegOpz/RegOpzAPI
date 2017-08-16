@@ -146,4 +146,4 @@ class MaintainReportRulesController(Resource):
 			queryString = "SELECT DISTINCT id,table_name,change_type,change_reference,date_of_change,\
 				maker,maker_comment,checker,checker_comment,status,date_of_checking FROM def_change_log\
 				WHERE (id,table_name) IN (" + calc_query + " UNION " + comp_query + " )"
-			return self.audit.get_audit_list(sql=queryString, sqlparams=queryParams)
+			return self.audit.get_audit_list(queryString, queryParams)
