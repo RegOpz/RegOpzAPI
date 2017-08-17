@@ -4,18 +4,18 @@ from Helpers.DatabaseHelper import DatabaseHelper
 from Helpers.DatabaseOps import DatabaseOps
 from Helpers.AuditHelper import AuditHelper
 
-class DefChangeController(Resource):
+class DataChangeController(Resource):
     def __init__(self):
         self.db=DatabaseHelper()
-        self.audit=AuditHelper('def_change_log')
+        self.audit=AuditHelper('data_change_log')
 
 
     def get(self):
-        if request.endpoint=="get_audit_list":
+        if request.endpoint=="get_data_audit_list":
             table_name=request.args.get("table_name")
             id_list=request.args.get("id_list")
             return self.get_audit_list(id_list,table_name)
-        if request.endpoint=="get_record_detail":
+        if request.endpoint=="get_data_record_detail":
             table_name=request.args.get("table_name")
             id=request.args.get("id")
             return self.get_record_detail(table_name,id)
