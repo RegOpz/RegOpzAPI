@@ -9,7 +9,7 @@ class AuditHelper(object):
         self.db=DatabaseHelper()
         self.business_date_present=False
         column_names=[v['Field'] for v in self.db.query('desc '+audit_table_name).fetchall()]
-        #print(column_names)
+        print(audit_table_name)
         if('business_date' in column_names):
             self.business_date_present=True
 
@@ -25,8 +25,9 @@ class AuditHelper(object):
 
     def update_audit_record(self,data):
         print(data)
+        print(self.audit_table_name)
         sql="update "+self.audit_table_name +" set status=%s,checker_comment=%s,date_of_checking=%s,checker=%s where table_name=%s and id=%s and status='PENDING'"
-        print(sql)
+        #print(sql)
         params=(data["status"],data["checker_comment"],datetime.now(),data["checker"],data["table_name"],data["id"])
         res = self.db.transact(sql,params)
         self.db.commit()
@@ -153,7 +154,12 @@ class AuditHelper(object):
         return data
 
     def get_audit_list(self,id_list=None,table_name=None):
-        sql = "select distinct id,table_name,change_type,change_reference,\
+        if self.business_date_present:
+            sql = "select distinct id,table_name,change_type,change_reference,\
+                                            date_of_change,maker,maker_comment,checker,checker_comment,status,date_of_checking,\
+                                             business_date from " + self.audit_table_name + " where 1"
+        else:
+            sql = "select distinct id,table_name,change_type,change_reference,\
                                 date_of_change,maker,maker_comment,checker,checker_comment,status,date_of_checking\
                                  from "+self.audit_table_name +" where 1"
         if id_list == "id" or ((id_list is None or id_list == 'undefined') and (table_name is None or table_name=='undefined')):
@@ -164,7 +170,7 @@ class AuditHelper(object):
             sql = sql + " and table_name = '" + table_name + "'"
         audit_list=self.db.query(sql).fetchall()
         for i,d in enumerate(audit_list):
-            print('Processing index ',i)
+            #print('Processing index ',i)
             for k,v in d.items():
                 if isinstance(v,datetime):
                     d[k] = d[k].isoformat()
@@ -172,7 +178,7 @@ class AuditHelper(object):
 
         for idx,item in enumerate(audit_list):
             if item["change_type"]=="UPDATE":
-                values=self.db.query("select field_name,old_val,new_val from def_change_log  where id="+str(item["id"])+
+                values=self.db.query("select field_name,old_val,new_val from " +self.audit_table_name+" where id="+str(item["id"])+
                                      " and table_name='"+str(item["table_name"])+"' and status='"+item["status"]+"'").fetchall()
                 update_info_list=[]
                 for val in values:

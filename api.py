@@ -12,6 +12,7 @@ from Controllers.RoleController import RoleController
 from Controllers.PermissionController import PermissionController
 from Controllers.MaintainSourcesController import MaintainSourcesController
 from Controllers.DefChangeController import DefChangeController
+from Controllers.DataChangeController import DataChangeController
 from flask_cors import CORS, cross_origin
 app = Flask(__name__)
 CORS(app)
@@ -235,6 +236,21 @@ api.add_resource(DefChangeController,
 api.add_resource(DefChangeController,
     apiPath+"/workflow/def-change/audit-decision",
     endpoint="audit_decision"
+)
+
+api.add_resource(DataChangeController,
+    apiPath+"/workflow/data-change/get-audit-list",
+    endpoint="get_data_audit_list"
+)
+
+api.add_resource(DataChangeController,
+    apiPath+"/workflow/data-change/get-record-detail",
+    endpoint="get_data_record_detail"
+)
+
+api.add_resource(DefChangeController,
+    apiPath+"/workflow/data-change/audit-decision",
+    endpoint="data_audit_decision"
 )
 
 
