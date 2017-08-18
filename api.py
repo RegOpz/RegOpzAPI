@@ -248,7 +248,7 @@ api.add_resource(DataChangeController,
     endpoint="get_data_record_detail"
 )
 
-api.add_resource(DefChangeController,
+api.add_resource(DataChangeController,
     apiPath+"/workflow/data-change/audit-decision",
     endpoint="data_audit_decision"
 )
