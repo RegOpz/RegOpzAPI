@@ -6,9 +6,13 @@ from jwt import JWT, jwk_from_pem
 from flask import request
 from Constants.Status import *
 
+TokenKey = 'HTTP_AUTHORIZATION'
+
 class Token(object):
 	def __init__(self):
 		self.dbhelper = DatabaseHelper()
+		if TokenKey in request.environ:
+			self.token = request.environ[TokenKey]
 
 	def create(self, user):
 		user_id = user['name']
@@ -56,18 +60,22 @@ class Token(object):
 		else:
 			raise ValueError("User not logged in!")
 
-	def authenticate(self, token):
-		extracted_token = token.replace("Bearer ","")
-		with open('public_key', 'r') as fh:
-			salt = jwk_from_pem(fh.read().encode())
-		try:
-			token_decode = JWT().decode(extracted_token, salt)
-		except Exception:
-			raise ValueError("Invalid Token Recieved for Authentication")
-		queryString = "SELECT * FROM token WHERE token=%s AND lease_end > %s"
-		queryParams = (token_decode['tokenId'], datetime.now(), )
-		cur = self.dbhelper.query(queryString, queryParams)
-		data = cur.fetchone()
-		if data and data['user_id'] == token_decode['userId']:
-			return data['user_id']
-		raise ValueError("Invalid Credentials Recieved for Authentication")
+	def authenticate(self):
+		if self.token:
+			extracted_token = self.token.replace("Bearer ", "")
+			with open('public_key', 'r') as fh:
+				salt = jwk_from_pem(fh.read().encode())
+			try:
+				token_decode = JWT().decode(extracted_token, salt)
+			except Exception:
+				raise TypeError("Invalid Token Recieved for Authentication")
+			queryString = "SELECT user_id FROM token WHERE token=%s AND user_id=%s AND lease_end > %s"
+			queryParams = (token_decode['tokenId'], token_decode['userId'], datetime.now(), )
+			cur = self.dbhelper.query(queryString, queryParams)
+			data = cur.fetchone()
+			if data:
+				return data['user_id']
+			else:
+				raise ValueError("Invalid Credentials Recieved for Authentication")
+		else:
+			raise ValueError("Token Not Found for Authentication")
