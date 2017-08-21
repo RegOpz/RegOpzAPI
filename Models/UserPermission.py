@@ -166,12 +166,14 @@ class UserPermission(object):
                 "change_reference": "Role: " + self.role + " Permission of " + self.permission + " on component " + self.component,
                 "maker": self.user_id
             }
-            queryString = "SELECT id FROM permissions WHERE role_id=%s AND component_id=%s AND permission_id=%s"
+            queryString = "SELECT * FROM permissions WHERE role_id=%s AND component_id=%s AND permission_id=%s"
             queryParams = (roleId, componentId, permissionId, )
             cur = self.dbhelper.query(queryString, queryParams)
             data = cur.fetchone()
             id = data['id'] if data else None
             if dml == "INSERT":
+                if id and data['in_use'] == 'Y':
+                    return True
                 if not id:
                     queryString = "INSERT INTO permissions (role_id, component_id, permission_id, dml_allowed, in_use) VALUES (%s,%s,%s,'N','N')"
                     queryParams = (roleId, componentId, permissionId, )
