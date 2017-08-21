@@ -92,10 +92,11 @@ class UserPermission(object):
         else:
             return ROLE_EMPTY
 
-    def delete(self, role = None):
+    def delete(self, role = None, comment = None):
         if role:
             data = self.get(role)
             if data:
+                data["comment"] = comment
                 res = self.post(data, False)
                 rowId = self.setRoleId(False)
                 if not rowId:
