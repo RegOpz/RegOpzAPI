@@ -13,4 +13,5 @@ class RoleController(Resource):
 
     def delete(self, role = None):
         userId = Token().authenticate()
-        return UserPermission(userId).delete(role)
+        comment = request.args.get('comment')
+        return UserPermission(userId).delete(role, comment)
