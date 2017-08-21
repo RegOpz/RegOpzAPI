@@ -15,7 +15,7 @@ class UserPermission(object):
         if roleId:
             queryString_1 += " AND role=%s"
             queryParams = (roleId,)
-        roleQuery = self.dbhelper.query(queryString_1,queryParams)
+        roleQuery = self.dbhelper.query(queryString_1, queryParams)
         roles = roleQuery.fetchall()
         if len(roles) == 0:
             return ROLE_EMPTY
@@ -48,6 +48,7 @@ class UserPermission(object):
                         componentList.append(compData)
             data = {
                 'role': role['role'],
+                'last_updated_by': role['last_updated_by'],
                 'components': componentList
             }
             if roleId:
