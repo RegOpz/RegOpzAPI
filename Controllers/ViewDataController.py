@@ -27,8 +27,10 @@ class ViewDataController(Resource):
             page = request.args['page']
             return self.getTableData(table=table,filter=filter,page=page)
         if(request.endpoint == 'get_source_ep'):
-            business_date = request.args['business_date']
-            return self.render_data_source_list(business_date=business_date)
+            startDate = request.args.get('startDate') if request.args.get('startDate') != None else '19000101'
+            endDate = request.args.get('endDate') if request.args.get('endDate') != None else '39991231'
+            catalog_type = request.args.get('catalog_type')
+            return self.render_data_source_list(start_business_date=startDate, end_business_date=endDate, catalog_type=catalog_type)
         if(request.endpoint == 'report_linkage_ep'):
             source_id = request.args.get("source_id")
             qualifying_key = request.args.get("qualifying_key")
@@ -283,19 +285,20 @@ class ViewDataController(Resource):
 
 
         return (catalog_list)
-    def render_data_source_list(self,**kwargs):
+    def render_data_source_list(self,start_business_date='19000101',end_business_date='39991231',catalog_type=''):
 
-        parameter_list = ['business_date']
-
-        if set(parameter_list).issubset(set(kwargs.keys())):
-            business_date = kwargs['business_date']
-        else:
-            print("Please supply parameters: " + str(parameter_list))
 
         db=DatabaseHelper()
-        data_sources = db.query("select *  from data_catalog where business_date='"+business_date+"'").fetchall()
+        data_sources={}
+        data_sources['start_date']=start_business_date
+        data_sources['end_date']=end_business_date
+        data_feeds = db.query("select *  from " + \
+                         "data_catalog " + \
+                        " where business_date between "+ start_business_date + \
+                        " and " + end_business_date + " order by business_date").fetchall()
 
         #print(data_sources)
+        data_sources['data_sources']=data_feeds
         return (data_sources)
     def list_reports_for_data(self,**kwargs):
         parameter_list = ['source_id','qualifying_key','business_date']
