@@ -61,6 +61,7 @@ class UserPermission(object):
         if entry:
             print("\nData recieved via", "POST" if add else "DELETE", "in permissions:") #, entry)
             self.role = entry['role']
+            self.comment = entry['comment']
             self.data = entry['components']
             roleId = self.getRoleId(True)
             if not roleId:
@@ -118,7 +119,7 @@ class UserPermission(object):
         audit_info = {
             "table_name": "roles",
             "change_type": dml,
-            "comment": "Nothing",
+            "comment": self.comment,
             "change_reference": "Role: " + self.role,
             "maker": self.user_id
         }
@@ -156,13 +157,13 @@ class UserPermission(object):
                 return data['id']
         return False
 
-    def setPermission(self, roleId = None, componentId = None, permissionId = None, dml_flag = None):
+    def setPermission(self, roleId = None, componentId = None, permissionId = None, dml_flag = False):
         dml = "INSERT" if dml_flag else "DELETE"
         if roleId and componentId and permissionId:
             audit_info = {
                 "table_name": "permissions",
                 "change_type": dml,
-                "comment": "Nothing",
+                "comment": self.comment,
                 "change_reference": "Role: " + self.role + " Permission of " + self.permission + " on component " + self.component,
                 "maker": self.user_id
             }
@@ -171,18 +172,19 @@ class UserPermission(object):
             cur = self.dbhelper.query(queryString, queryParams)
             data = cur.fetchone()
             id = data['id'] if data else None
+            in_use = data['in_use'] if data else None
+            if not id:
+                queryString = "INSERT INTO permissions (role_id, component_id, permission_id, dml_allowed, in_use) VALUES (%s,%s,%s,'N','N')"
+                queryParams = (roleId, componentId, permissionId, )
+                try:
+                    id = self.dbhelper.transact(queryString, queryParams)
+                    self.dbhelper.commit()
+                except Exception:
+                    return False
             if dml == "INSERT":
-                if id and data['in_use'] == 'Y':
-                    return True
-                if not id:
-                    queryString = "INSERT INTO permissions (role_id, component_id, permission_id, dml_allowed, in_use) VALUES (%s,%s,%s,'N','N')"
-                    queryParams = (roleId, componentId, permissionId, )
-                    try:
-                        id = self.dbhelper.transact(queryString, queryParams)
-                        self.dbhelper.commit()
-                    except Exception:
-                        return False
-                return self.audit.audit_insert({ "audit_info": audit_info }, id)
+                if not in_use or in_use != 'Y':
+                    return self.audit.audit_insert({ "audit_info": audit_info }, id)
             else:
-                return self.audit.audit_delete({ "audit_info": audit_info }, id)
+                if in_use and in_use != 'N':
+                    return self.audit.audit_delete({ "audit_info": audit_info }, id)
         return False
