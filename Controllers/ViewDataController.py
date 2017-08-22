@@ -311,16 +311,21 @@ class ViewDataController(Resource):
             print("Please supply parameters: " + str(parameter_list))
 
         db=DatabaseHelper()
-        sql="select * from report_qualified_data_link where qualifying_key='"+qualifying_key+\
-        "' and business_date='"+business_date+"'"
+        sql="select * from report_qualified_data_link where " +\
+        " source_id = " + source_id + \
+        " and qualifying_key in ("+qualifying_key+ ") " +\
+        " and business_date='"+business_date+"'"
+
 
         report_list=db.query(sql).fetchall()
 
-        data_qual = db.query(
-        "select * from qualified_data where qualifying_key='" + qualifying_key + "' and business_date='" + business_date + "'").fetchone()
-
         result_set = []
         for data in report_list:
+            data_qual = db.query(
+            "select * from qualified_data where " +\
+            " source_id = " + source_id + \
+            " and qualifying_key = " + str(data['qualifying_key']) + \
+            " and business_date='" + business_date + "'").fetchone()
             cell_rule=db.query("select * from report_calc_def where cell_calc_ref='"+data['cell_calc_ref']+"'").fetchone()
 
             data["cell_business_rules"]=cell_rule["cell_business_rules"]
