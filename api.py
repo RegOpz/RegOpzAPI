@@ -60,6 +60,10 @@ api.add_resource(MaintainBusinessRulesController,
     endpoint="business_rules_ep_ordered"
 )
 api.add_resource(MaintainBusinessRulesController,
+    apiPath + "/business-rules/<string:page>/<string:source_id>",
+    endpoint="business_rules_sourceid_ep"
+)
+api.add_resource(MaintainBusinessRulesController,
     apiPath + "/business-rules/filtered",
     endpoint="business_rules_ep_filtered"
 )
