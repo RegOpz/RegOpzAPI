@@ -14,7 +14,8 @@ class DataChangeController(Resource):
         if request.endpoint=="get_data_audit_list":
             table_name=request.args.get("table_name")
             id_list=request.args.get("id_list")
-            return self.get_audit_list(id_list,table_name)
+            business_date=request.args.get("business_date")
+            return self.get_audit_list(id_list,table_name,business_date)
         if request.endpoint=="get_data_record_detail":
             table_name=request.args.get("table_name")
             id=request.args.get("id")
@@ -25,8 +26,8 @@ class DataChangeController(Resource):
         return self.audit_decision(data)
 
 
-    def get_audit_list(self,id_list=None,table_name=None):
-        return self.audit.get_audit_list(id_list,table_name)
+    def get_audit_list(self,id_list=None,table_name=None,business_date=None):
+        return self.audit.get_audit_list(id_list,table_name,business_date)
 
     def get_record_detail(self,table_name,id):
         record_detail=self.db.query("select * from "+table_name+" where id="+str(id)).fetchone()
