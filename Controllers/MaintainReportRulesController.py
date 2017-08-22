@@ -61,7 +61,7 @@ class MaintainReportRulesController(Resource):
 		data_dict={}
 		where_clause = ''
 
-		sql = "select source_id, source_table_name " + \
+		sql = "select * " + \
 		        " from data_source_information " + \
 				" where 1 "
 		if source_id is not None and source_id !='ALL':

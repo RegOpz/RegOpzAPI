@@ -13,7 +13,7 @@ class MaintainBusinessRulesController(Resource):
 	def __init__(self):
 		self.dbOps=DatabaseOps('def_change_log')
 
-	def get(self, id=None, page=0, col_name=None,business_rule=None):
+	def get(self, id=None, source_id=None, page=0, col_name=None,business_rule=None):
 		print(request.endpoint)
 		if request.endpoint == "business_rule_export_to_csv_ep":
 			return self.export_to_csv()
@@ -33,11 +33,13 @@ class MaintainBusinessRulesController(Resource):
 			return self.get_source_column_suggestion_list(table_name=table_name)
 		if id:
 			return self.render_business_rule_json(id)
-		elif page and col_name == None:
+		elif page and source_id==None and col_name == None:
 			return self.render_business_rules_json(page)
+		elif source_id and page and col_name == None:
+			return self.render_business_rules_json(page,source_id)
 		elif col_name:
 			direction = request.args.get('direction')
-			return self.render_business_rules_json(page, (col_name,direction))
+			return self.render_business_rules_json(page, "source_id",(col_name,direction))
 	def post(self,page=None):
 
 		if request.endpoint == "business_rule_linkage_multiple_ep":
@@ -69,15 +71,15 @@ class MaintainBusinessRulesController(Resource):
 	# 		return BUSINESS_RULE_EMPTY
 	# 	res = self.delete_business_rules(id)
 	# 	return res
-	def render_business_rules_json(self, page=0, order=None):
+	def render_business_rules_json(self, page=0, source_id="source_id", order=None):
 		db = DatabaseHelper()
 		startPage =  int(page)*100
 		business_rules_dict = {}
 		business_rules_list = []
 		if order:
-			cur = db.query('select * from business_rules ' + 'order by ' + order[0] + ' ' + order[1] + ' limit ' + str(startPage) + ', 100')
+			cur = db.query('select * from business_rules where source_id=' + str(source_id) + ' order by ' + order[0] + ' ' + order[1] + ' limit ' + str(startPage) + ', 100')
 		else:
-			cur = db.query('select * from business_rules limit ' + str(startPage) + ', 100')
+			cur = db.query('select * from business_rules where source_id=' + str(source_id) + ' limit ' + str(startPage) + ', 100')
 		business_rules = cur.fetchall()
 		cols = [i[0] for i in cur.description]
 		business_rules_dict['cols'] = cols
@@ -85,7 +87,7 @@ class MaintainBusinessRulesController(Resource):
 		for br in business_rules:
 			business_rules_list.append(br)
 		business_rules_dict['rows'] = business_rules_list
-		count = db.query('select count(*) as count from business_rules').fetchone()
+		count = db.query('select count(*) as count from business_rules where source_id=' + str(source_id)).fetchone()
 		business_rules_dict['count'] = count['count']
 		json_dump = business_rules_dict
 		return json_dump
