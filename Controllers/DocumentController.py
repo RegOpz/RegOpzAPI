@@ -24,8 +24,10 @@ class DocumentController(Resource):
         return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
     def get(self, doc_id=None):
         if request.endpoint == 'report_list_ep':
-            reporting_date = request.args['reporting_date']
-            return self.render_report_list(reporting_date=reporting_date)
+            reporting_date = request.args.get('reporting_date')
+            reporting_date_start = request.args.get('reporting_date_start')
+            reporting_date_end = request.args.get('reporting_date_end')
+            return self.render_report_list(reporting_date=reporting_date,reporting_date_start=reporting_date_start,reporting_date_end=reporting_date_end)
         if(request.endpoint == 'get_date_heads_for_report_ep'):
             startDate = request.args.get('start_date') if request.args.get('start_date') != None else '19000101'
             endDate = request.args.get('end_date') if request.args.get('end_date') != None else '39991231'
@@ -293,21 +295,32 @@ class DocumentController(Resource):
 
         return (catalog_list)
 
-    def render_report_list(self,**kwargs):
+    def render_report_list(self,reporting_date=None, reporting_date_start=None, reporting_date_end=None):
 
-        parameter_list = ['reporting_date']
+        reporting_date = reporting_date if reporting_date and reporting_date != "undefined" else None
+        reporting_date_start = reporting_date_start if reporting_date_start and reporting_date_start != "undefined" else None
+        reporting_date_end = reporting_date_end if reporting_date_end and reporting_date_end != "undefined" else None
 
-        if set(parameter_list).issubset(set(kwargs.keys())):
-            reporting_date = kwargs['reporting_date']
-        else:
-            print("Please supply parameters: " + str(parameter_list))
+        if (not reporting_date) and ( not reporting_date_start or not reporting_date_end):
+            print("Please supply parameters: reporting_date or (reporting_date_start and reporting_date_end)")
 
         db=DatabaseHelper()
-        reports = db.query("select * \
-                        from report_catalog where as_of_reporting_date='"+reporting_date+"'").fetchall()
+        if reporting_date:
+            sql = "select * from report_catalog where as_of_reporting_date='"+reporting_date+"'"
+        if reporting_date_start and reporting_date_end:
+            data_sources={}
+            data_sources['start_date']=reporting_date_start
+            data_sources['end_date']=reporting_date_end
+            sql = "select * from report_catalog where as_of_reporting_date between " \
+                  + "'" + reporting_date_start + "' and '" + reporting_date_end + "'"
+        reports = db.query(sql).fetchall()
 
         #print(data_sources)
-        return (reports)
+        if reporting_date:
+            return (reports)
+        else:
+            data_sources['data_sources']=reports
+            return data_sources
 
 
     def export_to_excel(self, **kwargs):
