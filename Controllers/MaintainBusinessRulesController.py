@@ -16,9 +16,15 @@ class MaintainBusinessRulesController(Resource):
 	def get(self, id=None, source_id=None, page=0, col_name=None,business_rule=None):
 		print(request.endpoint)
 		if request.endpoint == "business_rule_export_to_csv_ep":
-			return self.export_to_csv()
+			source = request.args.get('source_id')
+			return self.export_to_csv(source_id=source)
 		if request.endpoint == "business_rule_linkage_ep":
 			return self.list_reports_for_rule(business_rule=business_rule)
+		if request.endpoint == "business_rule_linkage_multiple_ep":
+			source = request.args.get('source_id')
+			rules = request.args.get('rules')
+			#print(source,rules)
+			return self.list_reports_for_rule_list(source_id=source,business_rule_list=rules)
 		if request.endpoint == "business_rule_drill_down_rules_ep":
 			print('Inside rules drilldown ep')
 			source = request.args.get('source_id')
@@ -41,11 +47,6 @@ class MaintainBusinessRulesController(Resource):
 			direction = request.args.get('direction')
 			return self.render_business_rules_json(page, "source_id",(col_name,direction))
 	def post(self,page=None):
-
-		if request.endpoint == "business_rule_linkage_multiple_ep":
-			params=request.get_json(force=True)
-			print(params)
-			return self.list_reports_for_rule_list(source_id=params['source_id'],business_rule_list=params['business_rule_list'])
 
 		if request.endpoint == "business_rules_ep_filtered":
 			filter_conditions = request.get_json(force=True)
@@ -237,7 +238,7 @@ class MaintainBusinessRulesController(Resource):
 		 # keys=business_rules[0].keys()
 
 		keys = [i[0] for i in cur.description]
-		filename="business_rules"+str(time.time())+".csv"
+		filename="business_rules_source_" + str(source_id) + "_" + str(time.time())+ ".csv"
 
 		with open('./static/'+filename, 'wt') as output_file:
 			dict_writer = csv.DictWriter(output_file, keys)
@@ -269,7 +270,7 @@ class MaintainBusinessRulesController(Resource):
 
 		if set(parameter_list).issubset(set(kwargs.keys())):
 			source_id = kwargs['source_id']
-			business_rule_list = kwargs['business_rule_list']
+			business_rule_list = kwargs['business_rule_list'].split(',')
 
 		else:
 			return BUSINESS_RULE_EMPTY
