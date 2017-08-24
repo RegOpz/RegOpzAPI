@@ -11,8 +11,8 @@ from Constants.Status import *
 
 class MaintainReportRulesController(Resource):
 	def __init__(self):
-		self.dbOps=DatabaseOps()
-		self.audit=AuditHelper()
+		self.dbOps=DatabaseOps('def_change_log')
+		self.audit=AuditHelper('def_change_log')
 
 	def get(self):
 		print(request.endpoint)
