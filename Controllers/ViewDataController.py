@@ -312,9 +312,7 @@ class ViewDataController(Resource):
 
         db=DatabaseHelper()
         sql="select * from report_qualified_data_link where " +\
-        " source_id = " + source_id + \
-        " and qualifying_key in ("+qualifying_key+ ") " +\
-        " and business_date='"+business_date+"'"
+        " (source_id,qualifying_key,business_date) in ("+ qualifying_key + ") "
 
 
         report_list=db.query(sql).fetchall()
@@ -323,9 +321,9 @@ class ViewDataController(Resource):
         for data in report_list:
             data_qual = db.query(
             "select * from qualified_data where " +\
-            " source_id = " + source_id + \
+            " source_id = " + str(data['source_id']) + \
             " and qualifying_key = " + str(data['qualifying_key']) + \
-            " and business_date='" + business_date + "'").fetchone()
+            " and business_date=" + str(data['business_date']) ).fetchone()
             cell_rule=db.query("select * from report_calc_def where cell_calc_ref='"+data['cell_calc_ref']+"'").fetchone()
 
             data["cell_business_rules"]=cell_rule["cell_business_rules"]

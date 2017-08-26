@@ -157,16 +157,19 @@ class AuditHelper(object):
         if self.business_date_present:
             sql = "select distinct id,table_name,change_type,change_reference,\
                                             date_of_change,maker,maker_comment,checker,checker_comment,status,date_of_checking,\
-                                             business_date from " + self.audit_table_name + " where 1" \
-                                             +" and business_date=" + (business_date if business_date else "business_date ")
+                                             business_date from " + self.audit_table_name + " where 1"
+            if id_list:
+                sql = sql + " and (id,business_date) in (" + id_list + ") "
+            elif business_date:
+                sql = sql + " and business_date=" + business_date
         else:
             sql = "select distinct id,table_name,change_type,change_reference,\
                                 date_of_change,maker,maker_comment,checker,checker_comment,status,date_of_checking\
                                  from "+self.audit_table_name +" where 1"
-        if id_list == "id" or ((id_list is None or id_list == 'undefined') and (table_name is None or table_name=='undefined')):
-            sql = sql + " and status='PENDING'"
-        if id_list is not None and id_list != 'undefined' and id_list != 'null':
-            sql = sql + " and id in (" + id_list + ")"
+            if id_list == "id" or ((id_list is None or id_list == 'undefined') and (table_name is None or table_name=='undefined')):
+                sql = sql + " and status='PENDING'"
+            if id_list is not None and id_list != 'undefined' and id_list != 'null':
+                sql = sql + " and id in (" + id_list + ")"
         if table_name is not None and table_name != 'undefined':
             sql = sql + " and table_name = '" + table_name + "'"
         audit_list=self.db.query(sql).fetchall()
