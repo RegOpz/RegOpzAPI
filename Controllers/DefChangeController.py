@@ -27,7 +27,7 @@ class DefChangeController(Resource):
     def get_audit_list(self,id_list=None,table_name=None):
         sql = "SELECT DISTINCT id,table_name,change_type,change_reference,\
                                 date_of_change,maker,maker_comment,checker,checker_comment,status,date_of_checking\
-                                 FROM def_change_log WHERE 1"
+                                 FROM {} WHERE 1"
         if id_list == "id" or ((id_list is None or id_list == 'undefined') and (table_name is None or table_name=='undefined')):
             sql += " AND status='PENDING'"
         elif id_list is not None and id_list != 'undefined':
