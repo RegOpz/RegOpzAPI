@@ -1,5 +1,6 @@
 import mysql.connector
 from Configs import dbconfig
+from Helpers.CustomMySQLConverter import CustomMySQLConverterClass
 
 class DatabaseHelper(object):
     def __init__(self):
@@ -12,6 +13,7 @@ class DatabaseHelper(object):
         self.cnx = mysql.connector.connect(user=self.user, password=self.password, host=self.host,database=self.db)
         self.cursor = self.cnx.cursor(dictionary=True)
         self.cursor.execute('set global max_allowed_packet=524288000')
+        self.cnx.set_converter_class(CustomMySQLConverterClass)
 
     def query(self,queryString, queryParams=None):
         if queryParams != None:
