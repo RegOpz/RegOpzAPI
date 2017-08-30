@@ -13,6 +13,7 @@ from Controllers.PermissionController import PermissionController
 from Controllers.MaintainSourcesController import MaintainSourcesController
 from Controllers.DefChangeController import DefChangeController
 from Controllers.DataChangeController import DataChangeController
+from Controllers.LoadDataController import LoadDataController
 from flask_cors import CORS, cross_origin
 app = Flask(__name__)
 CORS(app)
@@ -259,6 +260,11 @@ api.add_resource(DataChangeController,
 api.add_resource(DataChangeController,
     apiPath+"/workflow/data-change/audit-decision",
     endpoint="data_audit_decision"
+)
+
+api.add_resource(LoadDataController,
+    apiPath+"/data-feed-management/load-data",
+    endpoint="load_data_ep"
 )
 
 
