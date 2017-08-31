@@ -61,6 +61,7 @@ docs/_build/
 # PyBuilder
 target/
 uploads/templates/*
+uploads/source-files/*
 static/*
 .idea/
 

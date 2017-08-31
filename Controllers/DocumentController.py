@@ -329,7 +329,7 @@ class DocumentController(Resource):
             report_id = self.report_id
             reporting_date=kwargs['reporting_date']
             cell_format_yn=kwargs['cell_format_yn']
-            target_file_name = report_id+ '_' + reporting_date + str(time.time())+ '.xlsx'
+            target_file_name = report_id+ '_' + str(reporting_date) + '_' + str(time.time())+ '.xlsx'
         else:
             print("Please supply parameters: " + str(parameter_list))
 
