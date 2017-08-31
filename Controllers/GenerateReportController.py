@@ -527,7 +527,7 @@ class GenerateReportController(Resource):
 
         result_set=[]
         for cls in comp_agg_cls:
-            formula=cls['comp_agg_ref']
+            formula=cls['comp_agg_rule']
             variables = list(set([node.id for node in ast.walk(ast.parse(formula)) if isinstance(node, ast.Name)]))
 
             summ_by_src_vals=summ_by_src[summ_by_src['cell_calc_ref'].isin(variables)][['cell_calc_ref','cell_summary']]
