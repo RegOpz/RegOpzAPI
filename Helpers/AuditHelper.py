@@ -7,6 +7,11 @@ class AuditHelper(object):
     def __init__(self,audit_table_name):
         self.audit_table_name = audit_table_name
         self.db=DatabaseHelper()
+        self.business_date_present=False
+        column_names=[v['Field'] for v in self.db.query('desc '+audit_table_name).fetchall()]
+        print(audit_table_name)
+        if('business_date' in column_names):
+            self.business_date_present=True
 
 
 
