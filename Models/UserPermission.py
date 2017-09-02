@@ -32,8 +32,8 @@ class UserPermission(object):
             # print(components)
             componentList = []
             for component in components:
-                queryString = "SELECT p.permission_id,pd.permission FROM permission_def pd \
-                              LEFT JOIN permissions p ON\
+                queryString = "SELECT p.permission_id,p.dml_allowed,p.in_use,pd.permission \
+                              FROM permission_def pd LEFT JOIN permissions p ON\
                               (p.permission_id = pd.id AND p.role_id = %s \
                               AND p.component_id = %s) WHERE p.in_use = 'Y'"
                 queryParams = (role['id'], component['component_id'], )
