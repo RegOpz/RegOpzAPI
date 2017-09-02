@@ -46,14 +46,16 @@ class LoadDataController(Resource):
                 sql += col + ","
                 placeholders += "%s,"
                 #print(chunk[col])
-           params_tuple=[]
-           for index,row in chunk.iterrows():
-                params_tuple.append(tuple(row[found_col_list]))
 
            placeholders = placeholders[:len(placeholders) - 1]
            placeholders += ")"
            sql = sql[:len(sql) - 1]
            sql += ") values " + placeholders
+
+           params_tuple=[]
+           for index,row in chunk.iterrows():
+                params_tuple.append(tuple(row[found_col_list]))
+
            #print(sql)
            #print(params_tuple)
            header_row = chunk.columns.values
