@@ -8,9 +8,9 @@ class UserPermission(object):
         self.audit = AuditHelper("def_change_log")
         self.user_id = userId
 
-    def get(self, roleId = None):
-        print("\nRecieved GET request in Permissions")
-        queryString_1 = "SELECT * FROM roles WHERE in_use='Y'"
+    def get(self, roleId = None, inUseCheck = 'Y'):
+        print("\nRecieved GET request in Permissions",inUseCheck)
+        queryString_1 = "SELECT * FROM roles WHERE in_use = 'Y'"
         queryParams = ()
         if roleId:
             queryString_1 += " AND role=%s"
@@ -21,24 +21,29 @@ class UserPermission(object):
             return ROLE_EMPTY
         dataList = []
         for role in roles:
-            queryParams = (role['id'], )
-            queryString = "SELECT p.*,c.component FROM components c \
-                           JOIN permissions p ON\
-                          p.component_id = c.id AND p.role_id = %s AND p.in_use='Y'"
-            if roleId:
-                queryString = queryString.replace("JOIN","LEFT JOIN")
-            compQuery = self.dbhelper.query(queryString, queryParams)
+            queryString = "SELECT * FROM components "
+            compQuery = self.dbhelper.query(queryString)
             components = compQuery.fetchall()
             # print(components)
             componentList = []
             for component in components:
-                queryString = "SELECT p.permission_id,p.dml_allowed,p.in_use,pd.permission \
-                              FROM permission_def pd LEFT JOIN permissions p ON\
-                              (p.permission_id = pd.id AND p.role_id = %s \
-                              AND p.component_id = %s) WHERE p.in_use = 'Y'"
-                queryParams = (role['id'], component['component_id'], )
+                queryString = "SELECT p.permission_id,p.dml_allowed,p.in_use,pd.permission,dc.status " + \
+                              "FROM permission_def pd LEFT JOIN permissions p ON " +\
+                              "(p.permission_id = pd.id AND p.role_id = %s " + \
+                              "AND p.component_id = %s) " + \
+                              "LEFT JOIN def_change_log dc ON " + \
+                              "p.id = dc.id AND dc.status='PENDING' " + \
+                              "WHERE p.role_id = %s AND p.in_use = " + ("'Y'" if inUseCheck == 'Y' else " p.in_use")
+                queryParams = (role['id'], component['id'], role['id'], )
                 permQuery = self.dbhelper.query(queryString, queryParams)
                 permissions = permQuery.fetchall()
+                for permission in permissions:
+                    #Now set the permission_id as Null for the set of permissions which are either
+                    #PENDING approval or Not in use, Not in use as these permissions are revoked or deleted
+                    #This will facilitate in UX component to disable the editing of the check box for these
+                    #set of permissions.
+                    if (permission['in_use']=='N' and permission['status'] !='PENDING') or permission['status'] =='PENDING':
+                        permission['permission_id']=None
                 if permissions:
                     compData = {
                         'component': component['component'],
@@ -161,12 +166,13 @@ class UserPermission(object):
 
     def setPermission(self, roleId = None, componentId = None, permissionId = None, dml_flag = False):
         dml = "INSERT" if dml_flag else "DELETE"
+        dml_narration= "GRANT" if dml == "INSERT" else "REVOKE"
         if roleId and componentId and permissionId:
             audit_info = {
                 "table_name": "permissions",
                 "change_type": dml,
                 "comment": self.comment,
-                "change_reference": "Role: " + self.role + " Permission of " + self.permission + " on component " + self.component,
+                "change_reference": "Role: " + self.role + " " + dml_narration + " Permission of " + self.permission + " on component " + self.component,
                 "maker": self.user_id
             }
             queryString = "SELECT * FROM permissions WHERE role_id=%s AND component_id=%s AND permission_id=%s"
