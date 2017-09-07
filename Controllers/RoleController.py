@@ -4,7 +4,8 @@ from Models.Token import Token
 
 class RoleController(Resource):
     def get(self, role = None):
-        return UserPermission().get(role)
+        inUseCheck = request.args.get('inUseCheck') if request.args.get('inUseCheck') else 'Y'
+        return UserPermission().get(role, inUseCheck)
 
     def post(self):
         userId = Token().authenticate()
