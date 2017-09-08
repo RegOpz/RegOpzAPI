@@ -17,6 +17,7 @@ from Constants.Status import *
 from operator import itemgetter
 from datetime import datetime
 from numpy import where
+from Helpers.Tree import tree
 
 class GenerateReportController(Resource):
 
@@ -505,11 +506,11 @@ class GenerateReportController(Resource):
         # con = mysql.connect(**db_config)
         # cur = con.cursor(dictionary=True)
         #
-        db=DatabaseHelper()
+        db = DatabaseHelper()
 
         # clean summary table before populating it for reporting_date
         # util.clean_table(cur, 'report_summary', '', reporting_date)
-        util.clean_table(db._cursor(), 'report_summary', '', reporting_date,'report_id=\''+ report_id + '\'')
+        util.clean_table(db._cursor(), 'report_summary', '', reporting_date, 'report_id=\''+ report_id + '\'')
 
 
         # formula='(RCDMAS1003ID001G19+RCDMAS1003ID001H19)/RCDMAS1003ID001K19+RCDMAS1003ID001G19*0.5'
@@ -518,46 +519,58 @@ class GenerateReportController(Resource):
         # if we want to implement a condition like R1+if(R2>0,R2,0) can be implemented as follows:
         # formula='R1 + (0,R2)[R2>0]'
 
-        sql="select * from report_summary_by_source where reporting_date='REPORT_DATE' and report_id='REPORT_ID'"\
-            .replace('REPORT_DATE',reporting_date).replace('REPORT_ID',report_id)
+        sql = "SELECT * FROM report_summary_by_source WHERE reporting_date=%s AND report_id=%s"\
+            .format(reporting_date, report_id)
 
-        summ_by_src=pd.read_sql(sql,db.connection())
+        summ_by_src = pd.read_sql(sql, db.connection())
 
-        comp_agg_cls=db.query("select * from report_comp_agg_def where report_id=%s and in_use='Y'",(report_id,)).fetchall()
+        comp_agg_cls = db.query("SELECT * FROM report_comp_agg_def WHERE report_id=%s AND in_use='Y'",\
+        (report_id,)).fetchall()
 
-        result_set=[]
+        formula_set = {}
         for cls in comp_agg_cls:
-            formula=cls['comp_agg_rule']
-            variables = list(set([node.id for node in ast.walk(ast.parse(formula)) if isinstance(node, ast.Name)]))
+            ref = cls['comp_agg_ref']
+            formula = cls['comp_agg_rule']
 
-            summ_by_src_vals=summ_by_src[summ_by_src['cell_calc_ref'].isin(variables)][['cell_calc_ref','cell_summary']]
-            summ_by_src_vals.set_index(['cell_calc_ref'],inplace=True)
+            if ref != formula:
+                formula_set[ref] = formula
+            else:
+                formula_set[ref] = 0.0 # Replace with summary
 
-            #print(summ_by_src_vals)
+        summary_set = tree(formula_set)
 
-            for var in variables:
+            # variables = list(set([node.id for node in ast.walk(ast.parse(formula)) if isinstance(node, ast.Name)]))
+            #
+            # summ_by_src_vals=summ_by_src[summ_by_src['cell_calc_ref'].isin(variables)][['cell_calc_ref','cell_summary']]
+            # summ_by_src_vals.set_index(['cell_calc_ref'],inplace=True)
+            #
+            # #print(summ_by_src_vals)
+            #
+            # for var in variables:
+            #
+            #     if var in summ_by_src_vals.index.values:
+            #         val=summ_by_src_vals.loc[var]['cell_summary']
+            #     else:
+            #         val=0
+            #
+            #     formula=formula.replace(var,str(val))
+            #
+            # # for idx,row in summ_by_src_vals.iterrows():
+            # #     formula=formula.replace(row['cell_calc_ref'],row['cell_summary'])
+            # # print(formula)
+            # summary=eval(formula)
 
-                if var in summ_by_src_vals.index.values:
-                    val=summ_by_src_vals.loc[var]['cell_summary']
-                else:
-                    val=0
-
-                formula=formula.replace(var,str(val))
-
-
-
-            # for idx,row in summ_by_src_vals.iterrows():
-            #     formula=formula.replace(row['cell_calc_ref'],row['cell_summary'])
-            # print(formula)
-            summary=eval(formula)
-            result_set.append((cls['report_id'],cls['sheet_id'],cls['cell_id'],summary,reporting_date))
-            #print(summary)
+        result_set = []
+        for cls in comp_agg_cls:
+            result_set.append((cls['report_id'], cls['sheet_id'], cls['cell_id'],\
+            summary_set[cls['comp_agg_ref']], reporting_date))
 
         #print(result_set)
 
-        db.transactmany('insert into report_summary(report_id,sheet_id,cell_id,cell_summary,reporting_date)\
-                                    values(%s,%s,%s,%s,%s)', result_set)
-
-
-        db.commit()
-        #return
+        try:
+            rowId = db.transactmany("INSERT INTO report_summary(report_id,sheet_id,cell_id,cell_summary,reporting_date)\
+                            VALUES(%s,%s,%s,%s,%s)", result_set)
+            db.commit()
+            return rowId
+        except Exception as e:
+            print(e)
