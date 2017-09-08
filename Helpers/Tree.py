@@ -123,7 +123,8 @@ def tree(table = {}, debug = False):
 
     eTree = {}
     for key, value in table.items():
-        eTree[key] = exprToTree(value)
+        eTree[key] = exprToTree(value.replace("+", " + ").replace("-", " - ")\
+.replace("*", " * ").replace("/", " / "))
 
     for key, value in eTree.items():
         eTree[key] = value if type(value) == float else value.dfs()
@@ -136,7 +137,7 @@ def tree(table = {}, debug = False):
 # Testing Script
 if __name__ == '__main__':
     table = {}
-    table["C1"] = "5 * 4 + 3"
-    table["C2"] = "20 + C1"
-    table["C3"] = "C1 * C2"
+    table["C1"] = "5*4+3"
+    table["C2"] = "20+C1"
+    table["C3"] = "C1*C2"
     tree(table, True)
