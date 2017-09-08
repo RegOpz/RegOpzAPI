@@ -31,7 +31,8 @@ class MaintainReportRulesController(Resource):
 		if request.endpoint == "report_rule_audit_ep":
 			report_id = request.args.get('report_id')
 			sheet_id = request.args.get('sheet_id')
-			return self.get_report_audit_list(report_id=report_id, sheet_id=sheet_id)
+			cell_id = request.args.get('cell_id')
+			return self.get_report_audit_list(report_id=report_id, sheet_id=sheet_id, cell_id=cell_id)
 
 	def post(self):
 		data = request.get_json(force=True)
@@ -134,7 +135,7 @@ class MaintainReportRulesController(Resource):
 		else:
 		    return data_dict
 
-	def get_report_audit_list(self, report_id=None, sheet_id=None):
+	def get_report_audit_list(self, report_id=None, sheet_id=None, cell_id=None):
 		if report_id:
 			calc_query = "SELECT id,'report_calc_def' FROM report_calc_def WHERE report_id=%s"
 			comp_query = "SELECT id,'report_comp_agg_def' FROM report_comp_agg_def WHERE report_id=%s"
@@ -142,7 +143,11 @@ class MaintainReportRulesController(Resource):
 			if sheet_id:
 				calc_query += " AND sheet_id=%s"
 				comp_query += " AND sheet_id=%s"
-				queryParams = (report_id, sheet_id, report_id, sheet_id)
+				queryParams = (report_id, sheet_id, report_id, sheet_id,)
+			if cell_id:
+				calc_query += " AND cell_id=%s"
+				comp_query += " AND cell_id=%s"
+				queryParams = (report_id, sheet_id, cell_id, report_id, sheet_id, cell_id,)
 			queryString = "SELECT DISTINCT id,table_name,change_type,change_reference,date_of_change,\
 				maker,maker_comment,checker,checker_comment,status,date_of_checking FROM def_change_log\
 				WHERE (id,table_name) IN (" + calc_query + " UNION " + comp_query + " )"
