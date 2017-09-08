@@ -229,6 +229,9 @@ class DocumentController(Resource):
                 else:
                     cell__summary= float(util.if_null_zero(row["cell_summary"]))
 
+                #Now add the cell drilldown definitions for the cell
+                if reporting_date=='19000101' or reporting_date=='undefined':
+                    cell_d['drill_down'] = self.cell_drill_down_rules(report_id=self.report_id,sheet_id=sheet['sheet_id'],cell_id=row['cell_id'])
                 cell_d['cell']=row['cell_id']
                 cell_d['value']=cell_summary
                 matrix_list.append(cell_d)
@@ -507,7 +510,7 @@ class DocumentController(Resource):
                 data_source_information b where a.source_id=b.source_id and \
                 report_id='" + report_id + "' and cell_calc_ref in (" + cell_calc_ref_list + ")"
 
-        print(sql)
+        #print(sql)
         cell_rules=db.query(sql).fetchall()
 
         for i,c in enumerate(cell_rules):
