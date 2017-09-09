@@ -519,10 +519,11 @@ class GenerateReportController(Resource):
         # if we want to implement a condition like R1+if(R2>0,R2,0) can be implemented as follows:
         # formula='R1 + (0,R2)[R2>0]'
 
-        sql = "SELECT * FROM report_summary_by_source WHERE reporting_date=%s AND report_id=%s"\
+        sql = "SELECT * FROM report_summary_by_source WHERE reporting_date='{0}' AND report_id='{1}'"\
             .format(reporting_date, report_id)
 
         summ_by_src = pd.read_sql(sql, db.connection())
+        summ_by_src.set_index(['cell_calc_ref'],inplace=True)
 
         comp_agg_cls = db.query("SELECT * FROM report_comp_agg_def WHERE report_id=%s AND in_use='Y'",\
         (report_id,)).fetchall()
@@ -535,7 +536,13 @@ class GenerateReportController(Resource):
             if ref != formula:
                 formula_set[ref] = formula
             else:
-                formula_set[ref] = 0.0 # Replace with summary
+                #formula_set[ref] = 0.0 # Replace with summary
+                try:
+                    summary_val=summ_by_src.loc[ref]['cell_summary']
+                    formula_set[ref]=summary_val
+                except KeyError:
+                    formula_set[ref]=0.0
+
 
         summary_set = tree(formula_set)
 
