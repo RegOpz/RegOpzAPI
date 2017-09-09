@@ -34,7 +34,8 @@ def tree(table = {}, debug = False):
                     eTree[ref] = Vertex(Node("val", val))
                     return val
                 else:
-                    raise ValueError("Invalid Operation defined: Found Reference Error", ref)
+                    return 0.0
+                    # raise ValueError("Invalid Operation defined: Found Reference Error", ref)
             else:
                 if self.left:
                     left = self.left.dfs()
@@ -123,7 +124,7 @@ def tree(table = {}, debug = False):
 
     eTree = {}
     for key, value in table.items():
-        eTree[key] = exprToTree(value.replace("+", " + ").replace("-", " - ")\
+        eTree[key] = exprToTree(str(value).replace("+", " + ").replace("-", " - ")\
 .replace("*", " * ").replace("/", " / "))
 
     for key, value in eTree.items():
