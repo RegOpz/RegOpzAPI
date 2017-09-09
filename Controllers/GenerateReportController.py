@@ -536,15 +536,14 @@ class GenerateReportController(Resource):
             if ref != formula:
                 formula_set[ref] = formula
             else:
-                #formula_set[ref] = 0.0 # Replace with summary
                 try:
-                    summary_val=summ_by_src.loc[ref]['cell_summary']
-                    formula_set[ref]=summary_val
+                    summary_val = summ_by_src.loc[ref]['cell_summary']
+                    formula_set[ref] = summary_val
                 except KeyError:
-                    formula_set[ref]=0.0
-
+                    formula_set[ref] = 0.0 # S2S27
 
         summary_set = tree(formula_set)
+        print(summary_set)
 
             # variables = list(set([node.id for node in ast.walk(ast.parse(formula)) if isinstance(node, ast.Name)]))
             #
@@ -572,7 +571,7 @@ class GenerateReportController(Resource):
             result_set.append((cls['report_id'], cls['sheet_id'], cls['cell_id'],\
             summary_set[cls['comp_agg_ref']], reporting_date))
 
-        #print(result_set)
+        # print(result_set)
 
         try:
             rowId = db.transactmany("INSERT INTO report_summary(report_id,sheet_id,cell_id,cell_summary,reporting_date)\
@@ -580,4 +579,4 @@ class GenerateReportController(Resource):
             db.commit()
             return rowId
         except Exception as e:
-            print(e)
+            print("Transaction Failed:", e)
