@@ -170,7 +170,7 @@ class AuditHelper(object):
 
             for idx,item in enumerate(audit_list):
                 if item["change_type"]=="UPDATE":
-                    values=self.db.query("select field_name,old_val,new_val from def_change_log  where id="+str(item["id"])+
+                    values=self.db.query("select field_name,old_val,new_val from " + self.audit_table_name + " where id="+str(item["id"])+
                                          " and table_name='"+str(item["table_name"])+"' and status='"+str(item["status"])+
                                          "' and date_of_change='"+str(item["date_of_change"])+"'").fetchall()
                     update_info_list=[]
