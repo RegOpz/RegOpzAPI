@@ -3,8 +3,9 @@
 # @param table: A set of reference and their formula/rules
 # @param @optional debug: Prints table (Given) and values (Evalutated) iff True
 # @returns Evalutated table
+import Helpers.utils as util
 
-def tree(table = {}, debug = False):
+def tree(table = {}, cellFormat = 'N', debug = False):
 
     class Node(object):
         def __init__(self, key = None, value = None):
@@ -20,6 +21,7 @@ def tree(table = {}, debug = False):
         def dfs(self):
             left = 0
             right = 0
+            #print(self.node.key,self.node.value,self.left,self.right)
             if self.node.key == "val":
                 return float(self.node.value)
             elif self.node.key == "ref":
@@ -33,6 +35,9 @@ def tree(table = {}, debug = False):
                     val = eq.dfs()
                     eTree[ref] = Vertex(Node("val", val))
                     return val
+                elif ref in ('NONE','CEIL','FLOOR','TRUNC') or 'DECIMAL' in str(ref):
+                     print("elif ref",ref)
+                     return ref
                 else:
                     return 0.0
                     # raise ValueError("Invalid Operation defined: Found Reference Error", ref)
@@ -53,11 +58,14 @@ def tree(table = {}, debug = False):
                             return (left / right)
                         except Exception:
                             raise ValueError("Invalid Operation defined: Found Arithmetic Error")
+                    elif self.node.value == "~":
+                        print("node value ~",right,left)
+                        return util.round_value(float(util.if_null_zero(left)),right if right != 0.0 else "NONE")
                     else:
                         raise ValueError("Invalid Operation defined: Found Invalid Error")
 
     def isOperator(token):
-        return (token in ('+', '-', '*', '/'))
+        return (token in ('+', '-', '*', '/', '~'))
 
     def isValue(token):
         try:
@@ -69,6 +77,7 @@ def tree(table = {}, debug = False):
     def infixToPostfix(expr: str):
         tokenList = expr.split()
         prec = {
+            "~": 4, #format for rounding_option
             "*": 3,
             "/": 3,
             "+": 2,
@@ -99,9 +108,17 @@ def tree(table = {}, debug = False):
             postfix.append(opStack.pop())
         return " ".join(postfix)
 
-    def exprToTree(expr: str):
+    def exprToTree(value):
+        scale = value["reporting_scale"]
+        roundOption = value["rounding_option"] if value["rounding_option"] else "NONE"
+        formula = "((" + str(value["formula"]) + ")/" + str(scale) +")~" + roundOption
+        expr = formula.replace("+", " + ").replace("-", " - ")\
+                                    .replace("*", " * ").replace("/", " / ")\
+                                    .replace("("," ( ").replace(")"," ) ")\
+                                    .replace("~", " ~ ")
         pexpr = infixToPostfix(expr)
         explist = pexpr.split()
+        print(explist,formula,roundOption)
         pstack = []
 
         for token in explist:
@@ -124,8 +141,7 @@ def tree(table = {}, debug = False):
 
     eTree = {}
     for key, value in table.items():
-        eTree[key] = exprToTree(str(value).replace("+", " + ").replace("-", " - ")\
-.replace("*", " * ").replace("/", " / "))
+        eTree[key] = exprToTree(value)
 
     for key, value in eTree.items():
         eTree[key] = value if type(value) == float else value.dfs()

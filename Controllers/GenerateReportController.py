@@ -492,7 +492,7 @@ class GenerateReportController(Resource):
         db.commit()
         #return
 
-    def create_report_summary_final(self,**kwargs):
+    def create_report_summary_final(self,populate_summary = True,cell_format_yn = 'N',**kwargs):
         parameter_list = ['report_id', 'business_date_from', 'business_date_to']
 
         if set(parameter_list).issubset(set(kwargs.keys())):
@@ -510,7 +510,8 @@ class GenerateReportController(Resource):
 
         # clean summary table before populating it for reporting_date
         # util.clean_table(cur, 'report_summary', '', reporting_date)
-        util.clean_table(db._cursor(), 'report_summary', '', reporting_date, 'report_id=\''+ report_id + '\'')
+        if populate_summary:
+            util.clean_table(db._cursor(), 'report_summary', '', reporting_date, 'report_id=\''+ report_id + '\'')
 
 
         # formula='(RCDMAS1003ID001G19+RCDMAS1003ID001H19)/RCDMAS1003ID001K19+RCDMAS1003ID001G19*0.5'
@@ -522,6 +523,7 @@ class GenerateReportController(Resource):
         sql = "SELECT * FROM report_summary_by_source WHERE reporting_date='{0}' AND report_id='{1}'"\
             .format(reporting_date, report_id)
 
+        print(sql)
         summ_by_src = pd.read_sql(sql, db.connection())
         summ_by_src.set_index(['cell_calc_ref'],inplace=True)
 
@@ -529,21 +531,37 @@ class GenerateReportController(Resource):
         (report_id,)).fetchall()
 
         formula_set = {}
+        contributors = db.query(sql).fetchall()
+        for element in contributors:
+            formula_set[element['cell_calc_ref']] = {'formula': element['cell_summary'],
+                                'reporting_scale': 1,
+                                'rounding_option': None
+                                }
         for cls in comp_agg_cls:
             ref = cls['comp_agg_ref']
             formula = cls['comp_agg_rule']
 
             if ref != formula:
-                formula_set[ref] = formula
+                formula_set[ref] = {'formula': formula,
+                                    'reporting_scale': cls['reporting_scale'],
+                                    'rounding_option': cls['rounding_option']
+                                    }
             else:
                 try:
                     summary_val = summ_by_src.loc[ref]['cell_summary']
-                    formula_set[ref] = summary_val
+                    formula_set[ref] = {'formula': summary_val,
+                                        'reporting_scale': cls['reporting_scale'],
+                                        'rounding_option': cls['rounding_option']
+                                        }
                 except KeyError:
-                    formula_set[ref] = 0.0 # S2S27
+                    formula_set[ref] = {'formula': 0.0,
+                                        'reporting_scale': cls['reporting_scale'],
+                                        'rounding_option': cls['rounding_option']
+                                        } # S2S27
 
-        summary_set = tree(formula_set)
-        print(summary_set)
+        #print(formula_set)
+        summary_set = tree(formula_set, cellFormat = cell_format_yn)
+        #print(summary_set)
 
             # variables = list(set([node.id for node in ast.walk(ast.parse(formula)) if isinstance(node, ast.Name)]))
             #
@@ -573,10 +591,13 @@ class GenerateReportController(Resource):
 
         # print(result_set)
 
-        try:
-            rowId = db.transactmany("INSERT INTO report_summary(report_id,sheet_id,cell_id,cell_summary,reporting_date)\
-                            VALUES(%s,%s,%s,%s,%s)", result_set)
-            db.commit()
-            return rowId
-        except Exception as e:
-            print("Transaction Failed:", e)
+        if populate_summary:
+            try:
+                rowId = db.transactmany("INSERT INTO report_summary(report_id,sheet_id,cell_id,cell_summary,reporting_date)\
+                                VALUES(%s,%s,%s,%s,%s)", result_set)
+                db.commit()
+                return rowId
+            except Exception as e:
+                print("Transaction Failed:", e)
+        else:
+            return result_set
