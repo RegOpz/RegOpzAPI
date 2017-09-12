@@ -503,68 +503,37 @@ class GenerateReportController(Resource):
         else:
             print("Please supply parameters: " + str(parameter_list))
 
-        # con = mysql.connect(**db_config)
-        # cur = con.cursor(dictionary=True)
-        #
         db = DatabaseHelper()
 
-        # clean summary table before populating it for reporting_date
-        # util.clean_table(cur, 'report_summary', '', reporting_date)
-        util.clean_table(db._cursor(), 'report_summary', '', reporting_date, 'report_id=\''+ report_id + '\'')
+        if populate_summary:
+            util.clean_table(db._cursor(), 'report_summary', '', reporting_date, 'report_id=\''+ report_id + '\'')
 
-
-        # formula='(RCDMAS1003ID001G19+RCDMAS1003ID001H19)/RCDMAS1003ID001K19+RCDMAS1003ID001G19*0.5'
-        # variables = list(set([node.id for node in ast.walk(ast.parse(formula)) if isinstance(node, ast.Name)]))
-        # Another example of formula can be as follows using ternary operators (if_test_is_false, if_test_is_true)[test]
-        # if we want to implement a condition like R1+if(R2>0,R2,0) can be implemented as follows:
-        # formula='R1 + (0,R2)[R2>0]'
-
-        sql = "SELECT * FROM report_summary_by_source WHERE reporting_date='{0}' AND report_id='{1}'"\
-            .format(reporting_date, report_id)
-
-        summ_by_src = pd.read_sql(sql, db.connection())
-        summ_by_src.set_index(['cell_calc_ref'],inplace=True)
+        contributors = db.query("SELECT * FROM report_summary_by_source WHERE reporting_date='{0}' AND report_id='{1}'"\
+            .format(reporting_date, report_id)).fetchall()
 
         comp_agg_cls = db.query("SELECT * FROM report_comp_agg_def WHERE report_id=%s AND in_use='Y'",\
-        (report_id,)).fetchall()
+            (report_id,)).fetchall()
 
         formula_set = {}
+        for element in contributors:
+            formula_set[element['cell_calc_ref']] = {
+                'formula': element['cell_summary'],
+                'reporting_scale': 1,
+                'rounding_option': None
+            }
+
         for cls in comp_agg_cls:
             ref = cls['comp_agg_ref']
             formula = cls['comp_agg_rule']
 
-            if ref != formula:
-                formula_set[ref] = formula
-            else:
-                try:
-                    summary_val = summ_by_src.loc[ref]['cell_summary']
-                    formula_set[ref] = summary_val
-                except KeyError:
-                    formula_set[ref] = 0.0 # S2S27
+            formula_set[ref] = {'formula': formula,
+                                'reporting_scale': cls['reporting_scale'],
+                                'rounding_option': cls['rounding_option']
+                                }
 
+        # print(formula_set)
         summary_set = tree(formula_set)
-        print(summary_set)
-
-            # variables = list(set([node.id for node in ast.walk(ast.parse(formula)) if isinstance(node, ast.Name)]))
-            #
-            # summ_by_src_vals=summ_by_src[summ_by_src['cell_calc_ref'].isin(variables)][['cell_calc_ref','cell_summary']]
-            # summ_by_src_vals.set_index(['cell_calc_ref'],inplace=True)
-            #
-            # #print(summ_by_src_vals)
-            #
-            # for var in variables:
-            #
-            #     if var in summ_by_src_vals.index.values:
-            #         val=summ_by_src_vals.loc[var]['cell_summary']
-            #     else:
-            #         val=0
-            #
-            #     formula=formula.replace(var,str(val))
-            #
-            # # for idx,row in summ_by_src_vals.iterrows():
-            # #     formula=formula.replace(row['cell_calc_ref'],row['cell_summary'])
-            # # print(formula)
-            # summary=eval(formula)
+        # print(summary_set)
 
         result_set = []
         for cls in comp_agg_cls:
