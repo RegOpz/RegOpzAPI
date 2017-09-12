@@ -61,8 +61,9 @@ class AuditHelper(object):
         table_name=data['table_name']
 
         def_change_insert = 0
+        old_rec=self.db.query("select * from "+ table_name+" where id="+str(id)).fetchone()
         for col in update_info.keys():
-            old_val=self.db.query("select "+col + " from "+ table_name+" where id="+str(id)).fetchone()[col]
+            old_val = old_rec[col]
             new_val = update_info[col]
             #print(col,old_val,new_val)
 
