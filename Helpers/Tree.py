@@ -1,11 +1,18 @@
 # Module: Expression Tree for Spreadsheet
 # @function: tree
-# @param table: A set of reference and their formula/rules
+# @param table: A set of reference and their formula/rules along with rounding option
 # @param @optional debug: Prints table (Given) and values (Evalutated) iff True
 # @returns Evalutated table
 
-def tree(table = {}, debug = False):
+import Helpers.utils as util
 
+def tree(table = {}, **kwargs):
+    debug = False
+
+    if "debug" in kwargs.keys():
+        debug = kwargs["debug"]
+
+    # Object Definitions
     class Node(object):
         def __init__(self, key = None, value = None):
             self.key = key
@@ -34,8 +41,8 @@ def tree(table = {}, debug = False):
                     eTree[ref] = Vertex(Node("val", val))
                     return val
                 else:
-                    return 0.0
-                    # raise ValueError("Invalid Operation defined: Found Reference Error", ref)
+                    return 0.0 # Some reference error need to be fixed in database
+                    # raise ValueError("Invalid Operation defined: Found Reference Error {0}".format(ref))
             else:
                 if self.left:
                     left = self.left.dfs()
@@ -56,6 +63,7 @@ def tree(table = {}, debug = False):
                     else:
                         raise ValueError("Invalid Operation defined: Found Invalid Error")
 
+    # Method Definitions
     def isOperator(token):
         return (token in ('+', '-', '*', '/'))
 
@@ -119,13 +127,15 @@ def tree(table = {}, debug = False):
                 pstack.append(root)
         return pstack.pop()
 
+    # Normal Execution
     if debug:
         print("Table:", table)
 
     eTree = {}
     for key, value in table.items():
-        eTree[key] = exprToTree(str(value).replace("+", " + ").replace("-", " - ")\
-.replace("*", " * ").replace("/", " / "))
+        formula = str(value["formula"]).replace("+", " + ").replace("-", " - ")\
+.replace("*", " * ").replace("/", " / ").replace("(", " ( ").replace(")", " ) ")
+        eTree[key] = exprToTree(formula)
 
     for key, value in eTree.items():
         eTree[key] = value if type(value) == float else value.dfs()
@@ -133,12 +143,22 @@ def tree(table = {}, debug = False):
     if debug:
         print("Evalutated:", eTree)
 
-    return eTree
+    result = {}
+    for key, value in eTree.items():
+        rounding = table[key]["rounding_option"]
+        scale = table[key]["reporting_scale"]
+        round_value = util.round_value(float(util.if_null_zero(value)), rounding)
+        result[key] = round_value // scale
+
+    if debug:
+        print("Final Result:", result)
+
+    return result
 
 # Testing Script
 if __name__ == '__main__':
     table = {}
-    table["C1"] = "5*4+3"
-    table["C2"] = "20+C1"
-    table["C3"] = "C1*C2"
-    tree(table, True)
+    table["C1"] = { "formula": "5*4+3", "rounding_option": "DECIMAL0" }
+    table["C2"] = { "formula": "20+C1", "rounding_option": "DECIMAL0" }
+    table["C3"] = { "formula": "C1*C2", "rounding_option": "DECIMAL0" }
+    tree(table, debug=True)
