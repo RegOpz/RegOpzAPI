@@ -524,9 +524,8 @@ class GenerateReportController(Resource):
 
         for cls in comp_agg_cls:
             ref = cls['comp_agg_ref']
-            formula = cls['comp_agg_rule']
 
-            formula_set[ref] = {'formula': formula,
+            formula_set[ref] = {'formula': cls['comp_agg_rule'],
                                 'reporting_scale': cls['reporting_scale'],
                                 'rounding_option': cls['rounding_option']
                                 }

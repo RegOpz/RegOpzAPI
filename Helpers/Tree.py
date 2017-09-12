@@ -1,12 +1,18 @@
 # Module: Expression Tree for Spreadsheet
 # @function: tree
-# @param table: A set of reference and their formula/rules
+# @param table: A set of reference and their formula/rules along with rounding option
 # @param @optional debug: Prints table (Given) and values (Evalutated) iff True
 # @returns Evalutated table
+
 import Helpers.utils as util
 
-def tree(table = {}, cellFormat = 'N', debug = False):
+def tree(table = {}, **kwargs):
+    debug = False
 
+    if "debug" in kwargs.keys():
+        debug = kwargs["debug"]
+
+    # Object Definitions
     class Node(object):
         def __init__(self, key = None, value = None):
             self.key = key
@@ -21,7 +27,6 @@ def tree(table = {}, cellFormat = 'N', debug = False):
         def dfs(self):
             left = 0
             right = 0
-            #print(self.node.key,self.node.value,self.left,self.right)
             if self.node.key == "val":
                 return float(self.node.value)
             elif self.node.key == "ref":
@@ -35,12 +40,9 @@ def tree(table = {}, cellFormat = 'N', debug = False):
                     val = eq.dfs()
                     eTree[ref] = Vertex(Node("val", val))
                     return val
-                elif ref in ('NONE','CEIL','FLOOR','TRUNC') or 'DECIMAL' in str(ref):
-                     print("elif ref",ref)
-                     return ref
                 else:
-                    return 0.0
-                    # raise ValueError("Invalid Operation defined: Found Reference Error", ref)
+                    return 0.0 # Some reference error need to be fixed in database
+                    # raise ValueError("Invalid Operation defined: Found Reference Error {0}".format(ref))
             else:
                 if self.left:
                     left = self.left.dfs()
@@ -58,14 +60,12 @@ def tree(table = {}, cellFormat = 'N', debug = False):
                             return (left / right)
                         except Exception:
                             raise ValueError("Invalid Operation defined: Found Arithmetic Error")
-                    elif self.node.value == "~":
-                        print("node value ~",right,left)
-                        return util.round_value(float(util.if_null_zero(left)),right if right != 0.0 else "NONE")
                     else:
                         raise ValueError("Invalid Operation defined: Found Invalid Error")
 
+    # Method Definitions
     def isOperator(token):
-        return (token in ('+', '-', '*', '/', '~'))
+        return (token in ('+', '-', '*', '/'))
 
     def isValue(token):
         try:
@@ -77,7 +77,6 @@ def tree(table = {}, cellFormat = 'N', debug = False):
     def infixToPostfix(expr: str):
         tokenList = expr.split()
         prec = {
-            "~": 4, #format for rounding_option
             "*": 3,
             "/": 3,
             "+": 2,
@@ -108,17 +107,9 @@ def tree(table = {}, cellFormat = 'N', debug = False):
             postfix.append(opStack.pop())
         return " ".join(postfix)
 
-    def exprToTree(value):
-        scale = value["reporting_scale"]
-        roundOption = value["rounding_option"] if value["rounding_option"] else "NONE"
-        formula = "((" + str(value["formula"]) + ")/" + str(scale) +")~" + roundOption
-        expr = formula.replace("+", " + ").replace("-", " - ")\
-                                    .replace("*", " * ").replace("/", " / ")\
-                                    .replace("("," ( ").replace(")"," ) ")\
-                                    .replace("~", " ~ ")
+    def exprToTree(expr: str):
         pexpr = infixToPostfix(expr)
         explist = pexpr.split()
-        print(explist,formula,roundOption)
         pstack = []
 
         for token in explist:
@@ -136,12 +127,15 @@ def tree(table = {}, cellFormat = 'N', debug = False):
                 pstack.append(root)
         return pstack.pop()
 
+    # Normal Execution
     if debug:
         print("Table:", table)
 
     eTree = {}
     for key, value in table.items():
-        eTree[key] = exprToTree(value)
+        formula = str(value["formula"]).replace("+", " + ").replace("-", " - ")\
+.replace("*", " * ").replace("/", " / ").replace("(", " ( ").replace(")", " ) ")
+        eTree[key] = exprToTree(formula)
 
     for key, value in eTree.items():
         eTree[key] = value if type(value) == float else value.dfs()
@@ -149,12 +143,22 @@ def tree(table = {}, cellFormat = 'N', debug = False):
     if debug:
         print("Evalutated:", eTree)
 
-    return eTree
+    result = {}
+    for key, value in eTree.items():
+        rounding = table[key]["rounding_option"]
+        scale = table[key]["reporting_scale"]
+        round_value = util.round_value(float(util.if_null_zero(value)), rounding)
+        result[key] = round_value // scale
+
+    if debug:
+        print("Final Result:", result)
+
+    return result
 
 # Testing Script
 if __name__ == '__main__':
     table = {}
-    table["C1"] = "5*4+3"
-    table["C2"] = "20+C1"
-    table["C3"] = "C1*C2"
-    tree(table, True)
+    table["C1"] = { "formula": "5*4+3", "rounding_option": "DECIMAL0" }
+    table["C2"] = { "formula": "20+C1", "rounding_option": "DECIMAL0" }
+    table["C3"] = { "formula": "C1*C2", "rounding_option": "DECIMAL0" }
+    tree(table, debug=True)
