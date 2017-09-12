@@ -1,7 +1,7 @@
 # Module: Expression Tree for Spreadsheet
 # @function: tree
 # @param table: A set of reference and their formula/rules along with rounding option
-# @param @optional debug: Prints table (Given) and values (Evalutated) iff True
+# @kwarg @optional debug: Prints table (Given) and values (Evalutated) iff True
 # @returns Evalutated table
 
 import Helpers.utils as util
@@ -28,18 +28,17 @@ def tree(table = {}, **kwargs):
             left = 0
             right = 0
             if self.node.key == "val":
-                return float(self.node.value)
+                return self.node.value
             elif self.node.key == "ref":
                 ref = self.node.value
-                if ref and ref in eTree:
+                if ref in eTree.keys():
                     eq = eTree[ref]
                     if type(eq) == float:
                         return eq
-                    if eq.node.key == "val":
-                        return eq.node.value
-                    val = eq.dfs()
-                    eTree[ref] = Vertex(Node("val", val))
-                    return val
+                    expt, rounding, scale = eq["tree"], eq["rounding"], eq["scale"]
+                    round_val = roundOff(expt.dfs(), rounding, scale)
+                    eTree[ref] = round_val
+                    return round_val
                 else:
                     return 0.0 # Some reference error need to be fixed in database
                     # raise ValueError("Invalid Operation defined: Found Reference Error {0}".format(ref))
@@ -49,21 +48,30 @@ def tree(table = {}, **kwargs):
                 if self.right:
                     right = self.right.dfs()
                 if self.node.key == "op":
-                    if self.node.value == "+":
+                    opcode = self.node.value
+                    if opcode == "+":
                         return (left + right)
-                    elif self.node.value == "-":
+                    elif opcode == "-":
                         return (left - right)
-                    elif self.node.value == "*":
+                    elif opcode == "*":
                         return (left * right)
-                    elif self.node.value == "/":
+                    elif opcode == "/":
                         try:
                             return (left / right)
-                        except Exception:
-                            raise ValueError("Invalid Operation defined: Found Arithmetic Error")
+                        except Exception as e:
+                            raise ValueError("Invalid Operand defined: Found \
+Arithmetic Error {0}".format(e))
                     else:
-                        raise ValueError("Invalid Operation defined: Found Invalid Error")
+                        raise ValueError("Invalid Operation defined: Found \
+Invalid Operator {0}".format(opcode))
 
     # Method Definitions
+    def roundOff(value: float, rounding: str, scale: float):
+        try:
+            return util.round_value(float(util.if_null_zero(value) / scale), rounding)
+        except Exception:
+            return 0.0
+
     def isOperator(token):
         return (token in ('+', '-', '*', '/'))
 
@@ -133,32 +141,31 @@ def tree(table = {}, **kwargs):
 
     eTree = {}
     for key, value in table.items():
-        formula = str(value["formula"]).replace("+", " + ").replace("-", " - ")\
+        rounding = value["rounding_option"]
+        scale = float(value["reporting_scale"])
+        formula = str(value["formula"]).replace("+", " + ").replace("-", " - ") \
 .replace("*", " * ").replace("/", " / ").replace("(", " ( ").replace(")", " ) ")
-        eTree[key] = exprToTree(formula)
+        eTree[key] = {
+            "tree":     exprToTree(formula),
+            "rounding": rounding,
+            "scale":    scale
+        }
 
     for key, value in eTree.items():
-        eTree[key] = value if type(value) == float else value.dfs()
+        if type(value) != float:
+            expt, rounding, scale = value["tree"], value["rounding"], value["scale"]
+            round_val = roundOff(expt.dfs(), rounding, scale)
+            eTree[key] = round_val
 
     if debug:
         print("Evalutated:", eTree)
 
-    result = {}
-    for key, value in eTree.items():
-        rounding = table[key]["rounding_option"]
-        scale = table[key]["reporting_scale"]
-        round_value = util.round_value(float(util.if_null_zero(value)), rounding)
-        result[key] = round_value // scale
-
-    if debug:
-        print("Final Result:", result)
-
-    return result
+    return eTree
 
 # Testing Script
 if __name__ == '__main__':
     table = {}
-    table["C1"] = { "formula": "5*4+3", "rounding_option": "DECIMAL0" }
-    table["C2"] = { "formula": "20+C1", "rounding_option": "DECIMAL0" }
-    table["C3"] = { "formula": "C1*C2", "rounding_option": "DECIMAL0" }
+    table["C1"] = { "formula": "5*4+3", "rounding_option": "DECIMAL0", "reporting_scale": "1" }
+    table["C2"] = { "formula": "20+C1", "rounding_option": "DECIMAL0", "reporting_scale": "10" }
+    table["C3"] = { "formula": "C1*C2", "rounding_option": "DECIMAL0", "reporting_scale": "10" }
     tree(table, debug=True)

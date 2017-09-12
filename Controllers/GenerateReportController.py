@@ -519,7 +519,7 @@ class GenerateReportController(Resource):
             formula_set[element['cell_calc_ref']] = {
                 'formula': element['cell_summary'],
                 'reporting_scale': 1,
-                'rounding_option': None
+                'rounding_option': "NONE"
             }
 
         for cls in comp_agg_cls:
