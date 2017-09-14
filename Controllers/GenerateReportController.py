@@ -526,12 +526,12 @@ class GenerateReportController(Resource):
             ref = cls['comp_agg_ref']
 
             formula_set[ref] = {'formula': cls['comp_agg_rule'],
-                                'reporting_scale': cls['reporting_scale'],
-                                'rounding_option': cls['rounding_option']
+                                'reporting_scale': cls['reporting_scale'] if cls['reporting_scale'] else 1,
+                                'rounding_option': cls['rounding_option'] if cls['rounding_option'] else "NONE"
                                 }
 
         # print(formula_set)
-        summary_set = tree(formula_set)
+        summary_set = tree(formula_set, format=cell_format_yn)
         # print(summary_set)
 
         result_set = []

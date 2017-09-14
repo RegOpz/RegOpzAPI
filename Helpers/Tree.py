@@ -8,9 +8,12 @@ import Helpers.utils as util
 
 def tree(table = {}, **kwargs):
     debug = False
+    format = "N"
 
     if "debug" in kwargs.keys():
         debug = kwargs["debug"]
+    if "format" in kwargs.keys():
+        format = kwargs["format"]
 
     # Object Definitions
     class Node(object):
@@ -141,8 +144,8 @@ Invalid Operator {0}".format(opcode))
 
     eTree = {}
     for key, value in table.items():
-        rounding = value["rounding_option"]
-        scale = float(value["reporting_scale"])
+        rounding = value["rounding_option"] if format == 'Y' else "NONE"
+        scale = float(value["reporting_scale"]) if format == 'Y' else 1.0
         formula = str(value["formula"]).replace("+", " + ").replace("-", " - ") \
 .replace("*", " * ").replace("/", " / ").replace("(", " ( ").replace(")", " ) ")
         eTree[key] = {
