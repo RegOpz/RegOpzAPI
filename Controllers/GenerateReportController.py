@@ -492,7 +492,7 @@ class GenerateReportController(Resource):
         db.commit()
         #return
 
-    def create_report_summary_final(self,**kwargs):
+    def create_report_summary_final(self,populate_summary = True,cell_format_yn = 'N',**kwargs):
         parameter_list = ['report_id', 'business_date_from', 'business_date_to']
 
         if set(parameter_list).issubset(set(kwargs.keys())):
@@ -541,10 +541,13 @@ class GenerateReportController(Resource):
 
         # print(result_set)
 
-        try:
-            rowId = db.transactmany("INSERT INTO report_summary(report_id,sheet_id,cell_id,cell_summary,reporting_date)\
-                            VALUES(%s,%s,%s,%s,%s)", result_set)
-            db.commit()
-            return rowId
-        except Exception as e:
-            print("Transaction Failed:", e)
+        if populate_summary:
+            try:
+                rowId = db.transactmany("INSERT INTO report_summary(report_id,sheet_id,cell_id,cell_summary,reporting_date)\
+                                VALUES(%s,%s,%s,%s,%s)", result_set)
+                db.commit()
+                return rowId
+            except Exception as e:
+                print("Transaction Failed:", e)
+        else:
+            return result_set

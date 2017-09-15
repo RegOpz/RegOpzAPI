@@ -17,6 +17,7 @@ import ast
 from operator import itemgetter
 from datetime import datetime
 import time
+from Controllers.GenerateReportController import GenerateReportController as report
 UPLOAD_FOLDER = './uploads/templates'
 ALLOWED_EXTENSIONS = set(['txt', 'xls', 'xlsx'])
 class DocumentController(Resource):
@@ -166,6 +167,18 @@ class DocumentController(Resource):
         sheets = cur.fetchall()
         print(sheets)
 
+        agg_format_data ={}
+        if cell_format_yn == 'Y':
+            summary_set = report.create_report_summary_final(self,populate_summary = False,
+                            cell_format_yn = cell_format_yn,
+                            report_id = self.report_id,
+                             business_date_from = str(reporting_date)[:8],
+                             business_date_to = str(reporting_date)[8:])
+            #print(summary_set)
+            for e in summary_set:
+                agg_format_data[e[0]+e[1]+e[2]] = e[3]
+            #print(agg_format_data)
+
         sheet_d_list = []
         for sheet in sheets:
             matrix_list = []
@@ -222,12 +235,15 @@ class DocumentController(Resource):
                 cell_d={}
                 if cell_format_yn == 'Y':
                     # print(row["cell_id"],row["cell_summary"])
-                    cell_summary = util.round_value(
+                    try:
+                        cell_summary = agg_format_data[row['report_id']+row['sheet_id']+row['cell_id']]
+                    except KeyError:
+                        cell_summary = util.round_value(
                         float(util.if_null_zero(row["cell_summary"])) / float(row["reporting_scale"]),
                         row["rounding_option"])
 
                 else:
-                    cell__summary= float(util.if_null_zero(row["cell_summary"]))
+                    cell_summary= float(util.if_null_zero(row["cell_summary"]))
 
                 cell_d['cell']=row['cell_id']
                 cell_d['value']=cell_summary
@@ -341,6 +357,17 @@ class DocumentController(Resource):
 
         sheets=db.query('select distinct sheet_id from report_def where report_id=%s', (report_id,)).fetchall()
 
+        agg_format_data ={}
+        if cell_format_yn == 'Y':
+            summary_set = report.create_report_summary_final(self,populate_summary = False,
+                            cell_format_yn = cell_format_yn,
+                            report_id = self.report_id,
+                             business_date_from = str(reporting_date)[:8],
+                             business_date_to = str(reporting_date)[8:])
+            #print(summary_set)
+            for e in summary_set:
+                agg_format_data[e[0]+e[1]+e[2]] = e[3]
+            #print(agg_format_data)
         # print sheets
         # The default sheet of the workbook
         al = Alignment(horizontal="center", vertical="center", wrap_text=True, shrink_to_fit=True)
@@ -407,7 +434,10 @@ class DocumentController(Resource):
             ws = wb.get_sheet_by_name(row["sheet_id"])
             if cell_format_yn == 'Y':
                 # print(row["cell_id"],row["cell_summary"])
-                cell_summary = util.round_value(
+                try:
+                    cell_summary = agg_format_data[row['report_id']+row['sheet_id']+row['cell_id']]
+                except KeyError:
+                    cell_summary = util.round_value(
                     float(util.if_null_zero(row["cell_summary"])) / float(row["reporting_scale"]),
                     row["rounding_option"])
                 ws[row["cell_id"]].value = cell_summary

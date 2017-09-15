@@ -10,7 +10,7 @@ def tree(table = {}, **kwargs):
     debug = False
     format_flag = False
 
-    kwlist = kwarg.keys()
+    kwlist = kwargs.keys()
 
     if "debug" in kwlist:
         debug = kwargs["debug"]
