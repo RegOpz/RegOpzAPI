@@ -324,7 +324,10 @@ class ViewDataController(Resource):
             " source_id = " + str(data['source_id']) + \
             " and qualifying_key = " + str(data['qualifying_key']) + \
             " and business_date=" + str(data['business_date']) ).fetchone()
-            cell_rule=db.query("select * from report_calc_def where cell_calc_ref='"+data['cell_calc_ref']+"'").fetchone()
+            cell_rule=db.query("select * from report_calc_def where cell_calc_ref='"+data['cell_calc_ref']+"'" + \
+            " and report_id = '" + data["report_id"] + "'" + \
+            " and sheet_id = '" + data["sheet_id"] + "'" + \
+            " and cell_id = '" + data["cell_id"] + "'").fetchone()
 
             data["cell_business_rules"]=cell_rule["cell_business_rules"]
             data["data_qualifying_rules"]=data_qual["business_rules"]
