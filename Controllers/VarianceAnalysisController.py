@@ -9,6 +9,7 @@ from Models.Document import Document
 import datetime
 import openpyxl as xls
 import Helpers.utils as util
+from Controllers.DocumentController import DocumentController as report
 from openpyxl.styles import Border, Side, PatternFill, Font, GradientFill, Alignment, Protection
 from openpyxl.utils import get_column_letter
 import Helpers.utils as util
@@ -34,7 +35,8 @@ class VarianceAnalysisController(Resource):
             report_id=request.args.get('report_id')
             first_reporting_date=request.args.get('first_date')
             subsequent_reporting_date=request.args.get('subsequent_date')
-            return self.get_variance_report(report_id,first_reporting_date,subsequent_reporting_date)
+            variance_tolerance=request.args.get('variance_tolerance')
+            return self.get_variance_report(report_id,first_reporting_date,subsequent_reporting_date,variance_tolerance)
 
     def get_country_suggestion_list(self):
         db=DatabaseHelper()
@@ -79,114 +81,38 @@ class VarianceAnalysisController(Resource):
         else:
             return date_list
 
-    def get_variance_report(self,report_id, first_reporting_date,subsequent_reporting_date, cell_format_yn='Y'):
+    def get_variance_report(self,report_id, first_reporting_date,subsequent_reporting_date, variance_tolerance=0):
 
-        db = DatabaseHelper()
-
-        sheets = db.query("select distinct sheet_id from report_def where report_id=%s", (report_id,)).fetchall()
-
-
-        sheet_d_list = []
-        for sheet in sheets:
-            matrix_list = []
-            row_attr = {}
-            col_attr = {}
-
-            report_template = db.query(
-                "select cell_id,cell_render_def,cell_calc_ref from report_def where report_id=%s and sheet_id=%s",
-                (report_id, sheet["sheet_id"])).fetchall()
-
-            for row in report_template:
-                cell_d = {}
-                if row["cell_render_def"] == 'STATIC_TEXT':
-                    cell_d['cell'] = row['cell_id']
-                    cell_d['type']='STATIC_TEXT'
-                    cell_d['value'] = row['cell_calc_ref']
-                    matrix_list.append(cell_d)
-
-
-                elif row['cell_render_def'] == 'MERGED_CELL':
-                    start_cell, end_cell = row['cell_id'].split(':')
-                    cell_d['cell'] = start_cell
-                    cell_d['type']='STATIC_TEXT'
-                    cell_d['value'] = row['cell_calc_ref']
-                    cell_d['merged'] = end_cell
-                    matrix_list.append(cell_d)
-
-
-                elif row['cell_render_def'] == 'ROW_HEIGHT':
-                    if row['cell_calc_ref'] == 'None':
-                        row_height = '12.5'
+        self.report_id = report_id
+        first_report = report.render_report_json(self,reporting_date=first_reporting_date,cell_format_yn='Y')
+        subsequent_report = report.render_report_json(self,reporting_date=subsequent_reporting_date,cell_format_yn='Y')
+        for first_sheet,subsequent_sheet in zip(first_report,subsequent_report):
+            for first_cell,subsequent_cell in zip(first_sheet['matrix'],subsequent_sheet['matrix']):
+                first_value = 0
+                subsequent_value = 0
+                if first_cell['origin'] == "DATA" :
+                    first_value = first_cell['value']
+                    subsequent_value = subsequent_cell['value']
+                    first_cell['displayattribute'] = "variance"
+                    first_cell['first_value'] = first_value
+                    first_cell['subsequent_value'] = subsequent_value
+                    first_cell['title'] = "P1: " + str(first_value) + " , P2: " + str(subsequent_value)
+                    if first_value == subsequent_value or (first_value ==0 and subsequent_value == 0):
+                        first_cell['variance'] = 0
+                        first_cell['classname'] = ""
+                    elif first_value ==0 and subsequent_value != 0:
+                        first_cell['variance'] = "+ ∞"
+                        first_cell['classname'] = "red fa fa-caret-up"
+                    # elif first_value !=0 and subsequent_value == 0:
+                    #     first_cell['variance'] = "- ∞"
+                    #     first_cell['classname'] = "red fa fa-caret-down"
                     else:
-                        row_height = row['cell_calc_ref']
-                    row_attr[row['cell_id']] = {'height': row_height}
+                        variance = util.round_value((subsequent_value/first_value -1)*100,"DECIMAL2")
+                        first_cell['variance'] = variance
+                        first_cell['classname'] = "red "  if abs(variance) > float(variance_tolerance) else "green "
+                        first_cell['classname'] += " fa fa-caret-up" if variance > 0 else " fa fa-caret-down"
+                    # else:
+                    #     first_cell['variance'] = 0
+                    #     first_cell['classname'] = ""
 
-
-                elif row['cell_render_def'] == 'COLUMN_WIDTH':
-                    if row['cell_calc_ref'] == 'None':
-                        col_width = '13.88'
-                    else:
-                        col_width = row['cell_calc_ref']
-                    col_attr[row['cell_id']] = {'width': col_width}
-
-            data = db.query('select b.report_id,b.sheet_id,b.cell_id,a.cell_summary,\
-                                            b.reporting_scale,b.rounding_option,a.reporting_date \
-                                            from report_comp_agg_def b left join report_summary a\
-                                            on a.report_id=b.report_id and\
-                                            a.sheet_id=b.sheet_id and \
-                                            a.cell_id=b.cell_id \
-                                            where b.report_id=%s \
-                                            and b.sheet_id=%s\
-                                            and a.reporting_date in(%s,%s)\
-                                            order by b.report_id,b.sheet_id,b.cell_id',
-                            (report_id, sheet["sheet_id"],first_reporting_date,subsequent_reporting_date)).fetchall()
-
-            for row in data:
-                cell_d={}
-                if cell_format_yn == 'Y':
-                    # print(row["cell_id"],row["cell_summary"])
-                    cell_summary = util.round_value(
-                        float(util.if_null_zero(row["cell_summary"])) / float(row["reporting_scale"]),
-                        row["rounding_option"])
-
-                else:
-                    cell__summary= float(util.if_null_zero(row["cell_summary"]))
-
-                idx = list(map(itemgetter('cell'), matrix_list)).index(row['cell_id']) \
-                    if row['cell_id'] in map(itemgetter('cell'), matrix_list) else None
-
-                if idx==None:
-                    cell_d['cell']=row['cell_id']
-                    cell_d['type']='DATA_VALUE'
-                    cell_d['value']={str(row['reporting_date']):cell_summary}
-                    #print(cell_d)
-                    matrix_list.append(cell_d)
-                else:
-                    if matrix_list[idx]['type'] != 'DATA_VALUE':
-                        #Already exits in te matrix list as STATIC_TEXT, so realign it as DATA_VALUE
-                        matrix_list[idx]['type']='DATA_VALUE'
-                        matrix_list[idx]['value']={str(row['reporting_date']):cell_summary}
-                    else:
-                        matrix_list[idx]['value'][str(row['reporting_date'])]=cell_summary
-                        #print(idx,row['reporting_date'],matrix_list[idx]['value'])
-
-                        if matrix_list[idx]['value'][first_reporting_date]==0 :
-                            matrix_list[idx]['value'][first_reporting_date] = 1e-15
-
-                        if matrix_list[idx]['value'][subsequent_reporting_date] == 0:
-                            matrix_list[idx]['value'][subsequent_reporting_date] = 1e-15
-
-                        matrix_list[idx]['pct']=util.round_value((matrix_list[idx]['value'][subsequent_reporting_date]/
-                                                         matrix_list[idx]['value'][first_reporting_date] -1)*100,row['rounding_option'])
-
-
-
-            sheet_d = {}
-            sheet_d['sheet'] = sheet['sheet_id']
-            # print(sheet_d['sheet'])
-            sheet_d['matrix'] = matrix_list
-            sheet_d['row_attr'] = row_attr
-            sheet_d['col_attr'] = col_attr
-            sheet_d_list.append(sheet_d)
-
-        return sheet_d_list
+        return first_report

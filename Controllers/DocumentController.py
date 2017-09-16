@@ -205,6 +205,7 @@ class DocumentController(Resource):
                 if row["cell_render_def"] == 'STATIC_TEXT':
                     cell_d['cell'] = row['cell_id']
                     cell_d['value'] = row['cell_calc_ref']
+                    cell_d['origin'] = "TEMPLATE"
                     matrix_list.append(cell_d)
 
 
@@ -213,6 +214,7 @@ class DocumentController(Resource):
                     cell_d['cell'] = start_cell
                     cell_d['value'] = row['cell_calc_ref']
                     cell_d['merged'] = end_cell
+                    cell_d['origin'] = "TEMPLATE"
                     matrix_list.append(cell_d)
 
 
@@ -247,6 +249,7 @@ class DocumentController(Resource):
 
                 cell_d['cell']=row['cell_id']
                 cell_d['value']=cell_summary
+                cell_d['origin'] = "DATA"
                 matrix_list.append(cell_d)
 
 
