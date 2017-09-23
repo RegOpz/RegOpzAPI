@@ -16,6 +16,7 @@ from Controllers.DefChangeController import DefChangeController
 from Controllers.DataChangeController import DataChangeController
 from Controllers.LoadDataController import LoadDataController
 from Controllers.ViewReportController import ViewReportController
+from Controllers.LoadDataFileController import LoadDataFileController
 from flask_cors import CORS, cross_origin
 
 api.add_resource(Info, apiPath + "/info")
@@ -273,6 +274,10 @@ api.add_resource(LoadDataController,
     endpoint="load_data_ep"
 )
 
+api.add_resource(LoadDataFileController,
+    apiPath + '/view-data-management/load-data',
+    endpoint='load_data'
+)
 
 
 
