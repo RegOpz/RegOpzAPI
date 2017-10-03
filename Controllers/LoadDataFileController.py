@@ -17,4 +17,4 @@ class LoadDataFileController(Resource):
                     ':', '_') + '_' + secure_filename(file.filename)
 
             file.save(os.path.join(UPLOAD_FOLDER, filename).replace('\\', '/'))
-            return {'msg': 'Data Uploaded Successfully', 'filename': filename}, 200
+            return {'msg': 'File Transferred Successfully', 'filename': filename}, 200
