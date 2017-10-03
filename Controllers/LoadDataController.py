@@ -93,6 +93,7 @@ class LoadDataController(Resource):
         except Exception as e:
             app.logger.error(e)
             return {"msg":e},500
+            
 
 
     def create_data_catalog(self,source_id,business_date,file_name,number_of_rows,header_row,file_load_status):
