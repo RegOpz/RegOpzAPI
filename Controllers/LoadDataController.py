@@ -92,8 +92,8 @@ class LoadDataController(Resource):
                 return {'msg': 'Data load failure, please check.', 'filename': data_file}, 400
         except Exception as e:
             app.logger.error(e)
-            return {"msg":e},500
-            
+            return {"msg":e, 'filename': data_file},500
+
 
 
     def create_data_catalog(self,source_id,business_date,file_name,number_of_rows,header_row,file_load_status):
