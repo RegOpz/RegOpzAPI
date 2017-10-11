@@ -1,5 +1,6 @@
 from Controllers.Info import Info
 from Controllers.DocumentController import DocumentController
+from Controllers.ReportTemplateController import ReportTemplateController
 from Controllers.MaintainBusinessRulesController import MaintainBusinessRulesController
 from Controllers.MaintainReportRulesController import MaintainReportRulesController
 from Controllers.UserController import UserController
@@ -14,18 +15,25 @@ from Controllers.MaintainSourcesController import MaintainSourcesController
 from Controllers.DefChangeController import DefChangeController
 from Controllers.DataChangeController import DataChangeController
 from Controllers.LoadDataController import LoadDataController
+from Controllers.ViewReportController import ViewReportController
 from flask_cors import CORS, cross_origin
 app = Flask(__name__)
 CORS(app)
 api = Api(app)
 apiPath = APIConfig.APIPATH
 api.add_resource(Info, apiPath + "/info")
-api.add_resource(DocumentController,
+api.add_resource(ReportTemplateController,
     apiPath + "/document",
     apiPath + "/document/<string:doc_id>"
 )
-api.add_resource(DocumentController,
-    apiPath + "/document/get-report-list",
+
+api.add_resource(ViewReportController,
+    apiPath + "/view-report/report",
+    apiPath + "/view-report/report/<string:report_id>",
+    endpoint = "view_report_ep"
+)
+api.add_resource(ViewReportController,
+    apiPath + "/view-report/get-report-list",
     endpoint = "report_list_ep"
 )
 api.add_resource(DocumentController,
@@ -40,16 +48,16 @@ api.add_resource(DocumentController,
     apiPath + "/document/get-date-heads-for-report",
     endpoint = "get_date_heads_for_report_ep"
 )
-api.add_resource(DocumentController,
+api.add_resource(ReportTemplateController,
     apiPath + "/document/get-report-template-suggestion-list",
     endpoint = "get_report_template_suggestion_list_ep"
 )
-api.add_resource(DocumentController,
-    apiPath + "/document/get-report-export-to-excel",
+api.add_resource(ViewReportController,
+    apiPath + "/view-report/get-report-export-to-excel",
     endpoint = "get_report_export_to_excel_ep"
 )
-api.add_resource(DocumentController,
-    apiPath + "/document/get-report-rule-export-to-excel",
+api.add_resource(MaintainReportRulesController,
+    apiPath + "/report-rule/get-report-rule-export-to-excel",
     endpoint = "get_report_rule_export_to_excel_ep"
 )
 api.add_resource(MaintainBusinessRulesController,
