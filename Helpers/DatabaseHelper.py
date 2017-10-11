@@ -1,6 +1,7 @@
 import mysql.connector
 from Configs import dbconfig
 from Helpers.CustomMySQLConverter import CustomMySQLConverterClass
+from mysql.connector.errors import Error
 
 class DatabaseHelper(object):
     def __init__(self):
@@ -16,12 +17,17 @@ class DatabaseHelper(object):
         self.cnx.set_converter_class(CustomMySQLConverterClass)
 
     def query(self,queryString, queryParams=None):
-        if queryParams != None:
-            self.cursor.execute(queryString,queryParams)
-        else:
-            self.cursor.execute(queryString)
-        print(self.cursor.statement)
-        return self.cursor
+        try:
+            if queryParams != None:
+                self.cursor.execute(queryString,queryParams)
+            else:
+                self.cursor.execute(queryString)
+            #print(self.cursor.statement)
+            return self.cursor
+        except Error as e:
+            print(self.cursor.statement)
+            print(e)
+            raise(e)
 
     def connection(self):
         return self.cnx
@@ -30,20 +36,40 @@ class DatabaseHelper(object):
         return self.cursor
 
     def transact(self,queryString, queryParams=()):
-        self.cursor.execute(queryString, queryParams)
-        print(self.cursor.statement)
-        return self.cursor.lastrowid
+        try:
+            self.cursor.execute(queryString, queryParams)
+            #print(self.cursor.statement)
+            return self.cursor.lastrowid
+        except Error as e:
+            print(self.cursor.statement)
+            print(e)
+            raise(e)
+
 
     def commit(self):
-        self.cnx.commit()
+        try:
+            self.cnx.commit()
+        except Error as e:
+            print(e)
+            raise(e)
 
     def rollback(self):
-        self.cnx.rollback()
+        try:
+            self.cnx.rollback()
+        except Error as e:
+            print(e)
+            raise(e)
 
     def transactmany(self,queryString,queryParams):
-        self.cursor.executemany(queryString,queryParams)
-        #print(self.cursor.statement)
-        return self.cursor.lastrowid
+        try:
+            self.cursor.executemany(queryString,queryParams)
+            #print(self.cursor.statement)
+            return self.cursor.lastrowid
+        except Error as e:
+            print(self.cursor.statement)
+            print(e)
+            raise(e)
+
 
     def __del__(self):
         self.commit()
