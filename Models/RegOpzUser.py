@@ -1,3 +1,4 @@
+from app import *
 from Helpers.DatabaseHelper import DatabaseHelper
 from flask import url_for, request
 from Models.Token import Token
@@ -47,7 +48,7 @@ class RegOpzUser(object):
             self.dbhelper.commit()
             return { "msg": "Added user successfully, please contact Admin to activate" },200
         except Exception as e:
-            print(e)
+            app.logger.error("E: Models: RegOpzUser: Post:", e)
             return { "msg": "Cannot add this user, please review the details" },400
 
     def get(self, userId = None, update = False):
@@ -96,7 +97,7 @@ class RegOpzUser(object):
                 self.dbhelper.commit()
                 return { "msg": "Successfully updated details." },200
             except Exception as e:
-                print(e)
+                app.logger.error("E: Models: RegOpzUser: Update:", e)
                 return { "msg": "Cannot update this user, please review the details" },400
         return NO_USER_FOUND
 
@@ -125,7 +126,8 @@ class RegOpzUser(object):
                     rowId = self.dbhelper.transact(queryString, queryParams)
                     self.dbhelper.commit()
                     return { "msg": "Status updated successfully." },200
-                except Exception:
+                except Exception as e:
+                    app.logger.error("E: Models: RegOpzUser: ChangeStatus:", e)
                     return { "msg": "Failed to update status." },200
             return { "msg": "Invalid credentials recieved." },301
 
