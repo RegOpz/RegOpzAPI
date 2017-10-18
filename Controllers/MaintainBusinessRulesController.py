@@ -1,3 +1,4 @@
+from app import *
 from flask import Flask, jsonify, request
 from flask_restful import Resource
 from Helpers.DatabaseHelper import DatabaseHelper
@@ -12,9 +13,10 @@ from Constants.Status import *
 class MaintainBusinessRulesController(Resource):
 	def __init__(self):
 		self.dbOps=DatabaseOps('def_change_log')
+		self.db=DatabaseHelper()
 
 	def get(self, id=None, source_id=None, page=0, col_name=None,business_rule=None):
-		print(request.endpoint)
+		app.logger.info(request.endpoint)
 		if request.endpoint == "business_rule_export_to_csv_ep":
 			source = request.args.get('source_id')
 			return self.export_to_csv(source_id=source)
@@ -23,10 +25,10 @@ class MaintainBusinessRulesController(Resource):
 		if request.endpoint == "business_rule_linkage_multiple_ep":
 			source = request.args.get('source_id')
 			rules = request.args.get('rules')
-			#print(source,rules)
+			#app.logger.info(source,rules)
 			return self.list_reports_for_rule_list(source_id=source,business_rule_list=rules)
 		if request.endpoint == "business_rule_drill_down_rules_ep":
-			print('Inside rules drilldown ep')
+			app.logger.info('Inside rules drilldown ep')
 			source = request.args.get('source_id')
 			rules = request.args.get('rules')
 			page = request.args.get('page')
@@ -46,6 +48,7 @@ class MaintainBusinessRulesController(Resource):
 		elif col_name:
 			direction = request.args.get('direction')
 			return self.render_business_rules_json(page, "source_id",(col_name,direction))
+
 	def post(self,page=None):
 
 		if request.endpoint == "business_rules_ep_filtered":
@@ -73,12 +76,11 @@ class MaintainBusinessRulesController(Resource):
 	# 	res = self.delete_business_rules(id)
 	# 	return res
 	def render_business_rules_json(self, page=0, source_id="source_id", order=None):
-		db = DatabaseHelper()
 		startPage =  int(page)*100
 		business_rules_dict = {}
 		business_rules_list = []
 		if order:
-			cur = db.query('select * from business_rules where source_id=' + str(source_id) + ' order by ' + order[0] + ' ' + order[1] + ' limit ' + str(startPage) + ', 100')
+			cur = self.db.query('select * from business_rules where source_id=' + str(source_id) + ' order by ' + order[0] + ' ' + order[1] + ' limit ' + str(startPage) + ', 100')
 		else:
 			# cur = db.query('select * from business_rules where source_id=' + str(source_id) + ' limit ' + str(startPage) + ', 100')
 			cur = db.query('select * from business_rules where source_id=' + str(source_id))
@@ -89,23 +91,23 @@ class MaintainBusinessRulesController(Resource):
 		for br in business_rules:
 			business_rules_list.append(br)
 		business_rules_dict['rows'] = business_rules_list
-		count = db.query('select count(*) as count from business_rules where source_id=' + str(source_id)).fetchone()
+		count = self.db.query('select count(*) as count from business_rules where source_id=' + str(source_id)).fetchone()
 		business_rules_dict['count'] = count['count']
 		json_dump = business_rules_dict
 		return json_dump
+
 	def get_business_rules_filtered(self,filter_conditions):
 		filter_string = ""
 		for filter_condition in filter_conditions:
 			filter_string = filter_string + " AND " + filter_condition['field_name'] + "='" + filter_condition['value'] + "'"
-		db = DatabaseHelper()
 		query = 'select * from business_rules where 1' + filter_string
-		cur = db.query(query)
+		cur = self.db.query(query)
 		data = cur.fetchall()
 		if data:
 			return data
 		return NO_BUSINESS_RULE_FOUND
+
 	def get_business_rules_list_by_source(self,rules,source,page):
-		db = DatabaseHelper()
 
 		if page is None:
 			page = 0
@@ -117,10 +119,10 @@ class MaintainBusinessRulesController(Resource):
 			where_clause += ' and source_id =' + source
 		if rules is not None:
 			where_clause += ' and business_rule in (\''+rules.replace(',','\',\'')+'\')'
-		cur = db.query(sql + where_clause + " limit " + str(startPage) + ", 100")
+		cur = self.db.query(sql + where_clause + " limit " + str(startPage) + ", 100")
 		data = cur.fetchall()
 		cols = [i[0] for i in cur.description]
-		count = db.query(sql.replace('*','count(*) as count ') + where_clause).fetchone()
+		count = self.db.query(sql.replace('*','count(*) as count ') + where_clause).fetchone()
 		data_dict['cols'] = cols
 		data_dict['rows'] = data
 		data_dict['count'] = count['count']
@@ -130,28 +132,26 @@ class MaintainBusinessRulesController(Resource):
 		return data_dict
 
 	def render_business_rule_json(self, id):
-		db = DatabaseHelper()
 		query = 'select * from business_rules where id = %s'
-		cur = db.query(query, (id, ))
+		cur = self.db.query(query, (id, ))
 		data = cur.fetchone()
 		if data:
 			return data
 		return NO_BUSINESS_RULE_FOUND
+
 	def ret_source_data_by_id(self, table_name,id):
-	    db = DatabaseHelper()
 	    query = 'select * from ' + table_name + ' where id = %s'
-	    cur = db.query(query, (id, ))
+	    cur = self.db.query(query, (id, ))
 	    data = cur.fetchone()
 	    for k,v in data.items():
 	    	if isinstance(v,datetime):
 	    		data[k] = data[k].isoformat()
-	    		print(data[k], type(data[k]))
+	    		app.logger.info(data[k], type(data[k]))
 	    if data:
 	        return data
 	    return NO_BUSINESS_RULE_FOUND
 
 	def insert_business_rules(self, data):
-	    db = DatabaseHelper()
 
 	    table_name = data['table_name']
 	    update_info = data['update_info']
@@ -175,15 +175,18 @@ class MaintainBusinessRulesController(Resource):
 	    sql+=") values "+ placeholders
 
 	    params_tuple=tuple(params)
-	    print(sql)
-	    print(params_tuple)
-	    res=db.transact(sql,params_tuple)
-	    db.commit()
+	    app.logger.info(sql)
+	    app.logger.info(params_tuple)
+		try:
+		    res=self.db.transact(sql,params_tuple)
+		    self.db.commit()
+		except Exception as e:
+            app.logger.error(e)
+            return { "msg": e },500
 
 	    return self.ret_source_data_by_id(table_name,res)
 
 	def update_business_rules(self, data, id):
-	    db=DatabaseHelper()
 
 	    table_name=data['table_name']
 	    update_info=data['update_info']
@@ -200,39 +203,44 @@ class MaintainBusinessRulesController(Resource):
 	    params.append(id)
 	    params_tuple=tuple(params)
 
-	    print(sql)
-	    print(params_tuple)
+	    app.logger.info(sql)
+	    app.logger.info(params_tuple)
+		try:
+		    res=self.db.transact(sql,params_tuple)
 
-	    res=db.transact(sql,params_tuple)
+		    if res==0:
+		        self.db.commit()
+		        return self.ret_source_data_by_id(table_name,id)
 
-	    if res==0:
-	        db.commit()
-	        return self.ret_source_data_by_id(table_name,id)
-
-	    db.rollback()
-	    return UPDATE_ERROR
+		    self.db.rollback()
+		    return UPDATE_ERROR
+		except Exception as e:
+            app.logger.error(e)
+            return { "msg": e },500
 
 	def delete_business_rules(self, id):
-		db = DatabaseHelper()
 		sql = 'delete from business_rules where id=%s'
 		params = (id, )
-		res = db.transact(sql, params)
-		if res == 0:
-			db.commit()
-			return res
+		try:
+			res = self.db.transact(sql, params)
+			if res == 0:
+				self.db.commit()
+				return res
 
-		db.rollback()
-		return DATABASE_ERROR
+			self.db.rollback()
+			return DATABASE_ERROR
+		except Exception as e:
+            app.logger.error(e)
+            return { "msg": e },500
 
 	def export_to_csv(self, source_id='ALL'):
-		db = DatabaseHelper()
 
 		sql = 'select * from business_rules where 1=1'
 
 		if source_id != 'ALL':
 			sql += " and source_id='" + str(source_id) + "'"
 
-		cur = db.query(sql)
+		cur = self.db.query(sql)
 
 		business_rules = cur.fetchall()
 
@@ -257,10 +265,9 @@ class MaintainBusinessRulesController(Resource):
 		else:
 			return BUSINESS_RULE_EMPTY
 
-		db = DatabaseHelper()
 		sql = "select distinct report_id,sheet_id,cell_id from report_calc_def, in_use \
 		where cell_business_rules like '%," + business_rule + ",%'"
-		cur=db.query(sql)
+		cur=self.db.query(sql)
 		report_list = cur.fetchall()
 
 		return [(rpt['report_id'], rpt['sheet_id'], rpt['cell_id']) for rpt in report_list]
@@ -276,38 +283,35 @@ class MaintainBusinessRulesController(Resource):
 		else:
 			return BUSINESS_RULE_EMPTY
 
-		db=DatabaseHelper()
-
 		sql = "select report_id,sheet_id,cell_id,cell_business_rules,in_use from report_calc_def where source_id=" + str(
 			source_id)
-		cur=db.query(sql)
+		cur=self.db.query(sql)
 		data_list = cur.fetchall()
 
 		result_set = []
 		for data in data_list:
-			# print(data['cell_business_rules'])
+			# app.logger.info(data['cell_business_rules'])
 			cell_rule_list = data['cell_business_rules'].split(',')
-			# print(type(cell_rule_list))
+			# app.logger.info(type(cell_rule_list))
 			if set(business_rule_list).issubset(set(cell_rule_list)):
-				# print(data)
+				# app.logger.info(data)
 				result_set.append(data)
 
 		return result_set
 
 	def get_source_suggestion_list(self,source_id='ALL'):
 
-		db=DatabaseHelper()
 		data_dict={}
 		where_clause = ''
 
 		sql = "select source_id, source_table_name " + \
 		        " from data_source_information " + \
 				" where 1 "
-		country_suggestion = db.query(sql).fetchall()
+		country_suggestion = self.db.query(sql).fetchall()
 		if source_id is not None and source_id !='ALL':
 		     where_clause =  " and source_id = " + source_id
 
-		source = db.query(sql + where_clause).fetchall()
+		source = self.db.query(sql + where_clause).fetchall()
 
 
 		data_dict['source_suggestion'] = source
@@ -319,8 +323,7 @@ class MaintainBusinessRulesController(Resource):
 
 
 	def get_source_column_suggestion_list(self,table_name):
-		db=DatabaseHelper()
-		data_dict = db.query("describe " + table_name).fetchall()
+		data_dict = self.db.query("describe " + table_name).fetchall()
 
 		#Now build the agg column list
 		return data_dict
@@ -329,7 +332,7 @@ class MaintainBusinessRulesController(Resource):
 		py_expr_val=expr_obj['expr']
 		py_attr=expr_obj['attr']
 		py_sample=expr_obj['sample']
-		print(py_attr)
+		app.logger.info(py_attr)
 
 		if not py_attr and not py_sample:
 			status='INVALID'
@@ -348,20 +351,20 @@ class MaintainBusinessRulesController(Resource):
 				business_date = py_sample['business_date']
 				columns = py_sample['columns']
 				sample_size = py_sample['sample_size']
-				db=DatabaseHelper()
-				sample_data = db.query("select " + columns + " from " + table_name + " where business_date=" + str(business_date) + " and " + columns.replace(","," is not null and ")+ " is not null LIMIT 0," + str(sample_size)).fetchall()
+				self.db=DatabaseHelper()
+				sample_data = self.db.query("select " + columns + " from " + table_name + " where business_date=" + str(business_date) + " and " + columns.replace(","," is not null and ")+ " is not null LIMIT 0," + str(sample_size)).fetchall()
 				for data in sample_data:
 					py_items.append({"attr":data,"msg":"","status":""})
 
 			for py_item in py_items:
-				print(py_item)
+				app.logger.info(py_item)
 				py_expr = py_expr_val
 				for attr in py_item['attr'].keys():
 					py_expr=py_expr.replace("["+attr+"]","'" + str(py_item['attr'][attr]) + "'")
 				try:
 					msg=[]
 					status='VALID'
-					print(py_expr)
+					app.logger.info(py_expr)
 					val=eval(py_expr.replace("DERIVED","'DERIVED'"))
 					msg.append('Executed expression gives a value of '+str(val))
 				except:
@@ -371,6 +374,6 @@ class MaintainBusinessRulesController(Resource):
 				py_item["msg"] = msg
 				py_item["status"] = status
 
-		#print(msg[-3:])
+		#app.logger.info(msg[-3:])
 
 		return py_items
