@@ -568,3 +568,4 @@ class GenerateReportController(Resource):
                 print("Transaction Failed:", e)
         else:
             return result_set
+            
