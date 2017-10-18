@@ -1,3 +1,4 @@
+from app import *
 from Helpers.DatabaseHelper import DatabaseHelper
 from Models.UserPermission import UserPermission
 import uuid
@@ -31,7 +32,8 @@ class Token(object):
 			values = (self.tokenId, self.lease_start, self.lease_end, self.ip, self.user_agent, self.user_id, )
 			try:
 				rowid = self.dbhelper.transact(queryString, values)
-			except Exception:
+			except Exception as e:
+				app.logger.error("E: Models: Token: Create:", e)
 				return NO_USER_FOUND
 		user_permission = UserPermission().get(role)
 		if user_permission:
@@ -68,13 +70,15 @@ class Token(object):
 				salt = jwk_from_pem(fh.read().encode())
 			try:
 				token_decode = JWT().decode(extracted_token, salt)
-			except Exception:
+			except Exception as e:
+				app.logger.error("E: Models: Token: Authenticate:", e)
 				raise TypeError("Invalid Token Recieved for Authentication")
 			queryString = "SELECT user_id FROM token WHERE token=%s AND user_id=%s AND lease_end > %s"
 			queryParams = (token_decode['tokenId'], token_decode['userId'], datetime.now(), )
 			cur = self.dbhelper.query(queryString, queryParams)
 			data = cur.fetchone()
 			if data:
+				app.logger.info("I: Models: Token: New login from user", data['user_id'])
 				return data['user_id']
 			else:
 				raise ValueError("Invalid Credentials Recieved for Authentication")
