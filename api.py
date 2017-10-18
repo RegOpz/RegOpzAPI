@@ -17,11 +17,9 @@ from Controllers.DataChangeController import DataChangeController
 from Controllers.LoadDataController import LoadDataController
 from Controllers.ViewReportController import ViewReportController
 from flask_cors import CORS, cross_origin
-app = Flask(__name__)
-CORS(app)
-api = Api(app)
-apiPath = APIConfig.APIPATH
+
 api.add_resource(Info, apiPath + "/info")
+
 api.add_resource(ReportTemplateController,
     apiPath + "/document",
     apiPath + "/document/<string:doc_id>"
