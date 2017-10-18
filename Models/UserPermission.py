@@ -1,3 +1,4 @@
+from app import *
 from Helpers.DatabaseHelper import DatabaseHelper
 from Helpers.AuditHelper import AuditHelper
 from Constants.Status import *
@@ -9,7 +10,7 @@ class UserPermission(object):
         self.user_id = userId
 
     def get(self, roleId = None, inUseCheck = 'Y'):
-        print("\nRecieved GET request in Permissions",inUseCheck)
+        app.logger.info("I: Models: UserPermission: Get: \nRecieved GET request in Permissions", inUseCheck)
         queryString_1 = "SELECT * FROM roles WHERE in_use = 'Y'"
         queryParams = ()
         if roleId:
@@ -24,7 +25,6 @@ class UserPermission(object):
             queryString = "SELECT * FROM components "
             compQuery = self.dbhelper.query(queryString)
             components = compQuery.fetchall()
-            # print(components)
             componentList = []
             for component in components:
                 queryString = "SELECT p.permission_id,p.dml_allowed,p.in_use,pd.permission,dc.status " + \
@@ -38,10 +38,10 @@ class UserPermission(object):
                 permQuery = self.dbhelper.query(queryString, queryParams)
                 permissions = permQuery.fetchall()
                 for permission in permissions:
-                    #Now set the permission_id as Null for the set of permissions which are either
-                    #PENDING approval or Not in use, Not in use as these permissions are revoked or deleted
-                    #This will facilitate in UX component to disable the editing of the check box for these
-                    #set of permissions.
+                    # Now set the permission_id as Null for the set of permissions which are either
+                    # PENDING approval or Not in use, Not in use as these permissions are revoked or deleted
+                    # This will facilitate in UX component to disable the editing of the check box for these
+                    # set of permissions.
                     if (permission['in_use']=='N' and permission['status'] !='PENDING') or permission['status'] =='PENDING':
                         permission['permission_id']=None
                 if permissions:
@@ -65,7 +65,7 @@ class UserPermission(object):
 
     def post(self, entry = None, add = True):
         if entry:
-            print("\nData recieved via", "POST" if add else "DELETE", "in permissions:") #, entry)
+            app.logger.info("I: Models: UserPermission: Post: \nData recieved via", "POST" if add else "DELETE", "in permissions:") #, entry)
             self.role = entry['role']
             self.comment = entry['comment']
             self.data = entry['components']
@@ -73,14 +73,16 @@ class UserPermission(object):
             if not roleId:
                 roleId = self.setRoleId(True)
                 if roleId:
-                    print("New Role", self.role, "Added.")
+                    app.logger.info("I: Models: UserPermission: Post: New Role", self.role, "Added.")
                 else:
-                    return { "msg": "Failed to add role " + self.role},402
+                    msg = "Failed to add role " + self.role
+                    app.logger.error("E: Models: UserPermission: Post:", msg)
+                    return { "msg": msg },402
             for item in self.data:
                 self.component = item['component']
                 componentId = self.getComponentId(self.component)
                 if not componentId:
-                    print("Invalid component specified.")
+                    app.logger.error("E: Models: UserPermission: Post:", self.component)
                     continue
                 permissions = item['permissions']
                 for permission in permissions:
@@ -90,9 +92,9 @@ class UserPermission(object):
                     if permissionId:
                         rowId = self.setPermission(roleId, componentId, permissionId, add)
                         if not rowId:
-                            print("Error occured while updating permission", self.permission, "on", self.component)
+                            app.logger.error("E: Models: UserPermission: Post: Error occured while updating permission", self.permission, "on", self.component)
                     else:
-                        print("Invalid permissions given against", self.component)
+                        app.logger.error("E: Models: UserPermission: Post: Invalid permissions given against", self.component)
                         continue
             return { "msg": "Permission update successful for " + self.role },200
         else:
@@ -106,7 +108,7 @@ class UserPermission(object):
                 res = self.post(data, False)
                 rowId = self.setRoleId(False)
                 if not rowId:
-                    print("Error occured while deleting role:", role)
+                    app.logger.error("E: Models: UserPermission: Delete: Error occured while deleting role:", role)
                 return res
         return ROLE_EMPTY
 
@@ -138,7 +140,8 @@ class UserPermission(object):
                 try:
                     id = self.dbhelper.transact(queryString, queryParams)
                     self.dbhelper.commit()
-                except Exception:
+                except Exception as e:
+                    app.logger.error("E: Models: UserPermission: SetRoleID:", e)
                     return False
             return self.audit.audit_insert({ "audit_info": audit_info }, id)
         else:
@@ -187,7 +190,8 @@ class UserPermission(object):
                 try:
                     id = self.dbhelper.transact(queryString, queryParams)
                     self.dbhelper.commit()
-                except Exception:
+                except Exception as e:
+                    app.logger.error("E: Models: UserPermission: SetPermission:", e)
                     return False
             if dml == "INSERT":
                 if not in_use or in_use != 'Y':
