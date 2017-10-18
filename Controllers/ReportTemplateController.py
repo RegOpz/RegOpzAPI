@@ -1,3 +1,4 @@
+from app import *
 from flask_restful import Resource,abort
 import os
 from flask import Flask, request, redirect, url_for
@@ -62,113 +63,137 @@ class ReportTemplateController(Resource):
         return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
     def insert_report_def_catalog(self):
-        #db = DatabaseHelper()
-        count = self.db.query("select count(*) as count from report_def_catalog where report_id=%s and country=%s",\
-                            (self.report_id,self.country,)).fetchone()
-        if not count['count']:
-            res = self.db.transact("insert into report_def_catalog(report_id,country,report_description) values(%s,%s,%s)",\
-                    (self.report_id,self.country,self.report_description,))
-            self.db.commit()
-            return res
-        return 1
+        app.logger.info("Creating entry for report catalog")
+        try:
+            app.logger.info("Checking if report {} for country {} already exists in catalog".format(self.report_id,self.country))
+            count = self.db.query("select count(*) as count from report_def_catalog where report_id=%s and country=%s",\
+                                (self.report_id,self.country,)).fetchone()
+            app.logger.info("Creating catalog entry for country {} and report {}".format(self.country,self.report_id))
+            if not count['count']:
+                res = self.db.transact("insert into report_def_catalog(report_id,country,report_description) values(%s,%s,%s)",\
+                        (self.report_id,self.country,self.report_description,))
+                self.db.commit()
+                return res
+            return 1
+        except Exception as e:
+            app.logger.error("Error occured:{}".format(e))
 
     def load_report_template(self,template_file_name):
-        formula_dict = {'SUM': 'CALCULATE_FORMULA',
-                        '=SUM': 'CALCULATE_FORMULA',
-                        }
-        cell_render_ref = None
-        target_dir = UPLOAD_FOLDER + "/"
-        wb = xls.load_workbook(target_dir + template_file_name)
+        app.logger.info("Loading report template")
+        try:
+            formula_dict = {'SUM': 'CALCULATE_FORMULA',
+                            '=SUM': 'CALCULATE_FORMULA',
+                            }
+            cell_render_ref = None
+            target_dir = UPLOAD_FOLDER + "/"
+            app.logger.info("Loading {} file from {} directory".format(template_file_name,target_dir))
+            wb = xls.load_workbook(target_dir + template_file_name)
 
-        #db = DatabaseHelper()
+            #db = DatabaseHelper()
 
-        for sheet in wb.worksheets:
+            for sheet in wb.worksheets:
+                app.logger.info("Deleting definition entries for sheet {} ,report {}".format(sheet.title,self.report_id))
+                self.db.transact('delete from report_def where report_id=%s and sheet_id=%s', (self.report_id, sheet.title,))
 
-            self.db.transact('delete from report_def where report_id=%s and sheet_id=%s', (self.report_id, sheet.title,))
+                # First capture the dimensions of the cells of the sheet
+                rowHeights = [sheet.row_dimensions[r + 1].height for r in range(sheet.max_row)]
+                colWidths = [sheet.column_dimensions[get_column_letter(c + 1)].width for c in range(sheet.max_column)]
 
-            # First capture the dimensions of the cells of the sheet
-            rowHeights = [sheet.row_dimensions[r + 1].height for r in range(sheet.max_row)]
-            colWidths = [sheet.column_dimensions[get_column_letter(c + 1)].width for c in range(sheet.max_column)]
+                app.logger.info("Creating entries for row height")
+                for row, height in enumerate(rowHeights):
+                    self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
+                                 values(%s,%s,%s,%s,%s)', (self.report_id, sheet.title, str(row + 1), 'ROW_HEIGHT', str(height)))
 
-            for row, height in enumerate(rowHeights):
-                self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
-                             values(%s,%s,%s,%s,%s)', (self.report_id, sheet.title, str(row + 1), 'ROW_HEIGHT', str(height)))
+                app.logger.info("Creating entries for column width")
+                for col, width in enumerate(colWidths):
+                    self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
+                                values(%s,%s,%s,%s,%s)',
+                                (self.report_id, sheet.title, get_column_letter(col + 1), 'COLUMN_WIDTH', str(width)))
 
-            for col, width in enumerate(colWidths):
-                self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
-                            values(%s,%s,%s,%s,%s)',
-                            (self.report_id, sheet.title, get_column_letter(col + 1), 'COLUMN_WIDTH', str(width)))
+                app.logger.info("Creating entries for merged cells")
+                rng_startcell = []
+                for rng in sheet.merged_cell_ranges:
+                    # print rng
+                    startcell, endcell = rng.split(':')
+                    # print sheet.cell(startcell).border
+                    rng_startcell.append(startcell)
 
-            rng_startcell = []
-            for rng in sheet.merged_cell_ranges:
-                # print rng
-                startcell, endcell = rng.split(':')
-                # print sheet.cell(startcell).border
-                rng_startcell.append(startcell)
+                    self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
+                                values(%s,%s,%s,%s,%s)',
+                                (self.report_id, sheet.title, rng, 'MERGED_CELL', sheet[startcell].value))
 
-                self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
-                            values(%s,%s,%s,%s,%s)',
-                            (self.report_id, sheet.title, rng, 'MERGED_CELL', sheet[startcell].value))
+                app.logger.info("Creating entries for static text and formulas")
+                for all_obj in sheet['A1':util.cell_index(sheet.max_column, sheet.max_row)]:
+                    for cell_obj in all_obj:
+                        cell_ref = str(cell_obj.column) + str(cell_obj.row)
+                        if (len(rng_startcell) > 0 and cell_ref not in rng_startcell) or (len(rng_startcell) == 0):
+                            if cell_obj.value:
+                                for key in formula_dict.keys():
+                                    cell_obj_value = str(cell_obj.value)
+                                    if key in cell_obj_value:
+                                        cell_render_ref = formula_dict[key]
+                                        break
+                                    else:
+                                        cell_render_ref = 'STATIC_TEXT'
 
-            for all_obj in sheet['A1':util.cell_index(sheet.max_column, sheet.max_row)]:
-                for cell_obj in all_obj:
-                    cell_ref = str(cell_obj.column) + str(cell_obj.row)
-                    if (len(rng_startcell) > 0 and cell_ref not in rng_startcell) or (len(rng_startcell) == 0):
-                        if cell_obj.value:
-                            for key in formula_dict.keys():
-                                cell_obj_value = str(cell_obj.value)
-                                if key in cell_obj_value:
-                                    cell_render_ref = formula_dict[key]
-                                    break
-                                else:
-                                    cell_render_ref = 'STATIC_TEXT'
-
-                            self.db.transact('insert into report_def(report_id,sheet_id ,cell_id ,cell_render_def ,cell_calc_ref)\
-                                      values(%s,%s,%s,%s,%s)',
-                                        (self.report_id, sheet.title, cell_ref, cell_render_ref, cell_obj_value.strip()))
-        self.db.commit()
-        return 0
+                                self.db.transact('insert into report_def(report_id,sheet_id ,cell_id ,cell_render_def ,cell_calc_ref)\
+                                          values(%s,%s,%s,%s,%s)',
+                                            (self.report_id, sheet.title, cell_ref, cell_render_ref, cell_obj_value.strip()))
+            self.db.commit()
+            return 0
+        except Exception as e:
+            app.logger.error("Error occured:{}".format(e))
 
     def report_template_suggesstion_list(self,report_id='ALL',country='ALL'):
 
-        db=DatabaseHelper()
-        data_dict={}
-        where_clause = ''
+        app.logger.info("Getting report template list")
 
-        sql = "select distinct country from report_def_catalog where 1 "
-        country_suggestion = db.query(sql).fetchall()
-        if country is not None and country !='ALL':
-             where_clause =  " and instr('" + country.upper() + "', upper(country)) > 0"
-        if report_id is not None and report_id !='ALL':
-             where_clause +=  " and instr('" + report_id.upper() + "', upper(report_id)) > 0"
+        try:
+            #db=DatabaseHelper()
+            data_dict={}
+            where_clause = ''
 
-        country = db.query(sql + where_clause).fetchall()
-
-        # sql = "select distinct report_id from report_def_catalog"
-        # report_suggestion = db.query(sql).fetchall()
-        data_dict['country'] = country
-        for i,c in enumerate(data_dict['country']):
-            sql = "select distinct report_id from report_def_catalog where country = '" + c['country'] + "'"
+            sql = "select distinct country from report_def_catalog where 1 "
+            country_suggestion = self.db.query(sql).fetchall()
+            if country is not None and country !='ALL':
+                 where_clause =  " and instr('" + country.upper() + "', upper(country)) > 0"
             if report_id is not None and report_id !='ALL':
-                 where_clause =  " and instr(upper('" + report_id + "'), upper(report_id)) > 0"
-            report = db.query(sql + where_clause).fetchall()
-            print(data_dict['country'][i])
-            data_dict['country'][i]['report'] = report
-            where_report = ''
-            for j,r in enumerate(data_dict['country'][i]['report']):
-                sql = "select distinct report_id, valid_from, valid_to, last_updated_by from report_def where 1 "
-                where_report =  " and report_id = '" + data_dict['country'][i]['report'][j]['report_id'] + "'"
-                reportversions = db.query(sql + where_report).fetchone()
-                print(data_dict['country'][i]['report'][j])
-                data_dict['country'][i]['report'][j] = reportversions
-            print(data_dict)
-        #data_dict['report_suggestion'] = report_suggestion
-        #data_dict['country_suggestion'] = country_suggestion
+                 where_clause +=  " and instr('" + report_id.upper() + "', upper(report_id)) > 0"
 
-        if not data_dict:
-            return {"msg":"No report matched found"},404
-        else:
-            return data_dict['country']
+            app.logger.info("Getting list of countries")
+            country = self.db.query(sql + where_clause).fetchall()
+
+            # sql = "select distinct report_id from report_def_catalog"
+            # report_suggestion = db.query(sql).fetchall()
+            data_dict['country'] = country
+            for i,c in enumerate(data_dict['country']):
+                sql = "select distinct report_id from report_def_catalog where country = '" + c['country'] + "'"
+
+                if report_id is not None and report_id !='ALL':
+                     where_clause =  " and instr(upper('" + report_id + "'), upper(report_id)) > 0"
+
+                app.logger.info("Getting list of reports for country {}".format(data_dict["country"]))
+                report = self.db.query(sql + where_clause).fetchall()
+                #print(data_dict['country'][i])
+                data_dict['country'][i]['report'] = report
+                where_report = ''
+                for j,r in enumerate(data_dict['country'][i]['report']):
+                    sql = "select distinct report_id, valid_from, valid_to, last_updated_by from report_def where 1 "
+                    where_report =  " and report_id = '" + data_dict['country'][i]['report'][j]['report_id'] + "'"
+                    app.logger.info("Getting different version for report {}".format(data_dict['country'][i]['report'][j]))
+                    reportversions = self.db.query(sql + where_report).fetchone()
+                    #print(data_dict['country'][i]['report'][j])
+                    data_dict['country'][i]['report'][j] = reportversions
+                #print(data_dict)
+            #data_dict['report_suggestion'] = report_suggestion
+            #data_dict['country_suggestion'] = country_suggestion
+
+            if not data_dict:
+                return {"msg":"No report matched found"},404
+            else:
+                return data_dict['country']
+        except Exception as e:
+            app.logger.error("Error occured:{}".format(e))
 
 
 

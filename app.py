@@ -2,9 +2,16 @@ from flask import Flask
 from flask_restful import Resource, Api
 from flask_cors import CORS, cross_origin
 from Configs import APIConfig
+import logging
+from logging.handlers import RotatingFileHandler
+
 app = Flask(__name__)
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://dev:harry123@ec2-52-77-112-190.ap-southeast-1.compute.amazonaws.com/RegOpz'
 CORS(app)
 api = Api(app)
 apiPath = APIConfig.APIPATH
+
+formatter = logging.Formatter("[%(asctime)s] {%(pathname)s:%(lineno)d} %(levelname)s - %(message)s")
+handler = RotatingFileHandler('foo.log', maxBytes=10000, backupCount=1)
+handler.setLevel(logging.INFO)
+handler.setFormatter(formatter)
+app.logger.addHandler(handler)
