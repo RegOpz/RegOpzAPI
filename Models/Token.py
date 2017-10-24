@@ -88,9 +88,7 @@ class Token(object):
 				return data['user_id']
 			else:
 				err = "Invalid Credentials Recieved for Authentication"
-				app.logger.error("E: Models: Token: Authenticate:", err)
-				return { "msg": err },301
 		else:
 			err = "Token Not Found for Authentication"
-			app.logger.error("E: Models: Token: Authenticate:", err)
-			return { "msg": err },301
+		app.logger.error("E: Models: Token: Authenticate:", err)
+		return { "msg": err },301
