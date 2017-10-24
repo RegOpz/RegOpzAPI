@@ -20,6 +20,7 @@ class Token(object):
 		firstname = user['first_name']
 		role = user['role']
 		try:
+			app.logger.info("I: Models: Token: Create: Getting existing Token for the User")
 			self.tokenId = self.get(user_id)
 		except ValueError:
 			self.tokenId = str(uuid.uuid4())
@@ -31,10 +32,12 @@ class Token(object):
 			queryString = "INSERT INTO token(token, lease_start, lease_end, ip, user_agent, user_id) VALUES (%s,%s,%s,%s,%s,%s)"
 			values = (self.tokenId, self.lease_start, self.lease_end, self.ip, self.user_agent, self.user_id, )
 			try:
+				app.logger.info("I: Models: Token: Create: Generating new Token for the User")
 				rowid = self.dbhelper.transact(queryString, values)
 			except Exception as e:
 				app.logger.error("E: Models: Token: Create:", e)
 				return NO_USER_FOUND
+		app.logger.info("I: Models: Token: Create: Generating Permissions for the User")
 		user_permission = UserPermission().get(role)
 		if user_permission:
 			user = {
@@ -55,6 +58,7 @@ class Token(object):
 	def get(self, userId):
 		queryString = "SELECT token FROM token WHERE user_id=%s and lease_end > %s"
 		queryParams = (userId, datetime.now(), )
+		app.logger.info("I: Models: Token: Get: Querying Token for the User in DB")
 		cur = self.dbhelper.query(queryString, queryParams)
 		data = cur.fetchone()
 		if data:
@@ -69,10 +73,12 @@ class Token(object):
 			with open('public_key', 'r') as fh:
 				salt = jwk_from_pem(fh.read().encode())
 			try:
+				app.logger.info("I: Models: Token: Authenticate: Decoding Token for the User")
 				token_decode = JWT().decode(extracted_token, salt)
 			except Exception as e:
 				app.logger.error("E: Models: Token: Authenticate:", e)
 				raise TypeError("Invalid Token Recieved for Authentication")
+			app.logger.info("I: Models: Token: Authenticate: Querying and Validating Token for the User")
 			queryString = "SELECT user_id FROM token WHERE token=%s AND user_id=%s AND lease_end > %s"
 			queryParams = (token_decode['tokenId'], token_decode['userId'], datetime.now(), )
 			cur = self.dbhelper.query(queryString, queryParams)
@@ -81,6 +87,10 @@ class Token(object):
 				app.logger.info("I: Models: Token: New login from user", data['user_id'])
 				return data['user_id']
 			else:
-				raise ValueError("Invalid Credentials Recieved for Authentication")
+				err = "Invalid Credentials Recieved for Authentication"
+				app.logger.error("E: Models: Token: Authenticate:", err)
+				return { "msg": err },301
 		else:
-			raise ValueError("Token Not Found for Authentication")
+			err = "Token Not Found for Authentication"
+			app.logger.error("E: Models: Token: Authenticate:", err)
+			return { "msg": err },301
