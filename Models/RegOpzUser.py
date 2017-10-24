@@ -44,11 +44,12 @@ class RegOpzUser(object):
         queryParams = (self.name, self.password, self.role, self.status, self.first_name,
             self.last_name, self.contact_number, self.email, self.ip, self.image,)
         try:
+            app.logger.info("I: Models: RegOpzUser: Save: Inserting a new User to DB")
             rowid = self.dbhelper.transact(queryString, queryParams)
             self.dbhelper.commit()
             return { "msg": "Added user successfully, please contact Admin to activate" },200
         except Exception as e:
-            app.logger.error("E: Models: RegOpzUser: Post:", e)
+            app.logger.error("E: Models: RegOpzUser: Save:", e)
             return { "msg": "Cannot add this user, please review the details" },400
 
     def get(self, userId = None, update = False):
@@ -58,6 +59,7 @@ class RegOpzUser(object):
         if userId:
             queryString += " AND regopzuser.name = %s"
             queryParams = (userId, )
+        app.logger.info("I: Models: RegOpzUser: Get: Querying all Users from DB")
         cur = self.dbhelper.query(queryString, queryParams)
         data = cur.fetchall()
         if data:
@@ -93,6 +95,7 @@ class RegOpzUser(object):
             queryParams = (data['role'], data['first_name'], data['last_name'], data['email'], \
                 data['contact_number'], data['status'], data['name'])
             try:
+                app.logger.info("I: Models: RegOpzUser: Update: Updating an existing User to DB")
                 rowId = self.dbhelper.transact(queryString, queryParams)
                 self.dbhelper.commit()
                 return { "msg": "Successfully updated details." },200
@@ -103,11 +106,13 @@ class RegOpzUser(object):
 
     def getUserList(self, userId = None):
         if userId:
+            app.logger.info("I: Models: RegOpzUser: GetUserList: Checking for existing Username")
             queryString = "SELECT name FROM regopzuser WHERE name=%s"
             queryParams = (userId, )
             cur = self.dbhelper.query(queryString, queryParams)
             data = cur.fetchone()
             if data:
+                app.logger.info("I: Models: RegOpzUser: GetUserList: Found existing Username")
                 return { "msg": "Username already exists.", "donotUseMiddleWare": True },200
             return {},200
 
@@ -115,6 +120,7 @@ class RegOpzUser(object):
         if userId:
             queryString = "SELECT status FROM regopzuser WHERE name=%s"
             queryParams = (userId,)
+            app.logger.info("I: Models: RegOpzUser: ChangeStatus: Querying Current status of the User")
             cur = self.dbhelper.query(queryString, queryParams)
             data = cur.fetchone()
             if data:
@@ -123,6 +129,7 @@ class RegOpzUser(object):
                 queryString = "UPDATE regopzuser SET status=%s WHERE name=%s"
                 queryParams = (nextStat, userId)
                 try:
+                    app.logger.info("I: Models: RegOpzUser: ChangeStatus: Updating status of the User")
                     rowId = self.dbhelper.transact(queryString, queryParams)
                     self.dbhelper.commit()
                     return { "msg": "Status updated successfully." },200
@@ -137,8 +144,10 @@ class RegOpzUser(object):
         queryString = "SELECT r.role, u.* FROM regopzuser u JOIN (roles r) ON (u.role_id = r.id)\
             WHERE name=%s AND password=%s AND status='Active'"
         dbhelper = DatabaseHelper()
+        app.logger.info("I: Models: RegOpzUser: Login: Verifying Username and Password of the User")
         cur = dbhelper.query(queryString, (username, password, ))
         data = cur.fetchone()
         if data:
             return Token().create(data)
+        app.logger.error("E: Models: RegOpzUser: Login: Invalid credentials recieved from User")
         return {"msg": "Login failed", "donotUseMiddleWare": True },403
