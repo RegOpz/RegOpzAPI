@@ -1,3 +1,4 @@
+from app import *
 from Helpers.DatabaseHelper import DatabaseHelper
 from flask_restful import Resource,request
 
@@ -5,9 +6,11 @@ class PermissionController(Resource):
     def get(self):
         dbhelper = DatabaseHelper()
         permissions_list = []
+        app.logger.info("I: Controller: PermissionController: Querying for available UX Components")
         queryString = "SELECT * FROM components"
         components = dbhelper.query(queryString).fetchall()
         for component in components:
+            app.logger.info("I: Controller: PermissionController: Querying for available Permissions on UX Components")
             queryString = "SELECT id AS permission_id, permission FROM permission_def \
                      WHERE component_id = %s"
             queryParams = (component['id'],)
