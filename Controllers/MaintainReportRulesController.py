@@ -94,7 +94,8 @@ class MaintainReportRulesController(Resource):
 			else:
 				return data_dict
 		except Exception as e:
-			app.logger.error("Error occured:{}".format(e))
+			app.logger.error(e)
+			return {"msg": e}, 500
 
 	def get_business_rules_suggestion_list(self,source_id='ALL'):
 
@@ -122,7 +123,8 @@ class MaintainReportRulesController(Resource):
 			else:
 				return data_dict
 		except Exception as e:
-			app.logger.error("Error occured:{}".format(e))
+			app.logger.error(e)
+			return {"msg": e}, 500
 
 	def get_agg_function_column_suggestion_list(self,table_name):
 		app.logger.info("Getting column suggestion list for agrregate function")
@@ -136,7 +138,8 @@ class MaintainReportRulesController(Resource):
 			#Now build the agg column list
 			return data_dict + data_dict_report_link
 		except Exception as e:
-			app.logger.error("Error occured:{}".format(e))
+			app.logger.error(e)
+			return {"msg": e}, 500
 
 	def get_cell_calc_ref_suggestion_list(self,report_id):
 		app.logger.info("Getting suggestion list for cell calc ref")
@@ -152,7 +155,8 @@ class MaintainReportRulesController(Resource):
 			else:
 				return data_dict
 		except Exception as e:
-			app.logger.error("Error occured:{}".format(e))
+			app.logger.error(e)
+			return {"msg": e}, 500
 
 	def get_report_audit_list(self, report_id=None, sheet_id=None, cell_id=None):
 		app.logger.info("Getting report audit list")
@@ -174,7 +178,8 @@ class MaintainReportRulesController(Resource):
 					WHERE (id,table_name) IN (" + calc_query + " UNION " + comp_query + " )"
 				return self.audit.get_audit_list(queryString, queryParams)
 		except Exception as e:
-			app.logger.error("Error occured:{}".format(e))
+			app.logger.error(e)
+			return {"msg": e}, 500
 
 	def export_rules_to_excel(self):
 		app.logger.info("Exporting report rules to excel sheet")
@@ -221,5 +226,6 @@ class MaintainReportRulesController(Resource):
 
 			return {"file_name": target_file_name}
 		except Exception as e:
-			app.logger.error("Error occured:{}".format(e))
+			app.logger.error(e)
+			return {"msg": e}, 500
 

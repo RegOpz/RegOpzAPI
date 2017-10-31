@@ -1,3 +1,4 @@
+from app import *
 from flask import Flask, jsonify, request
 from flask_restful import Resource
 from Helpers.DatabaseHelper import DatabaseHelper
@@ -25,20 +26,30 @@ class DefChangeController(Resource):
 
 
     def get_audit_list(self,id_list=None,table_name=None):
-        sql = "SELECT DISTINCT id,table_name,change_type,change_reference,\
-                                date_of_change,maker,maker_comment,checker,checker_comment,status,date_of_checking\
-                                 FROM {} WHERE 1"
-        if id_list == "id" or ((id_list is None or id_list == 'undefined') and (table_name is None or table_name=='undefined')):
-            sql += " AND status='PENDING'"
-        elif id_list is not None and id_list != 'undefined':
-            sql += " AND id IN (" + id_list + ")"
-        if table_name is not None and table_name != 'undefined':
-            sql += " AND table_name = '" + table_name + "'"
-        return self.audit.get_audit_list(sql)
+        app.logger.info("Getting audit list")
+        try:
+            sql = "SELECT DISTINCT id,table_name,change_type,change_reference,\
+                                    date_of_change,maker,maker_comment,checker,checker_comment,status,date_of_checking\
+                                     FROM {} WHERE 1"
+            if id_list == "id" or ((id_list is None or id_list == 'undefined') and (table_name is None or table_name=='undefined')):
+                sql += " AND status='PENDING'"
+            elif id_list is not None and id_list != 'undefined':
+                sql += " AND id IN (" + id_list + ")"
+            if table_name is not None and table_name != 'undefined':
+                sql += " AND table_name = '" + table_name + "'"
+            return self.audit.get_audit_list(sql)
+        except Exception as e:
+            app.logger.error(e)
+            return {"msg":e},500
 
     def get_record_detail(self,table_name,id):
-        record_detail=self.db.query("select * from "+table_name+" where id="+str(id)).fetchone()
-        return record_detail
+        app.logger.info("Getting record detail")
+        try:
+            record_detail=self.db.query("select * from "+table_name+" where id="+str(id)).fetchone()
+            return record_detail
+        except Exception as e:
+            app.logger.error(e)
+            return {"msg":e},500
 
     def audit_decision(self,data):
         if data["status"]=="REJECTED":
