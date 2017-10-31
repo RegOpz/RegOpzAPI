@@ -142,7 +142,8 @@ class ViewReportController(Resource):
             # print(json_dump)
             return json_dump
         except Exception as e:
-            app.logger.error("Error occured:{}".format(e))
+            app.logger.error(e)
+            return {"msg": e}, 500
 
     def render_report_list(self,reporting_date=None, reporting_date_start=None, reporting_date_end=None):
         #db=DatabaseHelper()
@@ -168,7 +169,8 @@ class ViewReportController(Resource):
                 data_sources['data_sources']=reports
                 return data_sources
         except Exception as e:
-            app.logger.error("Error occured:{}".format(e))
+            app.logger.error(e)
+            return {"msg": e}, 500
 
     def export_to_excel(self, reporting_date,cell_format_yn):
 
@@ -288,5 +290,6 @@ class ViewReportController(Resource):
 
             return { "file_name": target_file_name }
         except Exception as e:
-            app.logger.error("Error occured:{}".format(e))
+            app.logger.error(e)
+            return {"msg": e}, 500
 

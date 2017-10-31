@@ -76,7 +76,8 @@ class ReportTemplateController(Resource):
                 return res
             return 1
         except Exception as e:
-            app.logger.error("Error occured:{}".format(e))
+            app.logger.error(e)
+            return {"msg":e},500
 
     def load_report_template(self,template_file_name):
         app.logger.info("Loading report template")
@@ -142,7 +143,8 @@ class ReportTemplateController(Resource):
             self.db.commit()
             return 0
         except Exception as e:
-            app.logger.error("Error occured:{}".format(e))
+            app.logger.error(e)
+            return {"msg": e}, 500
 
     def report_template_suggesstion_list(self,report_id='ALL',country='ALL'):
 
@@ -193,7 +195,8 @@ class ReportTemplateController(Resource):
             else:
                 return data_dict['country']
         except Exception as e:
-            app.logger.error("Error occured:{}".format(e))
+            app.logger.error(e)
+            return {"msg": e}, 500
 
 
 

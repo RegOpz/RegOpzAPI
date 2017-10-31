@@ -1,3 +1,4 @@
+from app import *
 import mysql.connector
 from Configs import dbconfig
 from Helpers.CustomMySQLConverter import CustomMySQLConverterClass
@@ -25,8 +26,8 @@ class DatabaseHelper(object):
             #print(self.cursor.statement)
             return self.cursor
         except Error as e:
-            print(self.cursor.statement)
-            print(e)
+            app.logger.error(self.cursor.statement)
+            app.logger.error(e)
             raise(e)
 
     def connection(self):
@@ -41,8 +42,8 @@ class DatabaseHelper(object):
             #print(self.cursor.statement)
             return self.cursor.lastrowid
         except Error as e:
-            print(self.cursor.statement)
-            print(e)
+            app.logger.error(self.cursor.statement)
+            app.logger.error(e)
             raise(e)
 
 
@@ -50,14 +51,14 @@ class DatabaseHelper(object):
         try:
             self.cnx.commit()
         except Error as e:
-            print(e)
+            app.logger.error(e)
             raise(e)
 
     def rollback(self):
         try:
             self.cnx.rollback()
         except Error as e:
-            print(e)
+            app.logger.error(e)
             raise(e)
 
     def transactmany(self,queryString,queryParams):
@@ -66,8 +67,8 @@ class DatabaseHelper(object):
             #print(self.cursor.statement)
             return self.cursor.lastrowid
         except Error as e:
-            print(self.cursor.statement)
-            print(e)
+            app.logger.error(self.cursor.statement)
+            app.logger.error(e)
             raise(e)
 
 
