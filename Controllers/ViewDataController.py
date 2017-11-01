@@ -1,3 +1,4 @@
+from app import *
 from flask import Flask, jsonify, request
 from flask_restful import Resource
 import time
@@ -10,37 +11,38 @@ from datetime import datetime
 class ViewDataController(Resource):
     def __init__(self):
         self.dbOps = DatabaseOps('data_change_log')
+        self.db=DatabaseHelper()
     def get(self):
         if(request.endpoint == 'get_date_heads_ep'):
-            startDate = request.args.get('start_date') if request.args.get('start_date') != None else '19000101'
-            endDate = request.args.get('end_date') if request.args.get('end_date') != None else '39991231'
+            start_date = request.args.get('start_date') if request.args.get('start_date') != None else '19000101'
+            end_date = request.args.get('end_date') if request.args.get('end_date') != None else '39991231'
             table_name = request.args.get('table_name')
-            return self.render_data_load_dates(startDate, endDate, table_name)
+            return self.render_data_load_dates(start_date, end_date, table_name)
         if(request.endpoint == 'report_ep'):
             source_id = request.args['source_id']
             business_date = request.args['business_date']
             page = request.args['page']
-            return self.getDataSource(source_id=source_id,business_date=business_date,page=page)
+            return self.get_data_source(source_id=source_id,business_date=business_date,page=page)
         if(request.endpoint == 'table_data_ep'):
             table = request.args['table']
             filter = request.args['filter']
             page = request.args['page']
-            return self.getTableData(table=table,filter=filter,page=page)
+            return self.get_table_data(table=table,filter=filter,page=page)
         if(request.endpoint == 'get_source_ep'):
-            startDate = request.args.get('startDate') if request.args.get('startDate') != None else '19000101'
-            endDate = request.args.get('endDate') if request.args.get('endDate') != None else '39991231'
+            start_date = request.args.get('startDate') if request.args.get('startDate') != None else '19000101'
+            end_date = request.args.get('endDate') if request.args.get('endDate') != None else '39991231'
             catalog_type = request.args.get('catalog_type')
-            return self.render_data_source_list(start_business_date=startDate, end_business_date=endDate, catalog_type=catalog_type)
+            return self.render_data_source_list(start_business_date=start_date, end_business_date=end_date, catalog_type=catalog_type)
         if(request.endpoint == 'report_linkage_ep'):
             source_id = request.args.get("source_id")
             qualifying_key = request.args.get("qualifying_key")
             business_date = request.args.get("business_date")
             return self.list_reports_for_data(source_id=source_id,qualifying_key=qualifying_key,business_date=business_date)
         if (request.endpoint == 'report_export_csv_ep'):
-            tableName = request.args.get("table_name")
-            businessref = request.args.get("business_ref")
+            table_name = request.args.get("table_name")
+            business_ref = request.args.get("business_ref")
             sql = request.args.get("sql")
-            return self.export_to_csv(tableName,businessref,sql)
+            return self.export_to_csv(table_name,business_ref,sql)
 
     def put(self, id=None):
         data = request.get_json(force=True)
@@ -71,285 +73,296 @@ class ViewDataController(Resource):
         return res
 
     def delete_data(self,business_date,table_name,id):
-        db=DatabaseHelper()
-        sql="delete from "+table_name +" where business_date = %s and id=%s"
-        print(sql)
+        app.logger.info("Deleting data")
+        try:
+            sql="delete from {} where business_date = %s and id=%s".format(table_name)
+            #print(sql)
 
-        params=(business_date,id,)
-        print(params)
-        res=db.transact(sql,params)
+            params=(business_date,id,)
+            #print(params)
+            res=self.db.transact(sql,params)
 
-        return res
+            return res
+        except Exception as e:
+            app.logger.error(e)
+            return {"msg":e},500
 
 
     def insert_data(self,data):
 
-        db = DatabaseHelper()
+        app.logger.info("Inseting data")
+        try:
+            table_name = data['table_name']
+            update_info = data['update_info']
+            update_info_cols = update_info.keys()
+            business_date=data['business_date']
 
-        table_name = data['table_name']
-        update_info = data['update_info']
-        update_info_cols = update_info.keys()
-        business_date=data['business_date']
+            sql="insert into "+table_name + "("
+            placeholders="("
+            params=[]
 
-        sql="insert into "+table_name + "("
-        placeholders="("
-        params=[]
+            for col in update_info_cols:
+                sql+=col+","
+                placeholders+="%s,"
+                if col=='id':
+                    params.append(None)
+                else:
+                    params.append(update_info[col])
 
-        for col in update_info_cols:
-            sql+=col+","
-            placeholders+="%s,"
-            if col=='id':
-                params.append(None)
-            else:
-                params.append(update_info[col])
+            placeholders=placeholders[:len(placeholders)-1]
+            placeholders+=")"
+            sql=sql[:len(sql)-1]
+            sql+=") values "+ placeholders
 
-        placeholders=placeholders[:len(placeholders)-1]
-        placeholders+=")"
-        sql=sql[:len(sql)-1]
-        sql+=") values "+ placeholders
+            params_tuple=tuple(params)
+            #print(sql)
+            #print(params_tuple)
+            res=self.db.transact(sql,params_tuple)
+            self.db.commit()
 
-        params_tuple=tuple(params)
-        #print(sql)
-        #print(params_tuple)
-        res=db.transact(sql,params_tuple)
-        db.commit()
-
-        return self.ret_source_data_by_id(table_name,business_date,res)
+            return self.ret_source_data_by_id(table_name,business_date,res)
+        except Exception as e:
+            app.logger.error(e)
+            return {"msg":e},500
 
     def update_data(self,data,id):
-        db=DatabaseHelper()
+        app.logger.info("Updating data")
+        try:
+            table_name=data['table_name']
+            update_info=data['update_info']
+            update_info_cols=update_info.keys()
+            business_date=data['business_date']
 
-        table_name=data['table_name']
-        update_info=data['update_info']
-        update_info_cols=update_info.keys()
-        business_date=data['business_date']
+            sql= 'update '+table_name+ ' set '
+            params=[]
+            for col in update_info_cols:
+                sql+=col +'=%s,'
+                params.append(update_info[col])
 
-        sql= 'update '+table_name+ ' set '
-        params=[]
-        for col in update_info_cols:
-            sql+=col +'=%s,'
-            params.append(update_info[col])
+            sql=sql[:len(sql)-1]
+            sql+=" where business_date =%s and id=%s"
+            params.append(business_date)
+            params.append(id)
+            params_tuple=tuple(params)
 
-        sql=sql[:len(sql)-1]
-        sql+=" where business_date =%s and id=%s"
-        params.append(business_date)
-        params.append(id)
-        params_tuple=tuple(params)
+            #print(sql)
+            #print(params_tuple)
 
-        #print(sql)
-        #print(params_tuple)
+            res=self.db.transact(sql,params_tuple)
 
-        res=db.transact(sql,params_tuple)
+            if res==0:
+                self.db.commit()
+                return self.ret_source_data_by_id(table_name,business_date,id)
 
-        if res==0:
-            db.commit()
-            return self.ret_source_data_by_id(table_name,business_date,id)
-
-        db.rollback()
-        return UPDATE_ERROR
+            self.db.rollback()
+            return UPDATE_ERROR
+        except Exception as e:
+            app.logger.error(e)
+            return {"msg":e},500
 
     def ret_source_data_by_id(self, table_name,business_date,id):
-        db = DatabaseHelper()
-        query = 'select * from ' + table_name + ' where business_date = %s and id = %s'
-        cur = db.query(query, (business_date,id, ))
-        data = cur.fetchone()
-        if data:
-            return data
-        return NO_BUSINESS_RULE_FOUND
+        app.logger.info("Getting source data by id")
+        try:
+            query = 'select * from {} where business_date = %s and id = %s'.format(table_name)
+            cur = self.db.query(query, (business_date,id, ))
+            data = cur.fetchone()
+            if data:
+                return data
+            return NO_BUSINESS_RULE_FOUND
+        except Exception as e:
+            app.logger.error(e)
+            return {"msg":e},500
 
-    def getDataSource(self,**kwargs):
-        parameter_list = ['source_id', 'business_date', 'page']
+    def get_data_source(self,source_id,business_date,page):
 
-        if set(parameter_list).issubset(set(kwargs.keys())):
-            source_id = kwargs['source_id']
-            business_date = kwargs['business_date']
-            page = kwargs['page']
-        else:
-            print("Please supply parameters: " + str(parameter_list))
-        db = DatabaseHelper()
-        cur = db.query(
-            "select source_table_name from data_source_information where source_id='" + str(source_id) + "'")
-        table = cur.fetchone()
+        #db = DatabaseHelper()
+        app.logger.info("Getting data source")
+        try:
+            app.logger.info("Getting source table name ")
+            cur =self.db.query(
+                "select source_table_name from data_source_information where source_id={}".format(source_id))
+            table = cur.fetchone()
 
-        startPage = int(page) * 100
-        data_dict = {}
-        cur = db.query("select * from " + table['source_table_name'] +
-                       " where business_date='" + business_date + "' limit " + str(startPage) + ", 100")
-        data = cur.fetchall()
-        cols = [i[0] for i in cur.description]
-        count = db.query('select count(*) as count from ' +
-                         table['source_table_name'] +
-                         ' where business_date=\'' + business_date + '\'').fetchone()
-        sql = "select * from " + table['source_table_name'] + \
-                       " where business_date='" + business_date + "'"
-        data_dict['cols'] = cols
-        data_dict['rows'] = data
-        data_dict['count'] = count['count']
-        data_dict['table_name'] = table['source_table_name']
-        data_dict['sql'] = sql
+            start_page = int(page) * 100
+            data_dict = {}
+            app.logger.info("Getting data")
+            cur = self.db.query("select * from  {0} where business_date='{1}' limit {2}, 100".format( table['source_table_name'] ,business_date,start_page))
+            data = cur.fetchall()
+            cols = [i[0] for i in cur.description]
+            count = self.db.query("select count(*) as count from {0} where business_date='{1}'".format( table['source_table_name'],business_date)).fetchone()
+            sql = "select * from {0} where business_date='{1}'".format( table['source_table_name'] ,business_date )
+            data_dict['cols'] = cols
+            data_dict['rows'] = data
+            data_dict['count'] = count['count']
+            data_dict['table_name'] = table['source_table_name']
+            data_dict['sql'] = sql
 
-        # print(data_dict)
-        return data_dict
+            # print(data_dict)
+            return data_dict
+        except Exception as e:
+            app.logger.error(e)
+            return {"msg":e},500
 
-    def getTableData(self,**kwargs):
-        parameter_list = ['table', 'filter', 'page']
+    def get_table_data(self,table,filter,page):
+        app.logger.info("Getting table data")
 
-        print(kwargs)
-        if set(parameter_list).issubset(set(kwargs.keys())):
-            table = kwargs['table']
-            filter = kwargs['filter']
-            page = kwargs['page']
-        else:
-            print("Please supply parameters: " + str(parameter_list))
-        db = DatabaseHelper()
+        try:
+            if page is None:
+                page = 0
+            start_page = int(page) * 100
+            if filter is None :
+                filter = '1'
 
-        if page is None:
-            page = 0
-        startPage = int(page) * 100
-        if filter is None :
-            filter = '1'
+            data_dict = {}
+            sql = "select * from {0} where 1 and {1} limit {2},100".format(table ,filter ,start_page)
 
-        data_dict = {}
-        sql = "select * from " + table + \
-                       " where 1 and " + filter + " limit " + str(startPage) + ", 100"
-        cur = db.query(sql)
-        data = cur.fetchall()
-        for i,d in enumerate(data):
-            print('Processing index ',i)
-            for k,v in d.items():
-                if isinstance(v,datetime):
-                    d[k] = d[k].isoformat()
-                    print(d[k], type(d[k]))
+            app.logger.info("Getting 100 rows from table")
+            cur = self.db.query(sql)
+            data=cur.fetchall()
 
-        cols = [i[0] for i in cur.description]
-        count = db.query(sql.replace('*','count(*) as count ')).fetchone()
+            for i,d in enumerate(data):
+                for k,v in d.items():
+                    if isinstance(v,datetime):
+                        d[k] = d[k].isoformat()
 
-        data_dict['cols'] = cols
-        data_dict['rows'] = data
-        data_dict['count'] = count['count']
-        data_dict['table_name'] = table
-        data_dict['sql'] = sql
 
-        # print(data_dict)
-        return data_dict
+            cols = [i[0] for i in cur.description]
+            app.logger.info("Getting count from table")
+            count = self.db.query(sql.replace('*','count(*) as count ')).fetchone()
+
+            data_dict['cols'] = cols
+            data_dict['rows'] = data
+            data_dict['count'] = count['count']
+            data_dict['table_name'] = table
+            data_dict['sql'] = sql
+
+            # print(data_dict)
+            return data_dict
+        except Exception as e:
+            app.logger.error(e)
+            return {"msg":e},500
 
     def render_data_load_dates(self,start_business_date='19000101',end_business_date='39991231',catalog_table='data_catalog'):
+        app.logger.info("Getting data load dates")
+        try:
 
-        month_lookup={ '01': 'January',
-                       '02':'February',
-                       '03':'March',
-                       '04':'April',
-                       '05':'May',
-                       '06':'June',
-                       '07':'July',
-                       '08':'August',
-                       '09':'Sepember',
-                       '10':'October',
-                       '11':'November',
-                       '12':'December'
-                       }
-        db = DatabaseHelper()
-        if catalog_table == 'data_catalog':
-            sqlQuery = "select distinct business_date from data_catalog where business_date between "+ start_business_date + " and " + end_business_date + " order by business_date"
-        if catalog_table == 'report_catalog':
-            sqlQuery = "select distinct as_of_reporting_date as business_date from report_catalog where as_of_reporting_date between "+ start_business_date + " and " + end_business_date + " order by as_of_reporting_date"
+            month_lookup={ '01': 'January',
+                           '02':'February',
+                           '03':'March',
+                           '04':'April',
+                           '05':'May',
+                           '06':'June',
+                           '07':'July',
+                           '08':'August',
+                           '09':'Sepember',
+                           '10':'October',
+                           '11':'November',
+                           '12':'December'
+                           }
+            #db = DatabaseHelper()
+            if catalog_table == 'data_catalog':
+                sql = "select distinct business_date from data_catalog where business_date between "+ start_business_date + " and " + end_business_date + " order by business_date"
+            if catalog_table == 'report_catalog':
+                sql = "select distinct as_of_reporting_date as business_date from report_catalog where as_of_reporting_date between "+ start_business_date + " and " + end_business_date + " order by as_of_reporting_date"
 
-        #print(catalog_table,date_column)
+            app.logger.info("Getting data load dates from catalog")
+            catalog=self.db.query(sql).fetchall()
 
-        catalog=db.query(sqlQuery).fetchall()
+            catalog_list=[]
 
-        catalog_list=[]
+            for cat in catalog:
+                year=cat['business_date'][:4]
+                month_num=cat['business_date'][4:6]
+                bus_date=cat['business_date'][6:]
+                month=month_lookup[month_num]
 
-        for cat in catalog:
-            year=cat['business_date'][:4]
-            month_num=cat['business_date'][4:6]
-            bus_date=cat['business_date'][6:]
-            month=month_lookup[month_num]
+                #print(year,month,bus_date)
+                #print(list(map(itemgetter('year'),catalog_list)))
 
-            #print(year,month,bus_date)
-            #print(list(map(itemgetter('year'),catalog_list)))
+                idx=list(map(itemgetter('year'),catalog_list)).index(year)\
+                    if year in map(itemgetter('year'),catalog_list) else None
+                #print(list(map(itemgetter('year'), catalog_list)))
+                if idx==None:
+                    d={'year':year,'month':{month:[bus_date]}}
+                    catalog_list.append(d)
+                    #print(catalog_list)
 
-            idx=list(map(itemgetter('year'),catalog_list)).index(year)\
-                if year in map(itemgetter('year'),catalog_list) else None
-            #print(list(map(itemgetter('year'), catalog_list)))
-            if idx==None:
-                d={'year':year,'month':{month:[bus_date]}}
-                catalog_list.append(d)
-                #print(catalog_list)
-
-            else:
-                if month in catalog_list[idx]['month'].keys():
-                    catalog_list[idx]['month'][month].append(bus_date)
                 else:
-                    catalog_list[idx]['month'][month]=[bus_date]
+                    if month in catalog_list[idx]['month'].keys():
+                        catalog_list[idx]['month'][month].append(bus_date)
+                    else:
+                        catalog_list[idx]['month'][month]=[bus_date]
 
 
-        return (catalog_list)
-    def render_data_source_list(self,start_business_date='19000101',end_business_date='39991231',catalog_type=''):
+            return (catalog_list)
+        except Exception as e:
+            app.logger.error(e)
+            return {"msg":e},500
 
 
-        db=DatabaseHelper()
-        data_sources={}
-        data_sources['start_date']=start_business_date
-        data_sources['end_date']=end_business_date
-        data_feeds = db.query("select *  from " + \
-                         "data_catalog " + \
-                        " where business_date between "+ start_business_date + \
-                        " and " + end_business_date + " order by business_date").fetchall()
+    def render_data_source_list(self,start_business_date='19000101',end_business_date='39991231'):
+        app.logger.error("Getting data source list")
 
-        #print(data_sources)
-        data_sources['data_sources']=data_feeds
-        return (data_sources)
-    def list_reports_for_data(self,**kwargs):
-        parameter_list = ['source_id','qualifying_key','business_date']
-        if set(parameter_list).issubset(set(kwargs.keys())):
-            source_id=kwargs["source_id"]
-            qualifying_key = kwargs['qualifying_key']
-            business_date=kwargs['business_date']
+        try:
+            data_sources={}
+            data_sources['start_date']=start_business_date
+            data_sources['end_date']=end_business_date
+            data_feeds = self.db.query("select *  from data_catalog  where business_date between '{0}' and '{1}' order by business_date ".format(start_business_date ,end_business_date )).fetchall()
 
-        else:
-            print("Please supply parameters: " + str(parameter_list))
+            #print(data_sources)
+            data_sources['data_sources']=data_feeds
+            return (data_sources)
+        except Exception as e:
+            app.logger.error(e)
+            return {"msg":e},500
 
-        db=DatabaseHelper()
-        sql="select * from report_qualified_data_link where " +\
-        " (source_id,qualifying_key,business_date) in ("+ qualifying_key + ") "
+    def list_reports_for_data(self,source_id,qualifying_key,business_date):
+        app.logger.info("Getting list of reports for data")
+        try:
+            sql="select * from report_qualified_data_link where source_id=%s and qualifying_key=%s and business_date=%s"
 
+            app.logger.info("Getting report list for particular data")
+            report_list=self.db.query(sql,(source_id,qualifying_key,business_date)).fetchall()
 
-        report_list=db.query(sql).fetchall()
+            result_set = []
+            for data in report_list:
+                app.logger.info("Getting business rules for data")
+                data_qual = self.db.query(
+                    "select * from qualified_data where source_id = %s and qualifying_key = %s and business_date=%s",
+                    (data['source_id'],data['qualifying_key'],data['business_date'])).fetchone()
 
-        result_set = []
-        for data in report_list:
-            data_qual = db.query(
-            "select * from qualified_data where " +\
-            " source_id = " + str(data['source_id']) + \
-            " and qualifying_key = " + str(data['qualifying_key']) + \
-            " and business_date=" + str(data['business_date']) ).fetchone()
-            cell_rule=db.query("select * from report_calc_def where cell_calc_ref='"+data['cell_calc_ref']+"'" + \
-            " and report_id = '" + data["report_id"] + "'" + \
-            " and sheet_id = '" + data["sheet_id"] + "'" + \
-            " and cell_id = '" + data["cell_id"] + "'").fetchone()
+                app.logger.info("Getting cell business rules for data")
+                cell_rule=self.db.query("select * from report_calc_def where cell_calc_ref=%s and report_id = %s\
+                            and sheet_id = %s and cell_id = %s",(data['cell_calc_ref'],data["report_id"],
+                                                                 data["sheet_id"],data["cell_id"])).fetchone()
 
-            data["cell_business_rules"]=cell_rule["cell_business_rules"]
-            data["data_qualifying_rules"]=data_qual["business_rules"]
-            result_set.append(data)
+                data["cell_business_rules"]=cell_rule["cell_business_rules"]
+                data["data_qualifying_rules"]=data_qual["business_rules"]
+                result_set.append(data)
 
-        return result_set
+            return result_set
+        except Exception as e:
+            app.logger.error(e)
+            return {"msg":e},500
+
     def export_to_csv(self,table_name,business_ref,sql):
-        db = DatabaseHelper()
+        app.logger.info("Exporting to CSV")
+        try:
+            app.logger.info("Getting data from table")
+            cur = self.db.query(sql)
 
-        sql = sql
+            data = cur.fetchall()
+            keys = [i[0] for i in cur.description]
+            filename=table_name+business_ref+str(time.time())+".csv"
 
-        cur = db.query(sql)
-
-        data = cur.fetchall()
-        keys = [i[0] for i in cur.description]
-        filename=table_name+business_ref+str(time.time())+".csv"
-
-        with open('./static/'+filename, 'wt') as output_file:
-            dict_writer = csv.DictWriter(output_file, keys)
-            dict_writer.writeheader()
-            dict_writer.writerows(data)
-        return { "file_name": filename }
+            with open('./static/'+filename, 'wt') as output_file:
+                dict_writer = csv.DictWriter(output_file, keys)
+                dict_writer.writeheader()
+                dict_writer.writerows(data)
+            return { "file_name": filename }
+        except Exception as e:
+            app.logger.error(e)
+            return {"msg":e},500
 
 
     def run_rules_engine(self,source_id,business_date,business_or_validation='ALL'):
@@ -488,7 +501,11 @@ class ViewDataController(Resource):
                 return data_sources
 
     def update_data_catalog(self,status,source_id,business_date):
-        db=DatabaseHelper()
-        db.transact("update data_catalog set file_load_status=%s \
-                    where source_id=%s and business_date=%s",(status,source_id,business_date))
-        db.commit()
+        app.logger.info("Updating data catalog")
+        try:
+            self.db.transact("update data_catalog set file_load_status=%s \
+                        where source_id=%s and business_date=%s",(status,source_id,business_date))
+            self.db.commit()
+        except Exception as e:
+            app.logger.error(e)
+            return {"msg":e},500
