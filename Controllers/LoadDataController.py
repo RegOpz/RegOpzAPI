@@ -122,7 +122,6 @@ class LoadDataController(Resource):
         self.db.transact(sql,(str(business_date),))
         self.db.commit()
 
-
     def check_if_data_exists(self,source_id,business_date):
 
         app.logger.info("Checking if data already exists for source {0} and date {1}".format(source_id,business_date))
