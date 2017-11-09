@@ -63,6 +63,7 @@ target/
 uploads/templates/*
 uploads/source-files/*
 static/*
+logs/*
 .idea/
 
 # dbconfig file

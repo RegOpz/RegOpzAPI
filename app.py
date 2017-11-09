@@ -11,7 +11,7 @@ api = Api(app)
 apiPath = APIConfig.APIPATH
 
 formatter = logging.Formatter("[%(asctime)s] {%(pathname)s:%(lineno)d} %(levelname)s - %(message)s")
-handler = RotatingFileHandler('foo.log', maxBytes=10000, backupCount=1)
+handler = RotatingFileHandler('./logs/foo.log', maxBytes=10000, backupCount=1)
 handler.setLevel(logging.INFO)
 handler.setFormatter(formatter)
 app.logger.addHandler(handler)
