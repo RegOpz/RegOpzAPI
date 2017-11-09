@@ -49,9 +49,14 @@ class LoadDataController(Resource):
                    if col in chunk.columns.values and col not in ['id','dml_allowed','in_use','last_updated_by']:
                        found_col_list.append(col)
 
-               #print("found_col_list",found_col_list)
+               app.logger.info("found_col_list [ {} ]".format(found_col_list))
                if not found_col_list:
-                   return {'msg': "Table column names can not be matched to data file", 'filename': data_exists['data_file_name']}, 400
+                   self.update_data_catalog(source_id,business_date,selected_file,0,'','DATALOADING-FAILED')
+                   return {'msg': "Table column names can not be matched to data file", 'filename': selected_file}, 400
+
+               if 'business_date' not in found_col_list:
+                   self.update_data_catalog(source_id,business_date,selected_file,0,'','DATALOADING-FAILED')
+                   return {'msg': "business_date is missing in the data file", 'filename': selected_file}, 400
 
                sql = "insert into " + table_name + "("
                placeholders = "("
@@ -66,7 +71,11 @@ class LoadDataController(Resource):
 
                params_tuple=[]
                for index,row in chunk.iterrows():
-                    params_tuple.append(tuple(row[found_col_list]))
+                    if str(row['business_date']) == str(business_date):
+                        params_tuple.append(tuple(row[found_col_list]))
+                    else:
+                        self.update_data_catalog(source_id,business_date,selected_file,0,'','DATALOADING-FAILED')
+                        return {'msg': "Invalid data for business_date [ {0} ], different from the data loading date {1} exists in data file".format(row['business_date'],business_date), 'filename': selected_file}, 400
 
                #print(sql)
                #print(params_tuple)

@@ -17,6 +17,9 @@ build/
 develop-eggs/
 dist/
 downloads/
+uploads/
+static/
+logs/
 eggs/
 .eggs/
 lib/
@@ -68,4 +71,3 @@ logs/*
 
 # dbconfig file
 Configs/dbconfig.py
-
