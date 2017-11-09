@@ -31,8 +31,7 @@ class ViewDataController(Resource):
         if(request.endpoint == 'get_source_ep'):
             start_date = request.args.get('startDate') if request.args.get('startDate') != None else '19000101'
             end_date = request.args.get('endDate') if request.args.get('endDate') != None else '39991231'
-            catalog_type = request.args.get('catalog_type')
-            return self.render_data_source_list(start_business_date=start_date, end_business_date=end_date, catalog_type=catalog_type)
+            return self.render_data_source_list(start_business_date=start_date, end_business_date=end_date)
         if(request.endpoint == 'report_linkage_ep'):
             source_id = request.args.get("source_id")
             qualifying_key = request.args.get("qualifying_key")
@@ -319,10 +318,11 @@ class ViewDataController(Resource):
     def list_reports_for_data(self,source_id,qualifying_key,business_date):
         app.logger.info("Getting list of reports for data")
         try:
-            sql="select * from report_qualified_data_link where source_id=%s and qualifying_key=%s and business_date=%s"
+            sql="select * from report_qualified_data_link where " + \
+            " (source_id,qualifying_key,business_date) in ("+ qualifying_key + ") "
 
             app.logger.info("Getting report list for particular data")
-            report_list=self.db.query(sql,(source_id,qualifying_key,business_date)).fetchall()
+            report_list=self.db.query(sql).fetchall()
 
             result_set = []
             for data in report_list:

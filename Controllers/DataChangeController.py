@@ -32,6 +32,8 @@ class DataChangeController(Resource):
             sql = "SELECT DISTINCT id,table_name,change_type,change_reference,\
                 date_of_change,maker,maker_comment,checker,checker_comment,status,date_of_checking,\
                 business_date FROM {} WHERE 1"
+            if id_list == "id" or ((id_list is None or id_list == 'undefined') and (table_name is None or table_name=='undefined')):
+                sql += " AND status='PENDING'"
             if id_list:
                 sql = sql + " and (id,business_date) in (" + id_list + ") "
             elif business_date:

@@ -174,7 +174,7 @@ class MaintainSourcesController(Resource):
 
 		try:
 			data_dict = [{"Field":"","Type":"","Null":"","Key":"","Default":"","Extra":""}]
-			if table_name is None or table_name == 'undefined':
+			if table_name is None or table_name == 'undefined' or table_name == 'null':
 				return data_dict
 			app.logger.info("Describing table {}".format(table_name))
 			data_dict = self.db.query("describe " + table_name).fetchall()

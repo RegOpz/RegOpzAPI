@@ -85,6 +85,7 @@ class ViewReportController(Resource):
                     if row["cell_render_def"] == 'STATIC_TEXT':
                         cell_d['cell'] = row['cell_id']
                         cell_d['value'] = row['cell_calc_ref']
+                        cell_d['origin'] = "TEMPLATE"
                         matrix_list.append(cell_d)
 
 
@@ -93,6 +94,7 @@ class ViewReportController(Resource):
                         cell_d['cell'] = start_cell
                         cell_d['value'] = row['cell_calc_ref']
                         cell_d['merged'] = end_cell
+                        cell_d['origin'] = "TEMPLATE"
                         matrix_list.append(cell_d)
 
 
@@ -128,6 +130,7 @@ class ViewReportController(Resource):
 
                     cell_d['cell'] = row['cell_id']
                     cell_d['value'] = cell_summary
+                    cell_d['origin'] = "DATA"
                     matrix_list.append(cell_d)
 
                 sheet_d = {}
@@ -292,4 +295,3 @@ class ViewReportController(Resource):
         except Exception as e:
             app.logger.error(e)
             return {"msg": e}, 500
-
