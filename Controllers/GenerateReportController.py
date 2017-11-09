@@ -165,27 +165,9 @@ class GenerateReportController(Resource):
             print("Please supply parameters: "+str(parameter_list))
 
         db=DatabaseHelper()
-
-        all_business_rules=db.query('select report_id,sheet_id,cell_id,cell_calc_ref,cell_business_rules \
+        all_sources=db.query('select distinct source_id \
                     from report_calc_def where report_id=%s and in_use=\'Y\'',(report_id,)).fetchall()
-
-
-        start = time.time()
-        #report_parameter={'_TODAY':'20160930','_YESDAY':'20160929'}
-        report_parameter={}
-        for k,v in kwargs.items():
-            if k.startswith('_'):
-                report_parameter[k]=v
-
-        for i,rl in enumerate(all_business_rules):
-            #check for possible report parameter token replacement
-            for key, value in report_parameter.items():
-                all_business_rules[i]['cell_business_rules'] = all_business_rules[i]['cell_business_rules'].replace(key, key + ':' + value)
-
-        #print('All business rules after report parameter', all_business_rules)
-        print('Time taken for converting to dictionary all_business_rules ' + str((time.time() - start) * 1000))
-
-        #Changes required for incoporating exchange rates
+            #Changes required for incoporating exchange rates
 
         if ref_date_rate=='B':
             exch_rt=db.query('select business_date,from_currency,to_currency,rate from exchange_rate where business_date between %s and %s\
@@ -205,57 +187,81 @@ class GenerateReportController(Resource):
         util.clean_table(db._cursor(), 'report_qualified_data_link', '', reporting_date,'report_id=\''+ report_id + '\'')
         print('Time taken for clean_table report_qualified_data_link ' + str((time.time() - start) * 1000))
 
-        dbqd=DatabaseHelper()
-        curdata =dbqd.query('select source_id,qualifying_key,business_rules,buy_currency,sell_currency,mtm_currency,\
-                    %s as reporting_currency,business_date,%s as reporting_date,%s as business_date_to, \
-                    %s as ref_date_rate \
-                     from qualified_data where business_date between %s and %s',\
-                    (reporting_currency,reporting_date,business_date_to,ref_date_rate,business_date_from,business_date_to))
-        startcur = time.time()
-        while True:
-            all_qualified_trade=curdata.fetchmany(50000)
-            if not all_qualified_trade:
-                break
 
-            print('Before converting to dictionary')
+        startsource = time.time()
+        for source in all_sources:
+            source_id=source['source_id']
+            print("Processing source id: ",source_id)
+            all_business_rules=db.query('select report_id,sheet_id,cell_id,cell_calc_ref,cell_business_rules \
+                    from report_calc_def where report_id=%s and source_id=%s and in_use=\'Y\'',(report_id,source_id,)).fetchall()
+
             start = time.time()
-            all_qual_trd_dict_split = util.split(all_qualified_trade, 1000)
-            print('Time taken for converting to dictionary and spliting all_qual_trd '+str((time.time() - start)*1000))
+            #report_parameter={'_TODAY':'20160930','_YESDAY':'20160929'}
+            report_parameter={}
+            for k,v in kwargs.items():
+                if k.startswith('_'):
+                    report_parameter[k]=v
 
-            #print(exch_rt_dict)
-            start=time.time()
+            for i,rl in enumerate(all_business_rules):
+                #check for possible report parameter token replacement
+                for key, value in report_parameter.items():
+                    all_business_rules[i]['cell_business_rules'] = all_business_rules[i]['cell_business_rules'].replace(key, key + ':' + value)
 
-            #mp=partial(map_data_to_cells,all_bus_rl_dict,exch_rt_dict,reporting_currency)
-            mp = partial(self.map_data_to_cells, all_business_rules, exch_rt_dict, reporting_currency)
+            #print('All business rules after report parameter', all_business_rules)
+            print('Time taken for converting to dictionary all_business_rules ' + str((time.time() - start) * 1000))
 
-            print('CPU Count: ' + str(cpu_count()))
-            if cpu_count()>1 :
-                pool=Pool(cpu_count()-1)
-            else:
-                print('No of CPU is only 1, ... Inside else....')
-                pool=Pool(1)
-            result_set=pool.map(mp,all_qual_trd_dict_split)
-            pool.close()
-            pool.join()
+            dbqd=DatabaseHelper()
+            curdata =dbqd.query('select source_id,qualifying_key,business_rules,buy_currency,sell_currency,mtm_currency,\
+                        %s as reporting_currency,business_date,%s as reporting_date,%s as business_date_to, \
+                        %s as ref_date_rate \
+                         from qualified_data where source_id=%s and business_date between %s and %s',\
+                        (reporting_currency,reporting_date,business_date_to,ref_date_rate,source_id,business_date_from,business_date_to))
+            startcur = time.time()
+            while True:
+                all_qualified_trade=curdata.fetchmany(50000)
+                if not all_qualified_trade:
+                    break
 
-            print('Time taken by pool processes '+str((time.time() - start)*1000))
+                print('Before converting to dictionary')
+                start = time.time()
+                all_qual_trd_dict_split = util.split(all_qualified_trade, 1000)
+                print('Time taken for converting to dictionary and spliting all_qual_trd '+str((time.time() - start)*1000))
 
-            start=time.time()
-            result_set_flat=util.flatten(result_set)
-            start=time.time()
-            #for result_set_flat in rs:
-            print('Database inserts for 50000 .....')
-            db.transactmany('insert into report_qualified_data_link \
-                            (report_id,sheet_id ,cell_id ,cell_calc_ref,source_id ,qualifying_key,\
-                             buy_currency,sell_currency,mtm_currency,business_date,reporting_date,\
-                             buy_reporting_rate,sell_reporting_rate,mtm_reporting_rate,\
-                             buy_usd_rate,sell_usd_rate,mtm_usd_rate)\
-                              values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',result_set_flat)
+                #print(exch_rt_dict)
+                start=time.time()
 
-            print('Time taken by database inserts '+ str((time.time() - start) * 1000))
-            db.commit()
-            #return
-        print('Time taken by complete loop of qualified data '+ str((time.time() - startcur) * 1000))
+                #mp=partial(map_data_to_cells,all_bus_rl_dict,exch_rt_dict,reporting_currency)
+                mp = partial(self.map_data_to_cells, all_business_rules, exch_rt_dict, reporting_currency)
+
+                print('CPU Count: ' + str(cpu_count()))
+                if cpu_count()>1 :
+                    pool=Pool(cpu_count()-1)
+                else:
+                    print('No of CPU is only 1, ... Inside else....')
+                    pool=Pool(1)
+                result_set=pool.map(mp,all_qual_trd_dict_split)
+                pool.close()
+                pool.join()
+
+                print('Time taken by pool processes '+str((time.time() - start)*1000))
+
+                start=time.time()
+                result_set_flat=util.flatten(result_set)
+                start=time.time()
+                #for result_set_flat in rs:
+                print('Database inserts for 50000 .....')
+                db.transactmany('insert into report_qualified_data_link \
+                                (report_id,sheet_id ,cell_id ,cell_calc_ref,source_id ,qualifying_key,\
+                                 buy_currency,sell_currency,mtm_currency,business_date,reporting_date,\
+                                 buy_reporting_rate,sell_reporting_rate,mtm_reporting_rate,\
+                                 buy_usd_rate,sell_usd_rate,mtm_usd_rate)\
+                                  values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',result_set_flat)
+
+                print('Time taken by database inserts '+ str((time.time() - start) * 1000))
+                db.commit()
+                #return
+            print('Time taken by complete loop of qualified data '+ str((time.time() - startcur) * 1000))
+        print('Time taken by complete loop of all sources '+ str((time.time() - startsource) * 1000))
 
 
     def apply_formula_to_frame(self, df, excel_formula,new_field_name):
