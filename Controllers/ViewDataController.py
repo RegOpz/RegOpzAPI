@@ -300,7 +300,7 @@ class ViewDataController(Resource):
 
 
     def render_data_source_list(self,start_business_date='19000101',end_business_date='39991231'):
-        app.logger.error("Getting data source list")
+        app.logger.info("Getting data source list")
 
         try:
             data_sources={}
