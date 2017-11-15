@@ -25,10 +25,11 @@ class DynamicReportController(Resource):
 
     def create_report_detail(self,report_id,business_date_from,business_date_to):
         try:
+            reporting_date=business_date_from+business_date_to
             #fetch all report definition for all sections of a report
             sheets=self.db.query("select distinct sheet_id,section_id from report_dyn_def where report_id=%s",(report_id,)).fetchall()
             for sheet in sheets:
-                dyn_def=self.db.query("select  * from report_dyn_def where report_id=%s and sheet_id=%s and section_id=%s",
+                dyn_def=self.db.query("select  * from report_dyn_def where report_id=%s and sheet_id=%s and section_id=%s and in_use='Y' ",
                                        (report_id,sheet['sheet_id'],sheet['section_id'])).fetchall()
 
                 groupby={}
@@ -58,12 +59,22 @@ class DynamicReportController(Resource):
                                 row_num+=1
                                 unique_records[key]=row_num
 
-                            data_records.append({'source_id':source,'qualifying_key':qd['qualifying_key'],
-                                                 'buy_currency':qd['buy_currency'],'sell_currency':qd['sell_currnecy'],
-                                                 'mtm_currency':qd['mtm_currency'],'business_date':qd['business_date'],
-                                                 'row':unique_records[key]})
+                            # data_records.append({'source_id':source,'report_id':report_id,'sheet_id':sheet['sheet_id'],
+                            #                      'cell_id': '$' + unique_records[key],'cell_calc_ref':sheet['section_id'],
+                            #                      'qualifying_key':qd['qualifying_key'],
+                            #                      'buy_currency':qd['buy_currency'],'sell_currency':qd['sell_currnecy'],
+                            #                      'mtm_currency':qd['mtm_currency'],'business_date':qd['business_date'],
+                            #                      'reporting_date':reporting_date})
 
+                            data_records.append((source, report_id, sheet['sheet_id'],'$' + unique_records[key],
+                                                 sheet['section_id'], qd['buy_currency'], qd['sell_currnecy'],qd['mtm_currency'],
+                                                 qd['qualifying_key'],  qd['business_date'],reporting_date))
 
+                sql="insert into qualified_data_link(source_id,report_id,sheet_id,cell_id,cell_calc_ref,buy_currency,\
+                        sell_currency,mtm_currency,qualifying_key,business_date,reporting_date) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,)"
+
+                res=self.db.transactmany(sql,data_records)
+                self.db.commit()
 
             #fetch all data from qualified data
             #for each entry in report definition assign each qualified data to a particular section and particular row
