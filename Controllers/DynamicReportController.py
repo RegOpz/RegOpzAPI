@@ -70,7 +70,7 @@ class DynamicReportController(Resource):
                                                  sheet['section_id'], qd['buy_currency'], qd['sell_currnecy'],qd['mtm_currency'],
                                                  qd['qualifying_key'],  qd['business_date'],reporting_date))
 
-                sql="insert into qualified_data_link(source_id,report_id,sheet_id,cell_id,cell_calc_ref,buy_currency,\
+                sql="insert into report_qualified_data_link(source_id,report_id,sheet_id,cell_id,cell_calc_ref,buy_currency,\
                         sell_currency,mtm_currency,qualifying_key,business_date,reporting_date) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,)"
 
                 res=self.db.transactmany(sql,data_records)
