@@ -17,6 +17,7 @@ from Controllers.DataChangeController import DataChangeController
 from Controllers.LoadDataController import LoadDataController
 from Controllers.ViewReportController import ViewReportController
 from Controllers.LoadDataFileController import LoadDataFileController
+from Controllers.DynamicReportController import DynamicReportController
 from flask_cors import CORS, cross_origin
 
 api.add_resource(Info, apiPath + "/info")
@@ -277,6 +278,11 @@ api.add_resource(LoadDataController,
 api.add_resource(LoadDataFileController,
     apiPath + '/view-data-management/load-data',
     endpoint='load_data'
+)
+
+api.add_resource(DynamicReportController,
+    apiPath+"/create-dynamic-report",
+    endpoint="create_dynamic_report_ep"
 )
 
 
