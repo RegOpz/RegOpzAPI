@@ -96,8 +96,30 @@ class DynamicReportController(Resource):
                                                  sheet['section_id']+'$' + str(unique_records[key]), qd['buy_currency'], qd['sell_currency'],qd['mtm_currency'],
                                                  qd['qualifying_key'],  qd['business_date'],reporting_date))
                             #print(qd)
-                        source_qd_frame=pd.DataFrame(source_qd_list)
-                        #print(source_qd_frame)
+                    source_qd_frame=pd.DataFrame(source_qd_list)
+                    #print(source_qd_frame)
+
+                    sql="select * from report_dyn_calc_def where source_id=%s and report_id=%s and sheet_id=%s and section_id=%s and in_use='Y' "
+                    dyn_calc_def=self.db.query(sql,(source,report_id,sheet['sheet_id'],sheet['section_id'])).fetchall()
+                    df_grps= source_qd_frame.groupby('cell_calc_ref')
+                    summ_by_src=pd.DataFrame(columns=['source_id','report_id','sheet_id','cell_id','cell_calc_ref','cell_summary','reporting_date'])
+
+                    for idx,grp in df_grps:
+                        for calc_def in dyn_calc_def:
+                            expr_str="grp['{0}'].".format(calc_def['aggregation_ref'])
+                            if calc_def['aggregation_func']=='distinct':
+                                expr_str+="unique()[0]"
+                            else:
+                                expr_str+=calc_def['aggregation_func']+"()"
+                            summary=eval(expr_str)
+                            cell_id=grp['cell_id'].unique()[0].replace('$',calc_def['column_id'])
+                            cell_calc_ref=grp['cell_calc_ref'].unique()[0].replace('$',calc_def['column_id'])
+                            data={'source_id':source,'report_id':report_id,'sheet_id':sheet['sheet_id'],
+                                  'cell_id':cell_id,'cell_calc_ref':cell_calc_ref,'cell_summary':summary,'reporting_date':reporting_date}
+                            summ_by_src=summ_by_src.append(data,ignore_index=True)
+
+                    #print(summ_by_src)
+
 
 
 
@@ -107,9 +129,8 @@ class DynamicReportController(Resource):
                 res=self.db.transactmany(sql,data_records)
                 self.db.commit()
 
-            #fetch all data from qualified data
-            #for each entry in report definition assign each qualified data to a particular section and particular row
+
         except Exception as e:
             app.logger.error(e)
-            print(e)
+            #print(e)
             return {"msg":e},500
