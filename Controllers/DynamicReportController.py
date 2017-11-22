@@ -28,7 +28,6 @@ class DynamicReportController(Resource):
             report_id=report_info['report_id']
             business_date_from=report_info['business_date_from']
             business_date_to=report_info['business_date_to']
-            print("Hi")
             self.create_report_detail(report_id,business_date_from,business_date_to)
 
 
@@ -57,6 +56,7 @@ class DynamicReportController(Resource):
                 row_num = 0
                 unique_records = {}
                 data_records = []
+                first_source=True
 
                 for source in sources:
                     #print(source)
@@ -97,14 +97,24 @@ class DynamicReportController(Resource):
                                                  qd['qualifying_key'],  qd['business_date'],reporting_date))
                             #print(qd)
                     source_qd_frame=pd.DataFrame(source_qd_list)
+                    for col in source_qd_frame.columns:
+                        source_qd_frame[col]=source_qd_frame[col].astype(dtype=float,errors='ignore')
                     #print(source_qd_frame)
 
                     sql="select * from report_dyn_calc_def where source_id=%s and report_id=%s and sheet_id=%s and section_id=%s and in_use='Y' "
                     dyn_calc_def=self.db.query(sql,(source,report_id,sheet['sheet_id'],sheet['section_id'])).fetchall()
-                    df_grps= source_qd_frame.groupby('cell_calc_ref')
                     summ_by_src=pd.DataFrame(columns=['source_id','report_id','sheet_id','cell_id','cell_calc_ref','cell_summary','reporting_date'])
 
-                    for idx,grp in df_grps:
+                    column_list={}
+                    for calc_def in dyn_calc_def:
+                        column_list.update({calc_def['aggregation_ref']:calc_def['column_id']})
+
+
+                    summ_by_src_table=pd.DataFrame(columns=list(column_list.values()).append('row'))
+
+
+                    for idx,grp in source_qd_frame.groupby('cell_calc_ref'):
+                        table_data={}
                         for calc_def in dyn_calc_def:
                             expr_str="grp['{0}'].".format(calc_def['aggregation_ref'])
                             if calc_def['aggregation_func']=='distinct':
@@ -117,8 +127,43 @@ class DynamicReportController(Resource):
                             data={'source_id':source,'report_id':report_id,'sheet_id':sheet['sheet_id'],
                                   'cell_id':cell_id,'cell_calc_ref':cell_calc_ref,'cell_summary':summary,'reporting_date':reporting_date}
                             summ_by_src=summ_by_src.append(data,ignore_index=True)
+                            table_data.update({column_list[calc_def['aggregation_ref']]:summary})
+                        row_num=grp['cell_id'].unique()[0].replace('$','')
+                        table_data.update({'row':row_num})
+                        summ_by_src_table=summ_by_src_table.append(table_data,ignore_index=True)
+                        if first_source :
+                            summ_all_src_table=summ_by_src_table
+                        else:
+                            summ_all_src_table=summ_all_src_table.append(summ_by_src_table)
 
-                    #print(summ_by_src)
+
+                    sql="insert into report_summary_by_source(source_id,report_id,sheet_id,cell_id,cell_calc_ref,cell_summary,reporting_date) \
+                        values(%s,%s,%s,%s,%s,%s,%s)"
+                    res=self.db.transactmany(sql,summ_by_src.to_records(index=False).tolist())
+
+                #print(summ_all_src_table.groupby('row'))
+
+                summ_all_src_table_final=pd.DataFrame(data=None,columns=summ_all_src_table.columns)
+                for idx,grp in summ_all_src_table.groupby('row'):
+                    #print(grp)
+                    table_data = {}
+                    for calc_def in dyn_calc_def:
+                        expr_str = "grp['{0}'].".format(column_list[calc_def['aggregation_ref']])
+                        if calc_def['aggregation_func'] == 'distinct':
+                            expr_str += "unique()[0]"
+                        else:
+                            expr_str += calc_def['aggregation_func'] + "()"
+                        summary = eval(expr_str)
+                        #print(summary)
+                        table_data.update({column_list[calc_def['aggregation_ref']]: summary})
+                    row_num = grp['row'].unique()[0]
+                    table_data.update({'row': row_num})
+                    #print(table_data)
+                    summ_all_src_table_final=summ_all_src_table_final.append(table_data,ignore_index=True)
+                    #print(summ_all_src_table_final)
+
+                print(summ_all_src_table_final)
+
 
 
 
