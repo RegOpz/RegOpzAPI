@@ -14,7 +14,7 @@ class MaintainSourcesController(Resource):
 		self.db=DatabaseHelper()
 
 	def get(self):
-		print(request.endpoint)
+		app.logger.info(request.endpoint)
 		if request.endpoint == 'get_source_feed_suggestion_list_ep':
 			source_table_name = request.args.get('source_table_name')
 			country = request.args.get('country')
@@ -26,6 +26,7 @@ class MaintainSourcesController(Resource):
 
 	def post(self):
 		data = request.get_json(force=True)
+		app.logger.info("Data in post call {}".format(data,))
 		res = self.insert_data(data)
 		return res
 
@@ -33,12 +34,17 @@ class MaintainSourcesController(Resource):
 		if id == None:
 			return BUSINESS_RULE_EMPTY
 		data = request.get_json(force=True)
+		app.logger.info("Data in put call {}".format(data,))
 		res = self.update_data(data, id)
 		return res
 
 	def insert_data(self,data):
 		app.logger.info("Inserting data")
 		try:
+			create_table_name=data['update_info']['source_table_name']
+			columns=data['added_fields']
+			self.create_table(create_table_name,columns)
+			self.insert_columns(create_table_name,columns)
 			table_name = data['table_name']
 			update_info = data['update_info']
 			update_info_cols = update_info.keys()
@@ -78,6 +84,10 @@ class MaintainSourcesController(Resource):
 		app.logger.info("Updating data")
 
 		try:
+			alter_table_name=data['update_info']['source_table_name']
+			columns=data['added_fields']
+			self.modify_table(alter_table_name,columns)
+			self.insert_columns(alter_table_name,columns)
 			table_name=data['table_name']
 			update_info=data['update_info']
 			update_info_cols=update_info.keys()
@@ -177,7 +187,11 @@ class MaintainSourcesController(Resource):
 			if table_name is None or table_name == 'undefined' or table_name == 'null':
 				return data_dict
 			app.logger.info("Describing table {}".format(table_name))
-			data_dict = self.db.query("describe " + table_name).fetchall()
+			sql="select column_name as Field,column_datatype as 'Type',column_default_value as 'Default',\
+			column_is_nullable as 'Null',column_key as 'Key',column_display_name as 'Extra' \
+			from data_source_cols where source_table_name= %s"
+			data_dict = self.db.query(sql,(table_name,)).fetchall()
+			data_dict_database = self.db.query("describe " + table_name).fetchall()
 			return data_dict
 		except mysql.connector.Error as err:
 			if err.errno == errorcode.ER_BAD_TABLE_ERROR:
@@ -189,3 +203,37 @@ class MaintainSourcesController(Resource):
 		except Exception as e:
 			app.logger.error(e)
 			return {"msg":e},500
+
+
+	def create_table(self,table_name,columns):
+		app.logger.info("Create table for new source set up")
+
+		sql = 'create table ' + table_name + '( '
+		for col in columns:
+			not_null='not null' if col['Null']=='NO' else ''
+			sql += col['Field'] + ' ' + col['Type'] +' '+not_null+ ','
+		sql = sql[:-1] + ' )'
+		app.logger.info(sql)
+		self.db.transact(sql)
+
+	def modify_table(self,table_name,columns):
+		app.logger.info("Modify table for existing source ")
+
+		sql='alter table '+table_name + ' add( '
+		for col in columns:
+			not_null = 'not null' if col['Null'] == 'NO' else ''
+			sql+=col['Field'] +' ' + col['Type']+' '+not_null+','
+		sql=sql[:-1]+' )'
+		self.db.transact(sql)
+
+	def insert_columns(self,table_name,columns):
+		app.logger.info("Insert columns for source")
+
+		for col in columns:
+			sql='insert into data_source_cols(source_table_name,column_name,column_datatype,column_default_value,\
+			column_is_nullable,column_key,column_display_name) values(%s,%s,%s,%s,%s,%s,%s)'
+			params=(table_name,col['Field'],col['Type'],col['Default'],col['Null'],col['Key'],'')
+
+			self.db.transact(sql,params)
+
+		self.db.commit()
