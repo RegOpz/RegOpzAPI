@@ -11,10 +11,11 @@ UPLOAD_FOLDER = './uploads/source-files'
 class LoadDataFileController(Resource):
     def post(self):
         file = request.files['data_file']
+        selectedfilename = secure_filename(file.filename)
         if file:
             filename = str(uuid.uuid4()) + '_' +\
                 str(datetime.utcnow().isoformat()).replace(
                     ':', '_') + '_' + secure_filename(file.filename)
 
             file.save(os.path.join(UPLOAD_FOLDER, filename).replace('\\', '/'))
-            return {'msg': 'File Transferred Successfully', 'filename': filename}, 200
+            return {'msg': 'File Transferred Successfully [' + selectedfilename + ']', 'filename': filename}, 200
