@@ -16,7 +16,7 @@ class MaintainBusinessRulesController(Resource):
         self.db=DatabaseHelper()
 
     def get(self, id=None, source_id=None, page=0, col_name=None,business_rule=None):
-        app.logger.info("I: Controller: MaintainBusinessRulesController:", request.endpoint)
+        app.logger.info("I: Controller: MaintainBusinessRulesController: {}".format(request.endpoint))
         if request.endpoint == "business_rule_export_to_csv_ep":
             source = request.args.get('source_id')
             return self.export_to_csv(source_id=source)
@@ -53,7 +53,7 @@ class MaintainBusinessRulesController(Resource):
 
         if request.endpoint == "business_rules_ep_filtered":
             filter_conditions = request.get_json(force=True)
-            app.logger.info("I: Controller: MaintainBusinessRulesController: Post: Filtering Business Rules", filter_conditions)
+            app.logger.info("I: Controller: MaintainBusinessRulesController: Post: Filtering Business Rules {}".format(filter_conditions))
             return self.get_business_rules_filtered(filter_conditions)
 
         if request.endpoint == "validate_python_expr_ep":
@@ -62,7 +62,7 @@ class MaintainBusinessRulesController(Resource):
             return self.validate_python_expression(expr_obj)
 
         br = request.get_json(force=True)
-        app.logger.info("I: Controller: MaintainBusinessRulesController: Post: Inserting Data to DatabaseOps", br)
+        app.logger.info("I: Controller: MaintainBusinessRulesController: Post: Inserting Data to DatabaseOps {}".format(br))
         res = self.dbOps.insert_data(br)
         return res
 
@@ -70,7 +70,7 @@ class MaintainBusinessRulesController(Resource):
         if id == None:
             return BUSINESS_RULE_EMPTY
         data = request.get_json(force=True)
-        app.logger.info("I: Controller: MaintainBusinessRulesController: Put: Update/Delete Data on DatabaseOps", data)
+        app.logger.info("I: Controller: MaintainBusinessRulesController: Put: Update/Delete Data on DatabaseOps {}".format(data))
         res = self.dbOps.update_or_delete_data(data, id)
         return res
 
@@ -141,7 +141,7 @@ class MaintainBusinessRulesController(Resource):
         return data_dict
 
     def render_business_rule_json(self, id):
-        app.logger.info("I: Controller: MaintainBusinessRulesController: render_business_rule_json: Select a particular Business Rules by ID", id)
+        app.logger.info("I: Controller: MaintainBusinessRulesController: render_business_rule_json: Select a particular Business Rules by ID {}".format(id))
         query = 'select * from business_rules where id = %s'
         cur = self.db.query(query, (id, ))
         data = cur.fetchone()
@@ -150,14 +150,14 @@ class MaintainBusinessRulesController(Resource):
         return NO_BUSINESS_RULE_FOUND
 
     def ret_source_data_by_id(self, table_name,id):
-        app.logger.info("I: Controller: MaintainBusinessRulesController: ret_source_data_by_id: Querying Data Sources by ID", id)
+        app.logger.info("I: Controller: MaintainBusinessRulesController: ret_source_data_by_id: Querying Data Sources by ID {}".format(id))
         query = 'select * from ' + table_name + ' where id = %s'
         cur = self.db.query(query, (id, ))
         data = cur.fetchone()
         for k,v in data.items():
             if isinstance(v,datetime):
                 data[k] = data[k].isoformat()
-                app.logger.info(data[k], type(data[k]))
+                app.logger.info("Inside for loop to check data types {0} {1}".format(data[k], type(data[k])))
         if data:
             return data
         return NO_BUSINESS_RULE_FOUND
@@ -187,11 +187,11 @@ class MaintainBusinessRulesController(Resource):
 
         params_tuple=tuple(params)
         try:
-            app.logger.info("I: Controller: MaintainBusinessRulesController: insert_business_rules:", sql, params_tuple)
+            app.logger.info("I: Controller: MaintainBusinessRulesController: insert_business_rules: {0} {1}".format(sql, params_tuple))
             res=self.db.transact(sql,params_tuple)
             self.db.commit()
         except Exception as e:
-            app.logger.error("E: Controller: MaintainBusinessRulesController: insert_business_rules", e)
+            app.logger.error("E: Controller: MaintainBusinessRulesController: insert_business_rules {}".format(e))
             return { "msg": e },500
 
         return self.ret_source_data_by_id(table_name,res)
@@ -214,7 +214,7 @@ class MaintainBusinessRulesController(Resource):
         params_tuple=tuple(params)
 
         try:
-            app.logger.info("I: Controller: MaintainBusinessRulesController: update_business_rules:", sql, params_tuple)
+            app.logger.info("I: Controller: MaintainBusinessRulesController: update_business_rules: {0} {1}".format(sql, params_tuple))
             res=self.db.transact(sql,params_tuple)
 
             if res==0:
@@ -224,14 +224,14 @@ class MaintainBusinessRulesController(Resource):
             self.db.rollback()
             return UPDATE_ERROR
         except Exception as e:
-            app.logger.error("E: Controller: MaintainBusinessRulesController: update_business_rules:", e)
+            app.logger.error("E: Controller: MaintainBusinessRulesController: update_business_rules: {}".format(e))
             return { "msg": e },500
 
     def delete_business_rules(self, id):
         sql = 'delete from business_rules where id=%s'
         params = (id, )
         try:
-            app.logger.info("I: Controller: MaintainBusinessRulesController: delete_business_rules: Deleting Business Rules by ID", id)
+            app.logger.info("I: Controller: MaintainBusinessRulesController: delete_business_rules: Deleting Business Rules by ID {}".format(id))
             res = self.db.transact(sql, params)
             if res == 0:
                 self.db.commit()
@@ -240,7 +240,7 @@ class MaintainBusinessRulesController(Resource):
             self.db.rollback()
             return DATABASE_ERROR
         except Exception as e:
-            app.logger.error("I: Controller: MaintainBusinessRulesController: delete_business_rules:", e)
+            app.logger.error("I: Controller: MaintainBusinessRulesController: delete_business_rules: {}".format(e))
             return { "msg": e },500
 
     def export_to_csv(self, source_id='ALL'):
@@ -250,7 +250,7 @@ class MaintainBusinessRulesController(Resource):
         if source_id != 'ALL':
             sql += " and source_id='" + str(source_id) + "'"
 
-        app.logger.info("I: Controller: MaintainBusinessRulesController: export_to_csv: Exporting Business Rules to CSV of Source", source_id)
+        app.logger.info("I: Controller: MaintainBusinessRulesController: export_to_csv: Exporting Business Rules to CSV of Source {}".format(source_id))
         cur = self.db.query(sql)
 
         business_rules = cur.fetchall()
@@ -278,7 +278,7 @@ class MaintainBusinessRulesController(Resource):
 
         sql = "select distinct report_id,sheet_id,cell_id from report_calc_def, in_use \
         where cell_business_rules like '%," + business_rule + ",%'"
-        app.logger.info("I: Controller: MaintainBusinessRulesController: list_reports_for_rule: Selecting Reports that maintains Business Rule", business_rule)
+        app.logger.info("I: Controller: MaintainBusinessRulesController: list_reports_for_rule: Selecting Reports that maintains Business Rule {}".format(business_rule))
         cur=self.db.query(sql)
         report_list = cur.fetchall()
 
@@ -297,7 +297,7 @@ class MaintainBusinessRulesController(Resource):
 
         sql = "select report_id,sheet_id,cell_id,cell_business_rules,in_use from report_calc_def where source_id=" + str(
                 source_id)
-        app.logger.info("I: Controller: MaintainBusinessRulesController: list_reports_for_rule_list: List all Reports for Source", source_id)
+        app.logger.info("I: Controller: MaintainBusinessRulesController: list_reports_for_rule_list: List all Reports for Source {}".format(source_id))
         cur=self.db.query(sql)
         data_list = cur.fetchall()
 
@@ -325,7 +325,7 @@ class MaintainBusinessRulesController(Resource):
         if source_id is not None and source_id !='ALL':
             where_clause =  " and source_id = " + source_id
 
-        app.logger.info("I: Controller: MaintainBusinessRulesController: get_source_suggestion_list: Get Sugestion List of available Sources for", source_id)
+        app.logger.info("I: Controller: MaintainBusinessRulesController: get_source_suggestion_list: Get Sugestion List of available Sources for {}".format(source_id))
         source = self.db.query(sql + where_clause).fetchall()
 
 
@@ -338,14 +338,14 @@ class MaintainBusinessRulesController(Resource):
 
 
     def get_source_column_suggestion_list(self,table_name):
-        app.logger.info("I: Controller: MaintainBusinessRulesController: get_source_column_suggestion_list: Get Column structure of Table", table_name)
+        app.logger.info("I: Controller: MaintainBusinessRulesController: get_source_column_suggestion_list: Get Column structure of Table {}".format(table_name))
         data_dict = self.db.query("describe " + table_name).fetchall()
 
         #Now build the agg column list
         return data_dict
 
     def validate_python_expression(self,expr_obj):
-        app.logger.info("I: Controller: MaintainBusinessRulesController: validate_python_expression: Validating a Python Expression", expr_obj)
+        app.logger.info("I: Controller: MaintainBusinessRulesController: validate_python_expression: Validating a Python Expression {}".format(expr_obj))
         py_expr_val=expr_obj['expr']
         py_attr=expr_obj['attr']
         py_sample=expr_obj['sample']

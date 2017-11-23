@@ -35,7 +35,7 @@ class Token(object):
 				app.logger.info("I: Models: Token: Create: Generating new Token for the User")
 				rowid = self.dbhelper.transact(queryString, values)
 			except Exception as e:
-				app.logger.error("E: Models: Token: Create:", e)
+				app.logger.error("E: Models: Token: Create: {}".format(e))
 				return NO_USER_FOUND
 		app.logger.info("I: Models: Token: Create: Generating Permissions for the User")
 		user_permission = UserPermission().get(role)
@@ -76,7 +76,7 @@ class Token(object):
 				app.logger.info("I: Models: Token: Authenticate: Decoding Token for the User")
 				token_decode = JWT().decode(extracted_token, salt)
 			except Exception as e:
-				app.logger.error("E: Models: Token: Authenticate:", e)
+				app.logger.error("E: Models: Token: Authenticate: {}".format(e))
 				raise TypeError("Invalid Token Recieved for Authentication")
 			app.logger.info("I: Models: Token: Authenticate: Querying and Validating Token for the User")
 			queryString = "SELECT user_id FROM token WHERE token=%s AND user_id=%s AND lease_end > %s"
@@ -84,11 +84,11 @@ class Token(object):
 			cur = self.dbhelper.query(queryString, queryParams)
 			data = cur.fetchone()
 			if data:
-				app.logger.info("I: Models: Token: New login from user", data['user_id'])
+				app.logger.info("I: Models: Token: New login from user {}".format(data['user_id']))
 				return data['user_id']
 			else:
 				err = "Invalid Credentials Recieved for Authentication"
 		else:
 			err = "Token Not Found for Authentication"
-		app.logger.error("E: Models: Token: Authenticate:", err)
+		app.logger.error("E: Models: Token: Authenticate: {}".format(err))
 		return { "msg": err },301

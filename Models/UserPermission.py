@@ -10,7 +10,7 @@ class UserPermission(object):
         self.user_id = userId
 
     def get(self, roleId = None, inUseCheck = 'Y'):
-        app.logger.info("I: Models: UserPermission: Get: \nRecieved GET request in Permissions", inUseCheck)
+        app.logger.info("I: Models: UserPermission: Get: Recieved GET request in Permissions {}".format(inUseCheck))
         queryString_1 = "SELECT * FROM roles WHERE in_use = 'Y'"
         queryParams = ()
         if roleId:
@@ -65,7 +65,7 @@ class UserPermission(object):
 
     def post(self, entry = None, add = True):
         if entry:
-            app.logger.info("I: Models: UserPermission: Post: \nData recieved via", "POST" if add else "DELETE", "in permissions:") #, entry)
+            app.logger.info("I: Models: UserPermission: Post: Data recieved via {0} {1}".format("POST" if add else "DELETE", "in permissions:")) #, entry)
             self.role = entry['role']
             self.comment = entry['comment']
             self.data = entry['components']
@@ -73,16 +73,16 @@ class UserPermission(object):
             if not roleId:
                 roleId = self.setRoleId(True)
                 if roleId:
-                    app.logger.info("I: Models: UserPermission: Post: New Role", self.role, "Added.")
+                    app.logger.info("I: Models: UserPermission: Post: New Role {0} {1}".format(self.role, "Added."))
                 else:
                     msg = "Failed to add role " + self.role
-                    app.logger.error("E: Models: UserPermission: Post:", msg)
+                    app.logger.error("E: Models: UserPermission: Post: {}".format(msg))
                     return { "msg": msg },402
             for item in self.data:
                 self.component = item['component']
                 componentId = self.getComponentId(self.component)
                 if not componentId:
-                    app.logger.error("E: Models: UserPermission: Post:", self.component)
+                    app.logger.error("E: Models: UserPermission: Post: {}".format(self.component))
                     continue
                 permissions = item['permissions']
                 for permission in permissions:
@@ -92,9 +92,9 @@ class UserPermission(object):
                     if permissionId:
                         rowId = self.setPermission(roleId, componentId, permissionId, add)
                         if not rowId:
-                            app.logger.error("E: Models: UserPermission: Post: Error occured while updating permission", self.permission, "on", self.component)
+                            app.logger.error("E: Models: UserPermission: Post: Error occured while updating permission {0} on {1}".format(self.permission, self.component))
                     else:
-                        app.logger.error("E: Models: UserPermission: Post: Invalid permissions given against", self.component)
+                        app.logger.error("E: Models: UserPermission: Post: Invalid permissions given against {}".format(self.component))
                         continue
             return { "msg": "Permission update successful for " + self.role },200
         else:
@@ -108,7 +108,7 @@ class UserPermission(object):
                 res = self.post(data, False)
                 rowId = self.setRoleId(False)
                 if not rowId:
-                    app.logger.error("E: Models: UserPermission: Delete: Error occured while deleting role:", role)
+                    app.logger.error("E: Models: UserPermission: Delete: Error occured while deleting role: {}".format(role))
                 return res
         return ROLE_EMPTY
 
@@ -141,7 +141,7 @@ class UserPermission(object):
                     id = self.dbhelper.transact(queryString, queryParams)
                     self.dbhelper.commit()
                 except Exception as e:
-                    app.logger.error("E: Models: UserPermission: SetRoleID:", e)
+                    app.logger.error("E: Models: UserPermission: SetRoleID: {}".format(e))
                     return False
             return self.audit.audit_insert({ "audit_info": audit_info }, id)
         else:
@@ -191,7 +191,7 @@ class UserPermission(object):
                     id = self.dbhelper.transact(queryString, queryParams)
                     self.dbhelper.commit()
                 except Exception as e:
-                    app.logger.error("E: Models: UserPermission: SetPermission:", e)
+                    app.logger.error("E: Models: UserPermission: SetPermission: {}".format(e))
                     return False
             if dml == "INSERT":
                 if not in_use or in_use != 'Y':

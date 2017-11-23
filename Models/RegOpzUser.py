@@ -2,8 +2,8 @@ from app import *
 from Helpers.DatabaseHelper import DatabaseHelper
 from flask import url_for, request
 from Models.Token import Token
-# import bcrypt
 from Constants.Status import *
+from bcrypt import hashpw, gensalt
 
 labelList = {
     'name': "User Name",
@@ -29,6 +29,7 @@ class RegOpzUser(object):
             self.id = True
             self.name = user['name']
             self.password = user['password']
+            self.hashedpassword = hashpw(self.password.encode('utf-8'), gensalt())
             self.role = user['role'] if 'role' in user else "Default"
             self.status = user['status'] if 'status' in user else "Unspecified"
             self.first_name = user['first_name']
@@ -41,7 +42,7 @@ class RegOpzUser(object):
     def save(self):
         queryString = "INSERT INTO regopzuser (name,password,role_id,status,first_name,last_name,\
             contact_number,email,ip,image) VALUES (%s,%s,(SELECT id from roles where role=%s),%s,%s,%s,%s,%s,%s,%s)"
-        queryParams = (self.name, self.password, self.role, self.status, self.first_name,
+        queryParams = (self.name, self.hashedpassword, self.role, self.status, self.first_name,
             self.last_name, self.contact_number, self.email, self.ip, self.image,)
         try:
             app.logger.info("I: Models: RegOpzUser: Save: Inserting a new User to DB")
@@ -49,7 +50,7 @@ class RegOpzUser(object):
             self.dbhelper.commit()
             return { "msg": "Added user successfully, please contact Admin to activate" },200
         except Exception as e:
-            app.logger.error("E: Models: RegOpzUser: Save:", e)
+            app.logger.error("E: Models: RegOpzUser: Save: {}".format(e))
             return { "msg": "Cannot add this user, please review the details" },400
 
     def get(self, userId = None, update = False):
@@ -90,6 +91,7 @@ class RegOpzUser(object):
             for key in form:
                 label = labelList[key]
                 data[label] = form[key]
+            data['status'] = "Active" if data['role'] != "Default" and data['status'] == "Unspecified" else data['status']
             queryString = "UPDATE regopzuser SET role_id=(SELECT id from roles WHERE role=%s), first_name=%s, last_name=%s, email=%s,\
                 contact_number=%s, status=%s WHERE name=%s"
             queryParams = (data['role'], data['first_name'], data['last_name'], data['email'], \
@@ -100,7 +102,7 @@ class RegOpzUser(object):
                 self.dbhelper.commit()
                 return { "msg": "Successfully updated details." },200
             except Exception as e:
-                app.logger.error("E: Models: RegOpzUser: Update:", e)
+                app.logger.error("E: Models: RegOpzUser: Update: {}".format(e))
                 return { "msg": "Cannot update this user, please review the details" },400
         return NO_USER_FOUND
 
@@ -134,7 +136,7 @@ class RegOpzUser(object):
                     self.dbhelper.commit()
                     return { "msg": "Status updated successfully." },200
                 except Exception as e:
-                    app.logger.error("E: Models: RegOpzUser: ChangeStatus:", e)
+                    app.logger.error("E: Models: RegOpzUser: ChangeStatus: {}".format(e))
                     return { "msg": "Failed to update status." },200
             return { "msg": "Invalid credentials recieved." },301
 
@@ -142,12 +144,16 @@ class RegOpzUser(object):
         # This process cannot distinguish between Invalid password and Invalid username
         # hashpass = bcrypt.hashpw(base64.b64encode(hashlib.sha256(password).digest()), username)
         queryString = "SELECT r.role, u.* FROM regopzuser u JOIN (roles r) ON (u.role_id = r.id)\
-            WHERE name=%s AND password=%s AND status='Active'"
+            WHERE name=%s AND status='Active'"
         dbhelper = DatabaseHelper()
         app.logger.info("I: Models: RegOpzUser: Login: Verifying Username and Password of the User")
-        cur = dbhelper.query(queryString, (username, password, ))
+        cur = dbhelper.query(queryString, (username, ))
         data = cur.fetchone()
         if data:
-            return Token().create(data)
+            # If user data exist then check the hashed password value
+            password_entered = password.encode('utf-8')
+            hashedpassword = data['password'].encode('utf-8')
+            if hashpw(password_entered,hashedpassword)==hashedpassword:
+                return Token().create(data)
         app.logger.error("E: Models: RegOpzUser: Login: Invalid credentials recieved from User")
         return {"msg": "Login failed", "donotUseMiddleWare": True },403
