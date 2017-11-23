@@ -162,11 +162,19 @@ class DynamicReportController(Resource):
                     summ_all_src_table_final=summ_all_src_table_final.append(table_data,ignore_index=True)
                     #print(summ_all_src_table_final)
 
-                print(summ_all_src_table_final)
+                #print(summ_all_src_table_final)
+                summ_list=[]
+                for row in summ_all_src_table_final.to_dict(orient='records'):
+                    for col in summ_all_src_table_final.columns:
+                        if col =='row':
+                            continue
+                        cell_id=col+row['row']
+                        summary=row[col]
+                        summ_list.append((report_id,sheet['sheet_id'],cell_id,summary,reporting_date))
 
 
-
-
+                sql="insert into report_summary(report_id,sheet_id,cell_id,cell_summary,reporting_date) values(%s,%s,%s,%s,%s)"
+                res=self.db.transactmany(sql,summ_list)
 
                 sql="insert into report_qualified_data_link(source_id,report_id,sheet_id,cell_id,cell_calc_ref,buy_currency,\
                         sell_currency,mtm_currency,qualifying_key,business_date,reporting_date) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
