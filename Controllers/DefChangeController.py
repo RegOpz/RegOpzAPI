@@ -52,10 +52,15 @@ class DefChangeController(Resource):
             return {"msg":e},500
 
     def audit_decision(self,data):
-        if data["status"]=="REJECTED":
-            self.audit.reject_dml(data)
-        if data["status"]=="APPROVED":
-            self.audit.approve_dml(data)
-        if data["status"]=="REGRESSED":
-            self.audit.regress_dml(data)
-        return data
+        try:
+            app.logger.info("Inside audit decision for status {}".format(data["status"]))
+            if data["status"]=="REJECTED":
+                self.audit.reject_dml(data)
+            if data["status"]=="APPROVED":
+                self.audit.approve_dml(data)
+            if data["status"]=="REGRESSED":
+                self.audit.regress_dml(data)
+            return {"msg":"Successfully {0} for {1}".format(data["status"],data)},200
+        except Exception as e:
+            app.logger.error(str(e))
+            return {"msg": str(e)},500

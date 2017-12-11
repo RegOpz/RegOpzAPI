@@ -47,14 +47,12 @@ class ViewDataController(Resource):
         data = request.get_json(force=True)
         if id == None:
             return DATA_NOT_FOUND
-        res = self.dbOps.update_or_delete_data(data, id)
-        return res
+        return self.update_or_delete_data(data, id)
 
     def post(self):
         if(request.endpoint == 'report_ep'):
             data = request.get_json(force=True)
-            res = self.dbOps.insert_data(data)
-            return res
+            return self.insert_data(data)
         if(request.endpoint == 'apply_rules_ep'):
             source_info = request.get_json(force=True)
             source_id = source_info['source_id']
@@ -91,73 +89,20 @@ class ViewDataController(Resource):
 
         app.logger.info("Inseting data")
         try:
-            table_name = data['table_name']
-            update_info = data['update_info']
-            update_info_cols = update_info.keys()
-            business_date=data['business_date']
-
-            sql="insert into "+table_name + "("
-            placeholders="("
-            params=[]
-
-            for col in update_info_cols:
-                sql+=col+","
-                placeholders+="%s,"
-                if col=='id':
-                    params.append(None)
-                else:
-                    params.append(update_info[col])
-
-            placeholders=placeholders[:len(placeholders)-1]
-            placeholders+=")"
-            sql=sql[:len(sql)-1]
-            sql+=") values "+ placeholders
-
-            params_tuple=tuple(params)
-            #print(sql)
-            #print(params_tuple)
-            res=self.db.transact(sql,params_tuple)
-            self.db.commit()
-
-            return self.ret_source_data_by_id(table_name,business_date,res)
+            res = self.dbOps.insert_data(data)
+            return res
         except Exception as e:
-            app.logger.error(e)
-            return {"msg":e},500
+            app.logger.error(str(e))
+            return {"msg":str(e)},500
 
-    def update_data(self,data,id):
-        app.logger.info("Updating data")
+    def update_or_delete_data(self,data,id):
+        app.logger.info("Updating or Deleting data")
         try:
-            table_name=data['table_name']
-            update_info=data['update_info']
-            update_info_cols=update_info.keys()
-            business_date=data['business_date']
-
-            sql= 'update '+table_name+ ' set '
-            params=[]
-            for col in update_info_cols:
-                sql+=col +'=%s,'
-                params.append(update_info[col])
-
-            sql=sql[:len(sql)-1]
-            sql+=" where business_date =%s and id=%s"
-            params.append(business_date)
-            params.append(id)
-            params_tuple=tuple(params)
-
-            #print(sql)
-            #print(params_tuple)
-
-            res=self.db.transact(sql,params_tuple)
-
-            if res==0:
-                self.db.commit()
-                return self.ret_source_data_by_id(table_name,business_date,id)
-
-            self.db.rollback()
-            return UPDATE_ERROR
+            res = self.dbOps.update_or_delete_data(data, id)
+            return res
         except Exception as e:
-            app.logger.error(e)
-            return {"msg":e},500
+            app.logger.error(str(e))
+            return {"msg":str(e)},500
 
     def ret_source_data_by_id(self, table_name,business_date,id):
         app.logger.info("Getting source data by id")
