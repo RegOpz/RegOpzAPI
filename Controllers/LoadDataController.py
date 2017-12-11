@@ -12,6 +12,7 @@ class LoadDataController(Resource):
 
     def post(self):
         data=request.get_json(force=True)
+        app.logger.info("Inside post of Loading data {}".format(data))
         return self.load_data(data['source_id'],data['data_file'],data['business_date'],data['file'])
 
 
