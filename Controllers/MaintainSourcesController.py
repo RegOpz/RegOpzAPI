@@ -27,8 +27,7 @@ class MaintainSourcesController(Resource):
 	def post(self):
 		data = request.get_json(force=True)
 		app.logger.info("Data in post call {}".format(data,))
-		res = self.insert_data(data)
-		return res
+		return self.insert_data(data)
 
 	def put(self, id=None):
 		if id == None:
@@ -43,51 +42,51 @@ class MaintainSourcesController(Resource):
 		try:
 			create_table_name=data['update_info']['source_table_name']
 			columns=data['added_fields']
-			self.create_table(create_table_name,columns)
-			self.insert_columns(create_table_name,columns)
-			table_name = data['table_name']
-			update_info = data['update_info']
-			update_info_cols = update_info.keys()
+			if columns:
+				table_name = data['table_name']
+				update_info = data['update_info']
+				update_info_cols = update_info.keys()
 
-			sql="insert into "+table_name + "("
-			placeholders="("
-			params=[]
+				sql="insert into "+table_name + "("
+				placeholders="("
+				params=[]
 
-			for col in update_info_cols:
-				sql+=col+","
-				placeholders+="%s,"
-				if col=='id':
-					params.append(None)
-				else:
-					params.append(update_info[col])
+				for col in update_info_cols:
+					sql+=col+","
+					placeholders+="%s,"
+					if col=='id':
+						params.append(None)
+					else:
+						params.append(update_info[col])
 
-			placeholders=placeholders[:len(placeholders)-1]
-			placeholders+=")"
-			sql=sql[:len(sql)-1]
-			sql+=") values "+ placeholders
+				placeholders=placeholders[:len(placeholders)-1]
+				placeholders+=")"
+				sql=sql[:len(sql)-1]
+				sql+=") values "+ placeholders
 
-			params_tuple=tuple(params)
-			#print(sql)
-			#print(params_tuple)
-			app.logger.info("Insering data into table")
-			res=self.db.transact(sql,params_tuple)
-			self.db.commit()
-			data['update_info']=self.ret_source_data_by_id(table_name,res)
-			data['update_info']['source_id'] = data['update_info']['id']
-
-			return self.update_data(data, res)
+				params_tuple=tuple(params)
+				#print(sql)
+				#print(params_tuple)
+				app.logger.info("Insering data into table")
+				res=self.db.transact(sql,params_tuple)
+				# Now set source_id same as inserted id of the source
+				sql="update {0} set source_id=id where id={1}".format(table_name,str(res))
+				self.db.transact(sql)
+				self.insert_columns(create_table_name,columns)
+				self.create_table(create_table_name,columns)
+				self.db.commit()
+			else:
+				return {"msg":"FATAL Error!! Can not add source as no columns defined for the source {}".format(create_table_name)},500
 		except Exception as e:
 			app.logger.error(e)
-			return {"msg":e},500
+			app.logger.info("Rolling back insert data")
+			self.db.rollback()
+			return {"msg":str(e)},500
 
 	def update_data(self,data,id):
 		app.logger.info("Updating data")
 
 		try:
-			alter_table_name=data['update_info']['source_table_name']
-			columns=data['added_fields']
-			self.modify_table(alter_table_name,columns)
-			self.insert_columns(alter_table_name,columns)
 			table_name=data['table_name']
 			update_info=data['update_info']
 			update_info_cols=update_info.keys()
@@ -111,15 +110,18 @@ class MaintainSourcesController(Resource):
 
 			if res==0:
 				app.logger.info("Comitting updated data")
+				alter_table_name=data['update_info']['source_table_name']
+				columns=data['added_fields']
+				if columns:
+					self.insert_columns(alter_table_name,columns)
+					self.modify_table(alter_table_name,columns)
 				self.db.commit()
 				return self.ret_source_data_by_id(table_name,id)
-
-			app.logger.info("Rolling back updated data")
-			self.db.rollback()
-			return UPDATE_ERROR
 		except Exception as e:
 			app.logger.error(e)
-			return {"msg":e}, 500
+			app.logger.info("Rolling back updated data")
+			self.db.rollback()
+			return {"msg":str(e)}, 500
 
 	def ret_source_data_by_id(self,table_name,id):
 
@@ -194,15 +196,15 @@ class MaintainSourcesController(Resource):
 			data_dict_database = self.db.query("describe " + table_name).fetchall()
 			return data_dict
 		except mysql.connector.Error as err:
-			if err.errno == errorcode.ER_BAD_TABLE_ERROR:
-				app.logger.error(err)
+			if err.errno == errorcode.ER_NO_SUCH_TABLE:
+				app.logger.error("No such table {}".format(str(err)))
 				return data_dict
 			else:
-				app.logger.error(err)
-				return {"msg": err}, 500
+				app.logger.error("msg mysql.connector error {0} {1}".format(err,err.errno))
+				return {"msg": str(err)}, 500
 		except Exception as e:
-			app.logger.error(e)
-			return {"msg":e},500
+			app.logger.error("Any other exception {}".format(str(e)))
+			return {"msg":str(e)},500
 
 
 	def create_table(self,table_name,columns):
@@ -214,7 +216,10 @@ class MaintainSourcesController(Resource):
 			sql += col['Field'] + ' ' + col['Type'] +' '+not_null+ ','
 		sql = sql[:-1] + ' )'
 		app.logger.info(sql)
-		self.db.transact(sql)
+		try:
+			self.db.transact(sql)
+		except Exception as e:
+			raise(e)
 
 	def modify_table(self,table_name,columns):
 		app.logger.info("Modify table for existing source ")
@@ -224,16 +229,22 @@ class MaintainSourcesController(Resource):
 			not_null = 'not null' if col['Null'] == 'NO' else ''
 			sql+=col['Field'] +' ' + col['Type']+' '+not_null+','
 		sql=sql[:-1]+' )'
-		self.db.transact(sql)
+		try:
+			self.db.transact(sql)
+		except Exception as e:
+			raise(e)
 
 	def insert_columns(self,table_name,columns):
-		app.logger.info("Insert columns for source")
+		try:
+			app.logger.info("Insert columns for source")
 
-		for col in columns:
-			sql='insert into data_source_cols(source_table_name,column_name,column_datatype,column_default_value,\
-			column_is_nullable,column_key,column_display_name) values(%s,%s,%s,%s,%s,%s,%s)'
-			params=(table_name,col['Field'],col['Type'],col['Default'],col['Null'],col['Key'],'')
+			for col in columns:
+				sql='insert into data_source_cols(source_table_name,column_name,column_datatype,column_default_value,\
+				column_is_nullable,column_key,column_display_name) values(%s,%s,%s,%s,%s,%s,%s)'
+				params=(table_name,col['Field'],col['Type'],col['Default'],col['Null'],col['Key'],'')
 
-			self.db.transact(sql,params)
+				self.db.transact(sql,params)
 
-		self.db.commit()
+			# self.db.commit()
+		except Exception as e:
+			raise(e)
