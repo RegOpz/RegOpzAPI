@@ -26,11 +26,11 @@ class LoadDataController(Resource):
 
             if data_exists:
                 if 'SUCCESS' in data_exists['file_load_status']:
-                    return {'msg': "Data already loaded for the given business date", 'filename': data_exists['data_file_name']}, 400
+                    return {'msg': "Data already loaded for the given business date " + business_date, 'filename': data_exists['data_file_name']}, 400
                 elif data_exists['file_load_status']=='DATALOADING':
-                    return {'msg': "Data loading currently running for the given business date", 'filename': data_exists['data_file_name']}, 400
+                    return {'msg': "Data loading currently running for the given business date " + business_date, 'filename': data_exists['data_file_name']}, 400
                 elif data_exists['file_load_status']=='APPLYRULES':
-                    return {'msg': "Apply Business Rules currently running for the given business date", 'filename': data_exists['data_file_name']}, 400
+                    return {'msg': "Apply Business Rules currently running for the given business date " + business_date, 'filename': data_exists['data_file_name']}, 400
                 else:
                     self.update_data_catalog(source_id,business_date,selected_file,0,'','DATALOADING')
                     self.delete_existing_data(table_name,business_date)
@@ -39,12 +39,14 @@ class LoadDataController(Resource):
 
             fs=self.get_file_seperator(source_id)
             col_list=self.get_col_list(table_name)
+            # app.logger.info("col_list",col_list)
             chunksize=100000
 
             num_records=0
             file_load_status='DATALOADING-SUCCESS'
-            for chunk in pd.read_csv(UPLOAD_FOLDER+data_file,sep=fs,index_col=0,chunksize=chunksize,na_filter=False):
+            for chunk in pd.read_csv(UPLOAD_FOLDER+data_file,sep=fs,chunksize=chunksize,na_filter=False):
                #print(chunk)
+            #    app.logger.info("chunk columns",chunk.columns.values)
                found_col_list=[]
                for col in col_list:
                    if col in chunk.columns.values and col not in ['id','dml_allowed','in_use','last_updated_by']:
@@ -97,12 +99,12 @@ class LoadDataController(Resource):
 
             if "SUCCESS" in file_load_status:
                 print("Data Loaded Successfully")
-                return {'msg': 'Data Loaded Successfully', 'filename': data_file}, 200
+                return {'msg': 'Data Loaded Successfully ['+ selected_file +'] for ' + business_date, 'filename': data_file}, 200
             else:
-                return {'msg': 'Data load failure, please check.', 'filename': data_file}, 400
+                return {'msg': 'Data load failure, please check.[' + selected_file + '] for ' + business_date, 'filename': data_file}, 400
         except Exception as e:
             app.logger.error(e)
-            return {"msg":e, 'filename': data_file},500
+            return {"msg":e + '[' + selected_file + '] for ' + business_date, 'filename': data_file},500
 
 
 

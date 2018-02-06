@@ -435,15 +435,20 @@ class ViewDataController(Resource):
                 data_sources["file_load_status"] = "SUCCESS"
                 #print(code)
                 print("End of try....")
+                self.update_data_catalog(status=data_sources["file_load_status"],source_id=source_id,business_date=business_date)
+                return {"msg": "Apply rule SUCCESSFULLY COMPLETED for source ["+str(source_id)+"] Business date ["+str(business_date)+"]."}, 200
             except Exception as e:
                 print("In except..." + str(e))
                 db.rollback()
                 #print(code)
                 data_sources["file_load_status"] = "FAILED"
-            finally:
-                print("In finally")
                 self.update_data_catalog(status=data_sources["file_load_status"],source_id=source_id,business_date=business_date)
-                return data_sources
+                return {"msg": str(e) + " Apply rule FAILED for source ["+ str(source_id) +"] Business date ["+str(business_date)+"]"}, 400
+            # finally:
+            #     print("In finally")
+            #     self.update_data_catalog(status=data_sources["file_load_status"],source_id=source_id,business_date=business_date)
+            #     # return data_sources
+
 
     def update_data_catalog(self,status,source_id,business_date):
         app.logger.info("Updating data catalog")

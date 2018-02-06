@@ -48,6 +48,7 @@ class ReportTemplateController(Resource):
             return COUNTRY_EMPTY
 
         file = request.files['file']
+        self.selected_file=file.filename
         if file and not self.allowed_file(file.filename):
             return FILE_TYPE_IS_NOT_ALLOWED
         filename = str(uuid.uuid4()) + "_" + secure_filename(file.filename)
@@ -141,7 +142,7 @@ class ReportTemplateController(Resource):
                                           values(%s,%s,%s,%s,%s)',
                                             (self.report_id, sheet.title, cell_ref, cell_render_ref, cell_obj_value.strip()))
             self.db.commit()
-            return 0
+            return {"msg": "Report [" + self.report_id + "] template has been captured successfully using " + self.selected_file}, 200
         except Exception as e:
             app.logger.error(e)
             return {"msg": e}, 500
@@ -197,6 +198,3 @@ class ReportTemplateController(Resource):
         except Exception as e:
             app.logger.error(e)
             return {"msg": e}, 500
-
-
-

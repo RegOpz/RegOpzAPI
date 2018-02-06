@@ -58,6 +58,8 @@ class GenerateReportController(Resource):
             self.create_report_summary_final(**report_kwargs)
             self.update_report_catalog(status='SUCCESS', report_id=report_id, reporting_date=reporting_date)
 
+            return {"msg": "Report generated SUCCESSFULLY for ["+str(report_id)+"] Reporting date ["+str(reporting_date)+"]."}, 200
+
 
 
         if(request.endpoint == 'generate_report_ep'):
@@ -83,6 +85,7 @@ class GenerateReportController(Resource):
                 #db.rollback()
             #finally:
                 #return report_kwargs
+            return {"msg": "Report generated SUCCESSFULLY for ["+str(report_id)+"] Reporting date ["+str(reporting_date)+"]."}, 200
 
     def get_report_list(self,country='ALL'):
         db=DatabaseHelper()
