@@ -161,7 +161,9 @@ class ViewReportController(Resource):
                 data_sources['start_date']=reporting_date_start
                 data_sources['end_date']=reporting_date_end
                 app.logger.info("Getting list of rpeort between dates {0} and {1}".format(reporting_date_start ,reporting_date_end))
-                sql = "select * from report_catalog where as_of_reporting_date between '{0}' and '{1}'".format(reporting_date_start ,reporting_date_end)
+                sql = "select rc.*,rdc.country,rdc.report_description from report_catalog rc, " + \
+                    " report_def_catalog rdc where rc.report_id=rdc.report_id " +\
+                    " and rc.as_of_reporting_date between '{0}' and '{1}'".format(reporting_date_start ,reporting_date_end)
 
             reports = self.db.query(sql).fetchall()
 

@@ -251,7 +251,11 @@ class ViewDataController(Resource):
             data_sources={}
             data_sources['start_date']=start_business_date
             data_sources['end_date']=end_business_date
-            data_feeds = self.db.query("select *  from data_catalog  where business_date between '{0}' and '{1}' order by business_date ".format(start_business_date ,end_business_date )).fetchall()
+            sql="select dc.*,dsi.source_description, dsi.country from data_catalog dc, data_source_information dsi " + \
+                " where dc.source_id=dsi.source_id and dc.business_date between '{0}' and '{1}' " + \
+                " order by dc.business_date "
+            sql=sql.format(start_business_date ,end_business_date )
+            data_feeds = self.db.query(sql).fetchall()
 
             #print(data_sources)
             data_sources['data_sources']=data_feeds

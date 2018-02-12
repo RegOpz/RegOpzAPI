@@ -170,7 +170,7 @@ class ReportTemplateController(Resource):
             # report_suggestion = db.query(sql).fetchall()
             data_dict['country'] = country
             for i,c in enumerate(data_dict['country']):
-                sql = "select distinct report_id from report_def_catalog where country = '" + c['country'] + "'"
+                sql = "select distinct report_id, report_description from report_def_catalog where country = '" + c['country'] + "'"
 
                 if report_id is not None and report_id !='ALL':
                      where_clause =  " and instr(upper('" + report_id + "'), upper(report_id)) > 0"
@@ -181,7 +181,8 @@ class ReportTemplateController(Resource):
                 data_dict['country'][i]['report'] = report
                 where_report = ''
                 for j,r in enumerate(data_dict['country'][i]['report']):
-                    sql = "select distinct report_id, valid_from, valid_to, last_updated_by from report_def where 1 "
+                    sql = "select distinct report_id, valid_from, valid_to, last_updated_by,'{0}' as report_description from report_def where 1 "
+                    sql = sql.format(data_dict['country'][i]['report'][j]['report_description'])
                     where_report =  " and report_id = '" + data_dict['country'][i]['report'][j]['report_id'] + "'"
                     app.logger.info("Getting different version for report {}".format(data_dict['country'][i]['report'][j]))
                     reportversions = self.db.query(sql + where_report).fetchone()
