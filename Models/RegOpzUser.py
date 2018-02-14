@@ -107,7 +107,7 @@ class RegOpzUser(object):
             cur = self.dbhelper.query(queryString, queryParams)
             data = cur.fetchone()
             if data:
-                return { "msg": "Username already exists." },200
+                return { "msg": "Username already exists.", "donotUseMiddleWare": True },200
             return {},200
 
     def changeStatus(self, userId = None):
@@ -139,4 +139,4 @@ class RegOpzUser(object):
         data = cur.fetchone()
         if data:
             return Token().create(data)
-        return {"msg": "Login failed"},403
+        return {"msg": "Login failed", "donotUseMiddleWare": True },403

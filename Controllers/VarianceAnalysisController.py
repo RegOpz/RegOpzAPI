@@ -94,7 +94,7 @@ class VarianceAnalysisController(Resource):
                             first_cell['variance'] = 0
                             first_cell['classname'] = ""
                         elif first_value ==0 and subsequent_value != 0:
-                            first_cell['variance'] = "+ ∞"
+                            first_cell['variance'] = "+ inf"
                             first_cell['classname'] = "red fa fa-caret-up"
                         # elif first_value !=0 and subsequent_value == 0:
                         #     first_cell['variance'] = "- ∞"
