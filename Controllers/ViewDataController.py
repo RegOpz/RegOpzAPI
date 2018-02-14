@@ -285,9 +285,10 @@ class ViewDataController(Resource):
                             and sheet_id = %s and cell_id = %s",(data['cell_calc_ref'],data["report_id"],
                                                                  data["sheet_id"],data["cell_id"])).fetchone()
 
-                data["cell_business_rules"]=cell_rule["cell_business_rules"]
-                data["data_qualifying_rules"]=data_qual["business_rules"]
-                result_set.append(data)
+                if cell_rule:
+                    data["cell_business_rules"]=cell_rule["cell_business_rules"]
+                    data["data_qualifying_rules"]=data_qual["business_rules"]
+                    result_set.append(data)
 
             return result_set
         except Exception as e:
