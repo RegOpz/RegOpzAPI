@@ -501,57 +501,46 @@ class DocumentController(Resource):
 
         return { "file_name": target_file_name }
 
-    def cell_drill_down_rules(self,**kwargs):
-        parameter_list = ['report_id', 'sheet_id', 'cell_id']
-        if set(parameter_list).issubset(set(kwargs.keys())):
-            report_id = kwargs["report_id"]
-            sheet_id = kwargs['sheet_id']
-            cell_id = kwargs['cell_id']
-        else:
-            print("Please supply parameters: " + str(parameter_list))
-
+    def cell_drill_down_rules(self,report_id,sheet_id,cell_id):
         db=DatabaseHelper()
 
-        sql="select * from report_comp_agg_def where report_id='"+report_id+"' and sheet_id='"+sheet_id+"' and\
-            cell_id='"+cell_id+"'"
+        sql="select cell_calc_ref from report_def where report_id=%s and sheet_id=%s and (cell_id=%s or cell_id like %s) and cell_render_def='COMP_AGG_REF'"
+        comp_agg_ref=db.query(sql,(report_id,sheet_id,cell_id,cell_id+":%")).fetchone()
+
+        sql="select * from report_comp_agg_def where report_id=%s and sheet_id=%s and cell_id=%s"
 
         cell_calc_ref_list = ''
-        comp_agg_rules=db.query(sql).fetchall()
+        comp_agg_rules=db.query(sql,(report_id,sheet_id,cell_id)).fetchall()
         if comp_agg_rules:
-            formula = comp_agg_rules[0]['comp_agg_ref']
+            formula = comp_agg_rules[0]['comp_agg_rule']
             variables = list(set([node.id for node in ast.walk(ast.parse(formula)) if isinstance(node, ast.Name)]))
-            cell_calc_ref_list = ''
-            for v in variables:
-                cell_calc_ref_list += ',\'' + v + '\''
-            cell_calc_ref_list = cell_calc_ref_list[1:]
-
-        #sql="select * from report_agg_def where report_id='"+report_id+"' and sheet_id='"+sheet_id+"' and\
-        #    cell_id='"+cell_id+"'"
+            cell_calc_ref_list = ','.join(variables)
 
         agg_rules=[]
 
-        sql = "select  a.* from report_calc_def a,\
-            data_source_information b where a.source_id=b.source_id and \
-            report_id='" + report_id + "' and sheet_id='" + sheet_id + "' and \
-            cell_id='" + cell_id + "'"
+        sql = "select  a.* from report_calc_def a,data_source_information b where a.source_id=b.source_id and \
+            report_id=%s and sheet_id=%s and cell_id=%s"
         if cell_calc_ref_list != '':
-            sql += " union " + \
-            "select  a.* from report_calc_def a,\
-                data_source_information b where a.source_id=b.source_id and \
-                report_id='" + report_id + "' and cell_calc_ref in (" + cell_calc_ref_list + ")"
+            sql += " union select  a.* from report_calc_def a,data_source_information b where a.source_id=b.source_id and \
+                report_id=%s and cell_calc_ref in (%s)"
+            cell_rules = db.query(sql, (report_id, sheet_id, cell_id, report_id, cell_calc_ref_list)).fetchall()
+        else:
+            cell_rules = db.query(sql, (report_id, sheet_id, cell_id)).fetchall()
+
 
         #print(sql)
-        cell_rules=db.query(sql).fetchall()
+
 
         for i,c in enumerate(cell_rules):
             print('Processing index ',i)
             for k,v in c.items():
                 if isinstance(v,datetime):
                     c[k] = c[k].isoformat()
-                    print(c[k], type(c[k]))
+                    #print(c[k], type(c[k]))
 
         display_dict={}
 
+        display_dict['comp_agg_ref']=comp_agg_ref['cell_calc_ref']
         display_dict['comp_agg_rules']=comp_agg_rules
         display_dict['agg_rules']=agg_rules
         display_dict['cell_rules']=cell_rules

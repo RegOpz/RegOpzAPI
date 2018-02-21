@@ -18,6 +18,8 @@ import ast
 from operator import itemgetter
 from datetime import datetime
 import time
+import math
+import re
 
 UPLOAD_FOLDER = './uploads/templates'
 ALLOWED_EXTENSIONS = set(['txt', 'xls', 'xlsx'])
@@ -93,7 +95,9 @@ class ReportTemplateController(Resource):
 
             #db = DatabaseHelper()
 
+            sheet_index=0
             for sheet in wb.worksheets:
+                sheet_index+=1
                 app.logger.info("Deleting definition entries for sheet {} ,report {}".format(sheet.title,self.report_id))
                 self.db.transact('delete from report_def where report_id=%s and sheet_id=%s', (self.report_id, sheet.title,))
 
@@ -114,20 +118,27 @@ class ReportTemplateController(Resource):
 
                 app.logger.info("Creating entries for merged cells")
                 rng_startcell = []
+                rng_boundary=[]
                 for rng in sheet.merged_cell_ranges:
                     # print rng
                     startcell, endcell = rng.split(':')
                     # print sheet.cell(startcell).border
                     rng_startcell.append(startcell)
+                    rng_boundary.append(rng)
+                    agg_ref='S'+str(sheet_index)+'AGG'+str(startcell)
 
                     self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
                                 values(%s,%s,%s,%s,%s)',
                                 (self.report_id, sheet.title, rng, 'MERGED_CELL', sheet[startcell].value))
+                    self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
+                                values(%s,%s,%s,%s,%s)',
+                                (self.report_id, sheet.title, rng, 'COMP_AGG_REF', agg_ref))
 
                 app.logger.info("Creating entries for static text and formulas")
                 for all_obj in sheet['A1':util.cell_index(sheet.max_column, sheet.max_row)]:
                     for cell_obj in all_obj:
                         cell_ref = str(cell_obj.column) + str(cell_obj.row)
+                        agg_ref='S'+str(sheet_index)+'AGG'+str(cell_ref)
                         if (len(rng_startcell) > 0 and cell_ref not in rng_startcell) or (len(rng_startcell) == 0):
                             if cell_obj.value:
                                 for key in formula_dict.keys():
@@ -141,11 +152,53 @@ class ReportTemplateController(Resource):
                                 self.db.transact('insert into report_def(report_id,sheet_id ,cell_id ,cell_render_def ,cell_calc_ref)\
                                           values(%s,%s,%s,%s,%s)',
                                             (self.report_id, sheet.title, cell_ref, cell_render_ref, cell_obj_value.strip()))
+
+                            if not self.check_if_cell_isin_range(cell_ref,rng_boundary):
+                                self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
+                                                 values(%s,%s,%s,%s,%s)',(self.report_id, sheet.title, cell_ref, 'COMP_AGG_REF', agg_ref))
+
             self.db.commit()
             return {"msg": "Report [" + self.report_id + "] template has been captured successfully using " + self.selected_file}, 200
         except Exception as e:
             app.logger.error(e)
             return {"msg": e}, 500
+
+    def check_if_cell_isin_range(self,cell_id,rng_boundary_list):
+
+        def number_from_word(value):
+            base='ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+            result=0
+            i=len(value)-1
+            for j in range(0,len(value)):
+              result+=math.pow(len(base),i)*(base.index(value[j])+1)
+              i-=1
+            return result
+
+        def split_numbers_chars(string):
+            sub=re.split('(\d+)', string)
+            return sub
+
+        def check_inclusion(cell,rng):
+            start_cell, end_cell = rng.split(':')
+            start_cell_sub=split_numbers_chars(start_cell)
+            end_cell_sub=split_numbers_chars(end_cell)
+            cell_sub=split_numbers_chars(cell)
+
+            within_rng=False
+
+            if number_from_word(cell_sub[0]) >=number_from_word(start_cell_sub[0]) \
+            and number_from_word(cell_sub[0]) <= number_from_word(end_cell_sub[0]) \
+            and  cell_sub[1] >= start_cell_sub[1] and cell_sub[1] <= end_cell_sub[1]:
+                within_rng=True
+
+            return within_rng
+
+        for rng in rng_boundary_list:
+            incl=check_inclusion(cell_id,rng)
+            if incl:
+                break
+        return incl
+
 
     def report_template_suggesstion_list(self,report_id='ALL',country='ALL'):
 
