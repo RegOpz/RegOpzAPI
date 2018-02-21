@@ -113,25 +113,46 @@ class ViewReportController(Resource):
                             col_width = row['cell_calc_ref']
                         col_attr[row['cell_id']] = {'width': col_width}
 
-                app.logger.info("Writing report data to dictionary")
-                for row in data:
-                    cell_d = {}
-                    if cell_format_yn == 'Y':
-                        # print(row["cell_id"],row["cell_summary"])
-                        try:
-                            cell_summary = agg_format_data[row['report_id'] + row['sheet_id'] + row['cell_id']]
-                        except KeyError:
-                            cell_summary = util.round_value(
-                                float(util.if_null_zero(row["cell_summary"])) / float(row["reporting_scale"]),
-                                row["rounding_option"])
+                if reporting_date == '19000101' or not reporting_date:
+                    comp_agg_def = self.db.query("select cell_id,cell_render_def,cell_calc_ref from report_def where \
+                    report_id=%s and sheet_id=%s and cell_render_def='COMP_AGG_REF'",
+                                                 (self.report_id, sheet["sheet_id"])).fetchall()
 
-                    else:
-                        cell_summary = float(util.if_null_zero(row["cell_summary"]))
+                    for row in comp_agg_def:
+                        cell_d = {}
+                        if ':' in row['cell_id']:
+                            start_cell, end_cell = row['cell_id'].split(':')
+                        else:
+                            start_cell=row['cell_id']
 
-                    cell_d['cell'] = row['cell_id']
-                    cell_d['value'] = cell_summary
-                    cell_d['origin'] = "DATA"
-                    matrix_list.append(cell_d)
+                        current_cell_exists=next((item for item in matrix_list if item['cell']==start_cell),False)
+                        if not current_cell_exists:
+                            cell_d['cell'] = start_cell
+                            cell_d['value'] = row['cell_calc_ref']
+                            cell_d['origin'] = "TEMPLATE"
+                            #print(cell_d)
+                            matrix_list.append(cell_d)
+                else:
+                    app.logger.info("Writing report data to dictionary")
+                    for row in data:
+                        cell_d = {}
+                        if cell_format_yn == 'Y':
+                            # print(row["cell_id"],row["cell_summary"])
+                            try:
+                                cell_summary = agg_format_data[row['report_id'] + row['sheet_id'] + row['cell_id']]
+                            except KeyError:
+                                cell_summary = util.round_value(
+                                    float(util.if_null_zero(row["cell_summary"])) / float(row["reporting_scale"]),
+                                    row["rounding_option"])
+
+                        else:
+                            cell_summary = float(util.if_null_zero(row["cell_summary"]))
+
+                        cell_d['cell'] = row['cell_id']
+                        cell_d['value'] = cell_summary
+                        cell_d['origin'] = "DATA"
+                        matrix_list.append(cell_d)
+
 
                 sheet_d = {}
                 sheet_d['sheet'] = sheet['sheet_id']
@@ -140,6 +161,7 @@ class ViewReportController(Resource):
                 sheet_d['row_attr'] = row_attr
                 sheet_d['col_attr'] = col_attr
                 sheet_d_list.append(sheet_d)
+
 
             json_dump = (sheet_d_list)
             # print(json_dump)
