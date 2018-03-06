@@ -52,13 +52,15 @@ class MaintainReportRulesController(Resource):
 		res = self.dbOps.insert_data(data)
 		return res
 
-	def put(self, id=None):
-		if id == None:
+	def put(self, id=None, report=None):
+		if id == None and report == None:
 			return BUSINESS_RULE_EMPTY
 		data = request.get_json(force=True)
 		if request.endpoint == "report_rule_ep":
 			res = self.dbOps.update_or_delete_data(data, id)
 			return res
+		if request.endpoint == "report_parameter_ep":
+			return self.update_report_parameters(data, report)
 
 	# def delete(self, id=None):
 	# 	if id == None:
@@ -73,6 +75,20 @@ class MaintainReportRulesController(Resource):
     #
 	# 		res = self.dbOps.delete_data(table_name,id)
 	# 		return res
+
+	def update_report_parameters(self,data,report):
+		app.logger.info("Updating Report Parameters in Report Def Catalog {}".format(data,))
+		sql = "update report_def_catalog set report_parameters='{0}' where report_id='{1}'"
+		sql = sql.format(data['report_parameters'],report)
+		try:
+			self.db.transact(sql)
+			self.db.commit()
+			return {"msg": "Report parameters updated successfully for {0}".format(report,)}, 200
+		except Exception as e:
+			return {"msg": str(e)},500
+
+
+
 
 	def get_source_suggestion_list(self,source_id='ALL'):
 
@@ -228,4 +244,3 @@ class MaintainReportRulesController(Resource):
 		except Exception as e:
 			app.logger.error(e)
 			return {"msg": e}, 500
-
