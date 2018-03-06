@@ -72,7 +72,7 @@ class GenerateReportController(Resource):
             print(report_kwargs)
             db=DatabaseHelper()
             #try:
-            self.update_report_catalog(status='RUNNING',report_id=report_id,reporting_date=reporting_date)
+            self.update_report_catalog(status='RUNNING',report_id=report_id,reporting_date=reporting_date,report_parameters=report_parameters)
             self.create_report_detail(**report_kwargs)
             print("create_report_summary_by_source")
             self.create_report_summary_by_source(**report_kwargs)
@@ -105,10 +105,13 @@ class GenerateReportController(Resource):
         db.transact(sql,(report_id,reporting_date,report_create_date,report_parameters,report_create_status,as_of_reporting_date))
         db.commit()
 
-    def update_report_catalog(self,status,report_id,reporting_date):
+    def update_report_catalog(self,status,report_id,reporting_date,report_parameters=None):
         db=DatabaseHelper()
-        db.transact("update report_catalog set report_create_status=%s \
-                    where report_id=%s and reporting_date=%s",(status,report_id,reporting_date))
+        update_clause = "report_create_status='{0}'".format(status,)
+        if report_parameters != None:
+            update_clause += ", report_parameters='{0}'".format(report_parameters,)
+        sql = "update report_catalog set {0} where report_id='{1}' and reporting_date='{2}'".format(update_clause,report_id,reporting_date,)
+        db.transact(sql)
         db.commit()
 
 
