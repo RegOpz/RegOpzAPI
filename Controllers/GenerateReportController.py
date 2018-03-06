@@ -67,7 +67,7 @@ class GenerateReportController(Resource):
             report_id = report_info['report_id']
             report_parameters = report_info['report_parameters']
             reporting_date = report_info['reporting_date']
-            report_kwargs = eval("{'report_id':'" + report_id + "' ," + report_parameters + "}")
+            report_kwargs = eval("{'report_id':'" + report_id + "' ," + report_parameters.replace('"',"'") + "}")
             #report_kwargs = {'report_id': 'MAS1003', 'business_date_from': '20160930', 'reporting_currency': 'SGD', 'ref_date_rate': 'B', 'business_date_to': '20160930', 'rate_type': 'MAS'}
             print(report_kwargs)
             db=DatabaseHelper()
@@ -109,7 +109,8 @@ class GenerateReportController(Resource):
         db=DatabaseHelper()
         update_clause = "report_create_status='{0}'".format(status,)
         if report_parameters != None:
-            update_clause += ", report_parameters='{0}'".format(report_parameters,)
+            # Replace all singlequotes(') with double quote(") as update sql requires all enclosed in ''
+            update_clause += ", report_parameters='{0}'".format(report_parameters.replace("'",'"'),)
         sql = "update report_catalog set {0} where report_id='{1}' and reporting_date='{2}'".format(update_clause,report_id,reporting_date,)
         db.transact(sql)
         db.commit()
