@@ -186,6 +186,12 @@ api.add_resource(MaintainReportRulesController,
     apiPath+"/report-rule/<int:id>",
     endpoint="report_rule_ep"
 )
+
+api.add_resource(MaintainReportRulesController,
+    apiPath+"/report-rule/<string:report>",
+    endpoint="report_parameter_ep"
+)
+
 api.add_resource(MaintainReportRulesController,
     apiPath+"/report-rule/get-business-rules-suggestion-list",
     endpoint="get_business_rules_suggestion_list_ep"
