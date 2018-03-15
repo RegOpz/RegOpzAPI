@@ -126,6 +126,25 @@ class ReportTemplateController(Resource):
                     rng_startcell.append(startcell)
                     rng_boundary.append(rng)
                     agg_ref='S'+str(sheet_index)+'AGG'+str(startcell)
+                    _cell=sheet[startcell]
+                    cell_style={"font":{"name":_cell.font.name,
+                                        "bold": _cell.font.b,
+                                        "italic": _cell.font.i,
+                                        "colour": _cell.font.color.rgb if _cell.font.color else 'None',
+                                        "size": _cell.font.sz},
+                                "fill": {"type": _cell.fill.fill_type,
+                                        "colour" : _cell.fill.fgColor.rgb if _cell.fill.fgColor else 'None'},
+                                "alignment": {"horizontal": _cell.alignment.horizontal,
+                                        "vertical": _cell.alignment.vertical},
+                                "border":{"left":{"style": _cell.border.left.style,
+                                                "colour":_cell.border.left.color.rgb if _cell.border.left.color else 'None'} ,
+                                        "right":{"style": _cell.border.right.style,
+                                                "colour":_cell.border.right.color.rgb if _cell.border.right.color else 'None'},
+                                        "top":{"style": _cell.border.top.style,
+                                                "colour":_cell.border.top.color.rgb if _cell.border.top.color else 'None'},
+                                        "bottom":{"style": _cell.border.bottom.style,
+                                                "colour":_cell.border.bottom.color.rgb if _cell.border.bottom.color else 'None'},}
+                    }
 
                     self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
                                 values(%s,%s,%s,%s,%s)',
@@ -133,12 +152,34 @@ class ReportTemplateController(Resource):
                     self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
                                 values(%s,%s,%s,%s,%s)',
                                 (self.report_id, sheet.title, rng, 'COMP_AGG_REF', agg_ref))
+                    self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
+                                values(%s,%s,%s,%s,%s)',
+                                (self.report_id, sheet.title, rng, 'CELL_STYLE', str(cell_style)))
 
                 app.logger.info("Creating entries for static text and formulas")
                 for all_obj in sheet['A1':util.cell_index(sheet.max_column, sheet.max_row)]:
                     for cell_obj in all_obj:
                         cell_ref = str(cell_obj.column) + str(cell_obj.row)
                         agg_ref='S'+str(sheet_index)+'AGG'+str(cell_ref)
+                        _cell=sheet[cell_ref]
+                        cell_style={"font":{"name":_cell.font.name,
+                                            "bold": _cell.font.b,
+                                            "italic": _cell.font.i,
+                                            "colour": _cell.font.color.rgb if _cell.font.color else 'None',
+                                            "size": _cell.font.sz},
+                                    "fill": {"type": _cell.fill.fill_type,
+                                            "colour" : _cell.fill.fgColor.rgb if _cell.fill.fgColor else 'None'},
+                                    "alignment": {"horizontal": _cell.alignment.horizontal,
+                                            "vertical": _cell.alignment.vertical},
+                                    "border":{"left":{"style": _cell.border.left.style,
+                                                    "colour":_cell.border.left.color.rgb if _cell.border.left.color else 'None'} ,
+                                            "right":{"style": _cell.border.right.style,
+                                                    "colour":_cell.border.right.color.rgb if _cell.border.right.color else 'None'},
+                                            "top":{"style": _cell.border.top.style,
+                                                    "colour":_cell.border.top.color.rgb if _cell.border.top.color else 'None'},
+                                            "bottom":{"style": _cell.border.bottom.style,
+                                                    "colour":_cell.border.bottom.color.rgb if _cell.border.bottom.color else 'None'},}
+                        }
                         if (len(rng_startcell) > 0 and cell_ref not in rng_startcell) or (len(rng_startcell) == 0):
                             if cell_obj.value:
                                 for key in formula_dict.keys():
@@ -156,6 +197,8 @@ class ReportTemplateController(Resource):
                             if not self.check_if_cell_isin_range(cell_ref,rng_boundary):
                                 self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
                                                  values(%s,%s,%s,%s,%s)',(self.report_id, sheet.title, cell_ref, 'COMP_AGG_REF', agg_ref))
+                                self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
+                                                 values(%s,%s,%s,%s,%s)',(self.report_id, sheet.title, cell_ref, 'CELL_STYLE', str(cell_style)))
 
             self.db.commit()
             return {"msg": "Report [" + self.report_id + "] template has been captured successfully using " + self.selected_file}, 200

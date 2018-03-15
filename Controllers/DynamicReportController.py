@@ -173,7 +173,7 @@ class DynamicReportController(Resource):
                                 if set(rule.split(',')).issubset(set(qd['business_rules'].split(','))):
                                     key=rulesection
                                     for col in groupby[source][rulesection].split(','):
-                                        key+=qd[col]
+                                        key+=str(qd[col])
                                     if key not in unique_records.keys():
                                         row_num_counter+=1
                                         # app.logger.info("section {0} row_num_counter {1}".format(rulesection,row_num_counter))

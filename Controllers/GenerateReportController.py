@@ -50,13 +50,13 @@ class GenerateReportController(Resource):
 
             self.create_report_catalog(report_id,reporting_date,report_create_date,
                                        report_parameters,report_create_status,as_of_reporting_date)
-            self.update_report_catalog(status='RUNNING', report_id=report_id, reporting_date=reporting_date)
+            self.update_report_catalog(status='RUNNING', report_id=report_id, reporting_date=reporting_date,report_create_date=report_create_date)
             self.create_report_detail(**report_kwargs)
             print("create_report_summary_by_source")
             self.create_report_summary_by_source(**report_kwargs)
             print("create_report_summary_final")
             self.create_report_summary_final(**report_kwargs)
-            self.update_report_catalog(status='SUCCESS', report_id=report_id, reporting_date=reporting_date)
+            self.update_report_catalog(status='SUCCESS', report_id=report_id, reporting_date=reporting_date,report_create_date=report_create_date)
 
             return {"msg": "Report generated SUCCESSFULLY for ["+str(report_id)+"] Reporting date ["+str(reporting_date)+"]."}, 200
 
@@ -65,6 +65,7 @@ class GenerateReportController(Resource):
         if(request.endpoint == 'generate_report_ep'):
             report_info = request.get_json(force=True)
             report_id = report_info['report_id']
+            report_create_date=report_info['report_create_date']
             report_parameters = report_info['report_parameters']
             reporting_date = report_info['reporting_date']
             report_kwargs = eval("{'report_id':'" + report_id + "' ," + report_parameters.replace('"',"'") + "}")
@@ -72,14 +73,14 @@ class GenerateReportController(Resource):
             print(report_kwargs)
             db=DatabaseHelper()
             #try:
-            self.update_report_catalog(status='RUNNING',report_id=report_id,reporting_date=reporting_date,report_parameters=report_parameters)
+            self.update_report_catalog(status='RUNNING',report_id=report_id,reporting_date=reporting_date,report_parameters=report_parameters,report_create_date=report_create_date)
             self.create_report_detail(**report_kwargs)
             print("create_report_summary_by_source")
             self.create_report_summary_by_source(**report_kwargs)
             print("create_report_summary_final")
             self.create_report_summary_final(**report_kwargs)
             db.commit()
-            self.update_report_catalog(status='SUCCESS',report_id=report_id,reporting_date=reporting_date)
+            self.update_report_catalog(status='SUCCESS',report_id=report_id,reporting_date=reporting_date,report_create_date=report_create_date)
             #except Exception as e:
                 #print("Error ... : " + str(e))
                 #db.rollback()
@@ -105,12 +106,15 @@ class GenerateReportController(Resource):
         db.transact(sql,(report_id,reporting_date,report_create_date,report_parameters,report_create_status,as_of_reporting_date))
         db.commit()
 
-    def update_report_catalog(self,status,report_id,reporting_date,report_parameters=None):
+    def update_report_catalog(self,status,report_id,reporting_date,report_parameters=None,report_create_date=None):
         db=DatabaseHelper()
         update_clause = "report_create_status='{0}'".format(status,)
         if report_parameters != None:
             # Replace all singlequotes(') with double quote(") as update sql requires all enclosed in ''
             update_clause += ", report_parameters='{0}'".format(report_parameters.replace("'",'"'),)
+        if report_create_date != None:
+            # Replace all singlequotes(') with double quote(") as update sql requires all enclosed in ''
+            update_clause += ", report_create_date='{0}'".format(report_create_date.replace("'",'"'),)
         sql = "update report_catalog set {0} where report_id='{1}' and reporting_date='{2}'".format(update_clause,report_id,reporting_date,)
         db.transact(sql)
         db.commit()

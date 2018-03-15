@@ -61,6 +61,7 @@ class ViewReportController(Resource):
                 matrix_list = []
                 row_attr = {}
                 col_attr = {}
+                cell_style = {}
                 app.logger.info("Getting report definition for report {0},sheet {1}".format(self.report_id,sheet["sheet_id"]))
                 report_template = self.db.query(
                     "select cell_id,cell_render_def,cell_calc_ref from report_def where report_id=%s and sheet_id=%s",
@@ -113,6 +114,15 @@ class ViewReportController(Resource):
                             col_width = row['cell_calc_ref']
                         col_attr[row['cell_id']] = {'width': col_width}
 
+                    elif row['cell_render_def'] == 'CELL_STYLE':
+                        if ':' in row['cell_id']:
+                            start_cell, end_cell = row['cell_id'].split(':')
+                        else:
+                            start_cell=row['cell_id']
+
+                        app.logger.info("Inside CELL_STYLE for cell {}".format(start_cell,))
+                        cell_style[start_cell] = eval(row['cell_calc_ref'])
+
                 if reporting_date == '19000101' or not reporting_date:
                     comp_agg_def = self.db.query("select cell_id,cell_render_def,cell_calc_ref from report_def where \
                     report_id=%s and sheet_id=%s and cell_render_def='COMP_AGG_REF'",
@@ -128,7 +138,7 @@ class ViewReportController(Resource):
                         current_cell_exists=next((item for item in matrix_list if item['cell']==start_cell),False)
                         if not current_cell_exists:
                             cell_d['cell'] = start_cell
-                            cell_d['value'] = row['cell_calc_ref']
+                            cell_d['value'] = '' #row['cell_calc_ref']
                             cell_d['origin'] = "TEMPLATE"
                             #print(cell_d)
                             matrix_list.append(cell_d)
@@ -160,6 +170,7 @@ class ViewReportController(Resource):
                 sheet_d['matrix'] = matrix_list
                 sheet_d['row_attr'] = row_attr
                 sheet_d['col_attr'] = col_attr
+                sheet_d['cell_style'] = cell_style
                 sheet_d_list.append(sheet_d)
 
 
@@ -230,8 +241,10 @@ class ViewReportController(Resource):
                 #print(agg_format_data)
             # print sheets
             # The default sheet of the workbook
-            al = Alignment(horizontal="center", vertical="center", wrap_text=True, shrink_to_fit=True)
+            # al = Alignment(horizontal="center", vertical="center", wrap_text=True, shrink_to_fit=True)
+            al = Alignment(horizontal="left", vertical="center", wrap_text=True, shrink_to_fit=True)
             ws = wr.worksheets[0]
+            # img = xls.drawing.image.Image('/home/deb/Downloads/regopzdata/CloudMargin/SMTB.jpg')
             for sheet in sheets:
                 # The first sheet title will be Sheet, so do not create any sheet, just rename the title
                 if ws.title == 'Sheet':
@@ -250,20 +263,22 @@ class ViewReportController(Resource):
                         startcell, endcell = row["cell_id"].split(':')
                         ws[startcell].value = row["cell_calc_ref"]
                         ws[startcell].value = row["cell_calc_ref"]
-                        ws[startcell].fill = PatternFill("solid", fgColor="DDDDDD")
-                        ws[startcell].font = Font(size=9)
-                        ws[startcell].alignment = al
+                        # ws[startcell].fill = PatternFill("solid", fgColor="DDDDDD")
+                        # ws[startcell].font = Font(size=9)
+                        # ws[startcell].font = Font(bold=True, size=9)
+                        # ws[startcell].alignment = al
                     elif row["cell_render_def"] == 'STATIC_TEXT':
                         ws[row["cell_id"]].value = row["cell_calc_ref"]
-                        ws[row["cell_id"]].fill = PatternFill("solid", fgColor="DDDDDD")
-                        ws[row["cell_id"]].font = Font(size=9)
-                        if row["cell_calc_ref"][:1] != '=' and row["cell_calc_ref"][
-                                                               len(row["cell_calc_ref"]) - 1:1] != '%' and 'SUM' not in row[
-                            "cell_calc_ref"]:
-                            ws[row["cell_id"]].alignment = al
+                        # ws[row["cell_id"]].fill = PatternFill("solid", fgColor="DDDDDD")
+                        # ws[row["cell_id"]].font = Font(size=9)
+                        # ws[row["cell_id"]].font = Font(bold=True, size=9)
+                        # if row["cell_calc_ref"][:1] != '=' and row["cell_calc_ref"][
+                                                            #    len(row["cell_calc_ref"]) - 1:1] != '%' and 'SUM' not in row[
+                            # "cell_calc_ref"]:
+                            # ws[row["cell_id"]].alignment = al
                     elif row["cell_render_def"] == 'CALCULATE_FORMULA':
-                        ws[row["cell_id"]].fill = PatternFill("solid", fgColor="DDDDDD")
-                        ws[row["cell_id"]].font = Font(bold=True, size=9)
+                        # ws[row["cell_id"]].fill = PatternFill("solid", fgColor="DDDDDD")
+                        # ws[row["cell_id"]].font = Font(bold=True, size=9)
                         if '=' in row["cell_calc_ref"]:
                             ws[row["cell_id"]].value = row["cell_calc_ref"]
                         else:
@@ -274,6 +289,34 @@ class ViewReportController(Resource):
                     elif row["cell_render_def"] == 'COLUMN_WIDTH' and row["cell_calc_ref"] != 'None':
                         # print(row["cell_id"])
                         ws.column_dimensions[row["cell_id"]].width = float(row["cell_calc_ref"])
+                    elif row["cell_render_def"] == 'CELL_STYLE':
+                        # print(row["cell_id"])
+                        if ':' in row["cell_id"]:
+                            startcell, endcell = row["cell_id"].split(':')
+                        else:
+                            startcell = row["cell_id"]
+                        _cell_style=eval(row['cell_calc_ref'])
+                        app.logger.info("{0} CELL_STYLE values are {1} {2}".format(row['cell_id'],_cell_style,row['cell_calc_ref']))
+                        _al = Alignment(horizontal=_cell_style['alignment']['horizontal'], vertical=_cell_style['alignment']['vertical'])
+                        _font = Font(name=_cell_style['font']['name'],
+                                    bold= _cell_style['font']['bold'],
+                                    italic= _cell_style['font']['italic'],
+                                    color= _cell_style['font']['colour'] if _cell_style['font']['colour'] != 'None' else None,
+                                    size= _cell_style['font']['size'])
+                        _fill = PatternFill(fill_type=_cell_style['fill']['type'],
+                                    fgColor=_cell_style['fill']['colour'] if _cell_style['fill']['colour'] != 'None' else None)
+                        _border = Border(left=Side(style= _cell_style['border']['left']['style'],
+                                                    color= _cell_style['border']['left']['colour'] if _cell_style['border']['left']['colour'] != 'None' else None),
+                                        right=Side(style= _cell_style['border']['right']['style'],
+                                                 color= _cell_style['border']['right']['colour'] if _cell_style['border']['right']['colour'] != 'None' else None),
+                                        top=Side(style= _cell_style['border']['top']['style'],
+                                                 color= _cell_style['border']['top']['colour'] if _cell_style['border']['top']['colour'] != 'None' else None),
+                                        bottom=Side(style= _cell_style['border']['bottom']['style'],
+                                                 color= _cell_style['border']['bottom']['colour'] if _cell_style['border']['bottom']['colour'] != 'None' else None))
+                        ws[startcell].alignment = _al
+                        ws[startcell].font = _font
+                        ws[startcell].fill = _fill
+                        ws[startcell].border = _border
                     else:
                         pass
             app.logger.info("Saving report template to file {}".format(target_dir + target_file_name))
@@ -294,6 +337,11 @@ class ViewReportController(Resource):
                         order by b.report_id,b.sheet_id,b.cell_id',(reporting_date,report_id,)).fetchall()
 
             app.logger.info("Writing report data")
+            # for sheet in sheets:
+                # ws = wb.get_sheet_by_name(sheet["sheet_id"])
+                # img = xls.drawing.image.Image('/home/deb/Downloads/regopzdata/CloudMargin/SMTB.2.1.jpg')
+                # # img.anchor(ws.cell('T1'))
+                # ws.add_image(img,'N1')
             for row in data:
                 ws = wb.get_sheet_by_name(row["sheet_id"])
                 if cell_format_yn == 'Y':
