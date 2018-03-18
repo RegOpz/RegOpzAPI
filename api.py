@@ -18,6 +18,7 @@ from Controllers.LoadDataController import LoadDataController
 from Controllers.ViewReportController import ViewReportController
 from Controllers.LoadDataFileController import LoadDataFileController
 from Controllers.DynamicReportController import DynamicReportController
+from Controllers.TransactionalReportController import TransactionalReportController
 from flask_cors import CORS, cross_origin
 
 api.add_resource(Info, apiPath + "/info")
@@ -290,6 +291,18 @@ api.add_resource(DynamicReportController,
     apiPath+"/create-dynamic-report",
     endpoint="create_dynamic_report_ep"
 )
+
+api.add_resource(TransactionalReportController,
+    apiPath+"/load-transactional-report-template",
+    endpoint="load_trans_report_template_ep"
+)
+
+api.add_resource(TransactionalReportController,
+    apiPath+"/update-transactional-section",
+    endpoint="update_trans_section_ep"
+)
+
+
 
 
 
