@@ -293,12 +293,17 @@ api.add_resource(DynamicReportController,
 )
 
 api.add_resource(TransactionalReportController,
-    apiPath+"/load-transactional-report-template",
+    apiPath+"/transactionalReport/<string:report_id>",
+    apiPath+"/transactionalReport/getSection/<string:cell_id>"
+)
+
+api.add_resource(TransactionalReportController,
+    apiPath+"/transactionalReport/captureTemplate",
     endpoint="load_trans_report_template_ep"
 )
 
 api.add_resource(TransactionalReportController,
-    apiPath+"/update-transactional-section",
+    apiPath+"/transactionalReport/defineSection",
     endpoint="update_trans_section_ep"
 )
 
