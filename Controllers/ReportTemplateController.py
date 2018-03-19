@@ -33,7 +33,8 @@ class ReportTemplateController(Resource):
         if request.endpoint == 'get_report_template_suggestion_list_ep':
             reports = request.args.get('reports')
             country = request.args.get('country')
-            return self.report_template_suggesstion_list(report_id=reports,country=country)
+            report_type = request.args.get('reportType')
+            return self.report_template_suggesstion_list(report_id=reports,country=country,report_type=report_type)
 
     def post(self):
         if 'file' not in request.files:
@@ -243,7 +244,7 @@ class ReportTemplateController(Resource):
         return incl
 
 
-    def report_template_suggesstion_list(self,report_id='ALL',country='ALL'):
+    def report_template_suggesstion_list(self,report_id='ALL',country='ALL',report_type='ALL'):
 
         app.logger.info("Getting report template list")
 
@@ -258,6 +259,8 @@ class ReportTemplateController(Resource):
                  where_clause =  " and instr('" + country.upper() + "', upper(country)) > 0"
             if report_id is not None and report_id !='ALL':
                  where_clause +=  " and instr('" + report_id.upper() + "', upper(report_id)) > 0"
+            if report_type is not None and report_type !='ALL':
+                 where_clause +=  " and instr('" + report_type.upper() + "', upper(report_type)) > 0"
 
             app.logger.info("Getting list of countries")
             country = self.db.query(sql + where_clause).fetchall()
@@ -271,6 +274,8 @@ class ReportTemplateController(Resource):
 
                 if report_id is not None and report_id !='ALL':
                      where_clause =  " and instr(upper('" + report_id + "'), upper(report_id)) > 0"
+                if report_type is not None and report_type !='ALL':
+                     where_clause =  " and instr(upper('" + report_type + "'), upper(report_type)) > 0"
 
                 app.logger.info("Getting list of reports for country {}".format(data_dict["country"]))
                 report = self.db.query(sql + where_clause).fetchall()
