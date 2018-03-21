@@ -584,6 +584,25 @@ class TransactionalReportController(Resource):
                     link_data_records = []
                     source_data=self.get_qualified_source_data(source,business_date_from,business_date_to)
                     df_source_data=pd.DataFrame(source_data)
+                        # for index,row in qd_source_data.iterrows():
+                        #     tcd_source=trans_calc_def.loc[trans_calc_def['source_id']==source]
+                        #     for idx,rw in tcd_source.iterrows():
+                        #         cell_calc_render_ref=eval(rw['cell_calc_render_ref'])
+                        #         cell_calc_rule=cell_calc_render_ref['rule']
+                        #         if set(cell_calc_rule.split(',')).issubset(set(row['business_rules'].split(','))):
+                        #             cell_calc_columns=cell_calc_render_ref['calc']
+                        #             data_dict={}
+                        #             for col in cell_calc_columns.keys():
+                        #                 # app.logger.info("Column value [{0}]".format(col))
+                        #                 if cell_calc_columns[col]['column'] is not None and cell_calc_columns[col]['column'] !='':
+                        #                     data_dict[col]=row[cell_calc_columns[col]['column']]
+                        #
+                        #             # app.logger.info("data_dict ...{}".format(data_dict))
+                        #             qualified_filtered_data=qualified_filtered_data.append(data_dict,ignore_index=True)
+                        #             link_data_records.append((source,report_id,sheet_id,section_id,rw['cell_calc_ref'],row['business_date'],reporting_date))
+                        #             break
+
+
                     if not df_source_data.empty:
                         # Create dummy columns (with truth values) on qualified business rules
                         qdr=df_source_data['business_rules'].str.get_dummies(sep=',')
@@ -621,28 +640,34 @@ class TransactionalReportController(Resource):
                             dfr=pd.DataFrame()
                             app.logger.info("Before dfr filter ...{0}".format(expr_str,))
                             dfr=eval(expr_str)
-                            app.logger.info("After dfr filter ...{0}".format(dfr,))
+                            # app.logger.info("After dfr filter ...{0}".format(dfr,))
                             if not dfr.empty:
                                 cell_calc_columns=cell_calc_render_ref['calc']
                                 data_dict={}
-                                for index,row in dfr.iterrows():
-                                    for col in cell_calc_columns.keys():
-                                        # app.logger.info("Column value [{0}]".format(col))
-                                        if cell_calc_columns[col]['column'] is not None and cell_calc_columns[col]['column'] !='':
-                                            data_dict[col]=row[cell_calc_columns[col]['column']]
+                                col_list=[]
+                                expr_str=""
+                                for col in cell_calc_columns.keys():
+                                    # app.logger.info("Column value [{0}]".format(col))
+                                    if cell_calc_columns[col]['column'] is not None and cell_calc_columns[col]['column'] !='':
+                                        col_list.append(col)
+                                        expr_str = "\""+cell_calc_columns[col]['column']+"\":\""+col+"\"" if expr_str=="" else expr_str + ",\""+cell_calc_columns[col]['column']+"\":\""+col+"\""
+                                expr_str="dfr.rename(columns={" + expr_str + "},inplace=True)"
+                                app.logger.info("Before dfr column rename  ...{0}".format(expr_str,))
+                                eval(expr_str)
+                                app.logger.info("after dfr eval expr_str {}".format(dfr,))
 
-                                    # app.logger.info("data_dict ...{}".format(data_dict))
-                                    qualified_filtered_data=qualified_filtered_data.append(data_dict,ignore_index=True)
-                                    link_data_records.append((source,report_id,sheet_id,section_id,rw['cell_calc_ref'],row['business_date'],reporting_date))
+                                # app.logger.info("data_dict ...{}".format(data_dict))
+                                qualified_filtered_data=qualified_filtered_data.append(dfr[col_list],ignore_index=True)
+                                # link_data_records.append((source,report_id,sheet_id,section_id,rw['cell_calc_ref'],row['business_date'],reporting_date))
 
                     app.logger.info("At the end of the qualified data loop...")
-                    row_id=self.db.transactmany("insert into report_dyn_trans_qualified_data_link(source_id,report_id,\
-                                                     sheet_id,section_id,cell_calc_ref,business_date,reporting_date) values\
-                                                    (%s,%s,%s,%s,%s,%s,%s)",link_data_records)
+                    # row_id=self.db.transactmany("insert into report_dyn_trans_qualified_data_link(source_id,report_id,\
+                    #                                  sheet_id,section_id,cell_calc_ref,business_date,reporting_date) values\
+                    #                                 (%s,%s,%s,%s,%s,%s,%s)",link_data_records)
 
                 qualified_filtered_data.fillna('',inplace=True)
                 record_json=qualified_filtered_data.to_dict(orient='records')
-                app.logger.info("qualified_filtered_data ...{}".format(qualified_filtered_data))
+                # app.logger.info("qualified_filtered_data ...{}".format(qualified_filtered_data))
                 summary_records=[]
                 row_seq=0
                 for rec in record_json:
