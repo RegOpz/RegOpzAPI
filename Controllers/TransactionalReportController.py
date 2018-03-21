@@ -583,26 +583,57 @@ class TransactionalReportController(Resource):
                 for source in trans_calc_def['source_id'].unique():
                     link_data_records = []
                     source_data=self.get_qualified_source_data(source,business_date_from,business_date_to)
-                    qd_source_data=pd.DataFrame(source_data)
-                    app.logger.info("Before start of the qualified data loop...")
+                    df_source_data=pd.DataFrame(source_data)
+                    if not df_source_data.empty:
+                        # Create dummy columns (with truth values) on qualified business rules
+                        qdr=df_source_data['business_rules'].str.get_dummies(sep=',')
+                        # merge both the data frames into one to facilitate the filter
+                        qd_source_data=pd.concat([df_source_data,qdr],axis=1)
+                        app.logger.info("Before start of the qualified data loop...")
 
-                    for index,row in qd_source_data.iterrows():
+                        # for index,row in qd_source_data.iterrows():
+                        #     tcd_source=trans_calc_def.loc[trans_calc_def['source_id']==source]
+                        #     for idx,rw in tcd_source.iterrows():
+                        #         cell_calc_render_ref=eval(rw['cell_calc_render_ref'])
+                        #         cell_calc_rule=cell_calc_render_ref['rule']
+                        #         if set(cell_calc_rule.split(',')).issubset(set(row['business_rules'].split(','))):
+                        #             cell_calc_columns=cell_calc_render_ref['calc']
+                        #             data_dict={}
+                        #             for col in cell_calc_columns.keys():
+                        #                 # app.logger.info("Column value [{0}]".format(col))
+                        #                 if cell_calc_columns[col]['column'] is not None and cell_calc_columns[col]['column'] !='':
+                        #                     data_dict[col]=row[cell_calc_columns[col]['column']]
+                        #
+                        #             # app.logger.info("data_dict ...{}".format(data_dict))
+                        #             qualified_filtered_data=qualified_filtered_data.append(data_dict,ignore_index=True)
+                        #             link_data_records.append((source,report_id,sheet_id,section_id,rw['cell_calc_ref'],row['business_date'],reporting_date))
+                        #             break
+
                         tcd_source=trans_calc_def.loc[trans_calc_def['source_id']==source]
                         for idx,rw in tcd_source.iterrows():
                             cell_calc_render_ref=eval(rw['cell_calc_render_ref'])
                             cell_calc_rule=cell_calc_render_ref['rule']
-                            if set(cell_calc_rule.split(',')).issubset(set(row['business_rules'].split(','))):
+                            expr_str=""
+                            for r in cell_calc_rule.split(','):
+                                if r is not None and r !='':
+                                    expr_str= "(qd_source_data['{0}']==1)".format(r,) if expr_str=="" else expr_str + " & (qd_source_data['{0}']==1)".format(r,)
+                            expr_str = "qd_source_data[" + expr_str + "]"
+                            dfr=pd.DataFrame()
+                            app.logger.info("Before dfr filter ...{0}".format(expr_str,))
+                            dfr=eval(expr_str)
+                            app.logger.info("After dfr filter ...{0}".format(dfr,))
+                            if not dfr.empty:
                                 cell_calc_columns=cell_calc_render_ref['calc']
                                 data_dict={}
-                                for col in cell_calc_columns.keys():
-                                    # app.logger.info("Column value [{0}]".format(col))
-                                    if cell_calc_columns[col]['column'] is not None and cell_calc_columns[col]['column'] !='':
-                                        data_dict[col]=row[cell_calc_columns[col]['column']]
+                                for index,row in dfr.iterrows():
+                                    for col in cell_calc_columns.keys():
+                                        # app.logger.info("Column value [{0}]".format(col))
+                                        if cell_calc_columns[col]['column'] is not None and cell_calc_columns[col]['column'] !='':
+                                            data_dict[col]=row[cell_calc_columns[col]['column']]
 
-                                # app.logger.info("data_dict ...{}".format(data_dict))
-                                qualified_filtered_data=qualified_filtered_data.append(data_dict,ignore_index=True)
-                                link_data_records.append((source,report_id,sheet_id,section_id,rw['cell_calc_ref'],row['business_date'],reporting_date))
-                                break
+                                    # app.logger.info("data_dict ...{}".format(data_dict))
+                                    qualified_filtered_data=qualified_filtered_data.append(data_dict,ignore_index=True)
+                                    link_data_records.append((source,report_id,sheet_id,section_id,rw['cell_calc_ref'],row['business_date'],reporting_date))
 
                     app.logger.info("At the end of the qualified data loop...")
                     row_id=self.db.transactmany("insert into report_dyn_trans_qualified_data_link(source_id,report_id,\
