@@ -80,7 +80,8 @@ class MaintainBusinessRulesController(Resource):
 		if order:
 			cur = db.query('select * from business_rules where source_id=' + str(source_id) + ' order by ' + order[0] + ' ' + order[1] + ' limit ' + str(startPage) + ', 100')
 		else:
-			cur = db.query('select * from business_rules where source_id=' + str(source_id) + ' limit ' + str(startPage) + ', 100')
+			# cur = db.query('select * from business_rules where source_id=' + str(source_id) + ' limit ' + str(startPage) + ', 100')
+			cur = db.query('select * from business_rules where source_id=' + str(source_id))
 		business_rules = cur.fetchall()
 		cols = [i[0] for i in cur.description]
 		business_rules_dict['cols'] = cols
