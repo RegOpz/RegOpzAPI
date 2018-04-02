@@ -540,7 +540,7 @@ class DocumentController(Resource):
 
         display_dict={}
 
-        display_dict['comp_agg_ref']=comp_agg_ref['cell_calc_ref']
+        display_dict['comp_agg_ref']=comp_agg_ref['cell_calc_ref'] if comp_agg_ref else ''
         display_dict['comp_agg_rules']=comp_agg_rules
         display_dict['agg_rules']=agg_rules
         display_dict['cell_rules']=cell_rules
