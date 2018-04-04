@@ -60,9 +60,10 @@ class Token(object):
 		else:
 			raise ValueError("User not logged in!")
 
-	def authenticate(self):
-		if self.token:
-			extracted_token = self.token.replace("Bearer ", "")
+	def authenticate(self, auth=None):
+		token = auth if auth else self.token
+		if token:
+			extracted_token = token.replace("Bearer ", "")
 			with open('public_key', 'r') as fh:
 				salt = jwk_from_pem(fh.read().encode())
 			try:
