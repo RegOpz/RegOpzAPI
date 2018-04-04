@@ -13,6 +13,5 @@ class Info(Resource):
 			'os': platform.linux_distribution(),
 			'kernel': platform.system() + " " + platform.release(),
 			'version': APIConfig.API['version'],
-			'ip_address': request.remote_addr			
+			'ip_address': request.remote_addr
 	}
-

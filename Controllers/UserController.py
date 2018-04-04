@@ -8,6 +8,7 @@ import json
 TokenKey = 'HTTP_AUTHORIZATION'
 
 class UserController(Resource):
+	@authenticate
 	def get(self, userId = None):
 		if TokenKey in request.environ:
 			auth = request.environ[TokenKey]
