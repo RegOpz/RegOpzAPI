@@ -9,8 +9,9 @@ from Constants.Status import *
 TokenKey = 'HTTP_AUTHORIZATION'
 
 class Token(object):
-	def __init__(self):
-		self.dbhelper = DatabaseHelper()
+	def __init__(self,tenant_info):
+		self.tenant_info=tenant_info
+		self.dbhelper = DatabaseHelper(self.tenant_info)
 		if TokenKey in request.environ:
 			self.token = request.environ[TokenKey]
 
@@ -33,7 +34,7 @@ class Token(object):
 				rowid = self.dbhelper.transact(queryString, values)
 			except Exception:
 				return NO_USER_FOUND
-		user_permission = UserPermission().get(role)
+		user_permission = UserPermission(self.tenant_info).get(role)
 		if user_permission:
 			user = {
 				'tokenId': self.tokenId,
