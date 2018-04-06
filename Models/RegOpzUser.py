@@ -22,8 +22,9 @@ labelList = {
 }
 
 class RegOpzUser(object):
-    def __init__(self, user = None):
-        self.dbhelper = DatabaseHelper()
+    def __init__(self, tenant_info,user = None):
+        self.tenant_info=tenant_info
+        self.dbhelper = DatabaseHelper(self.tenant_info)
         if user and user['password'] == user['passwordConfirm']:
             self.id = True
             self.name = user['name']
@@ -134,9 +135,8 @@ class RegOpzUser(object):
         # hashpass = bcrypt.hashpw(base64.b64encode(hashlib.sha256(password).digest()), username)
         queryString = "SELECT r.role, u.* FROM regopzuser u JOIN (roles r) ON (u.role_id = r.id)\
             WHERE name=%s AND password=%s AND status='Active'"
-        dbhelper = DatabaseHelper()
-        cur = dbhelper.query(queryString, (username, password, ))
+        cur = self.dbhelper.query(queryString, (username, password, ))
         data = cur.fetchone()
         if data:
-            return Token().create(data)
+            return Token(self.tenant_info).create(data)
         return {"msg": "Login failed", "donotUseMiddleWare": True },403

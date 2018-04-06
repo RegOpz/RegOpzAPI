@@ -3,9 +3,10 @@ from Helpers.AuditHelper import AuditHelper
 from Constants.Status import *
 
 class UserPermission(object):
-    def __init__(self, userId = None):
-        self.dbhelper = DatabaseHelper()
-        self.audit = AuditHelper("def_change_log")
+    def __init__(self, tenant_info,userId = None):
+        self.tenant_info=tenant_info
+        self.dbhelper = DatabaseHelper(self.tenant_info)
+        self.audit = AuditHelper("def_change_log",self.tenant_info)
         self.user_id = userId
 
     def get(self, roleId = None, inUseCheck = 'Y'):

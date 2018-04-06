@@ -5,9 +5,10 @@ from Constants.Status import *
 
 
 class AuditHelper(object):
-    def __init__(self,audit_table_name):
+    def __init__(self,audit_table_name,tenant_info):
         self.audit_table_name = audit_table_name
-        self.db=DatabaseHelper()
+        self.tenant_info=tenant_info
+        self.db=DatabaseHelper(self.tenant_info)
         self.business_date_present=False
         column_names=[v['Field'] for v in self.db.query('desc '+audit_table_name).fetchall()]
         app.logger.info(audit_table_name)

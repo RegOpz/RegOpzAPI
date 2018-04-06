@@ -19,6 +19,7 @@ from Controllers.ViewReportController import ViewReportController
 from Controllers.LoadDataFileController import LoadDataFileController
 from Controllers.DynamicReportController import DynamicReportController
 from Controllers.TransactionalReportController import TransactionalReportController
+from Controllers.TenantSubscriptionController import TenantSubscirptionController
 from flask_cors import CORS, cross_origin
 
 api.add_resource(Info, apiPath + "/info")
@@ -311,8 +312,9 @@ api.add_resource(TransactionalReportController,
     endpoint="update_trans_section_ep"
 )
 
-
-
+api.add_resource(TenantSubscirptionController,
+    apiPath+"/subscription"
+)
 
 
 

@@ -11,12 +11,16 @@ from Constants.Status import *
 import openpyxl as xls
 from openpyxl.styles import Border, Side, PatternFill, Font, GradientFill, Alignment, Protection
 from openpyxl.utils import get_column_letter
+import json
 
 class MaintainReportRulesController(Resource):
 	def __init__(self):
-		self.dbOps=DatabaseOps('def_change_log')
-		self.audit=AuditHelper('def_change_log')
-		self.db=DatabaseHelper()
+		#print("Inside MaintainReportRulesController", request.headers.get('Tenant'))
+		tenant_info = json.loads(request.headers.get('Tenant'))
+		self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+		self.dbOps=DatabaseOps('def_change_log',self.tenant_info)
+		self.audit=AuditHelper('def_change_log',self.tenant_info)
+		self.db=DatabaseHelper(self.tenant_info)
 
 	def get(self,report_id=None):
 		#print(request.endpoint)
