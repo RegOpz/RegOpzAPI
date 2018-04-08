@@ -27,7 +27,9 @@ ALLOWED_EXTENSIONS = set(['xls', 'xlsx'])
 
 class TransactionalReportController(Resource):
     def __init__(self):
-        self.db=DatabaseHelper()
+        tenant_info = json.loads(request.headers.get('Tenant'))
+        self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+        self.db=DatabaseHelper(self.tenant_info)
 
     def get(self,report_id=None,cell_id=None, rule_cell_id=None,reporting_date=None):
         if report_id and reporting_date:

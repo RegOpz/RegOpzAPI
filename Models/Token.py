@@ -5,12 +5,17 @@ from datetime import datetime, timedelta
 from jwt import JWT, jwk_from_pem
 from flask import request
 from Constants.Status import *
+import json
 
 TokenKey = 'HTTP_AUTHORIZATION'
 
 class Token(object):
-	def __init__(self,tenant_info):
-		self.tenant_info=tenant_info
+	def __init__(self,tenant_info = None):
+		if tenant_info:
+			self.tenant_info=tenant_info
+		else:
+			tenant_info = json.loads(request.headers.get('Tenant'))
+			self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
 		self.dbhelper = DatabaseHelper(self.tenant_info)
 		if TokenKey in request.environ:
 			self.token = request.environ[TokenKey]

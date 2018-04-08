@@ -4,10 +4,13 @@ from flask import Flask, request, redirect, url_for
 from Helpers.DatabaseHelper import DatabaseHelper
 from Controllers.ViewReportController import ViewReportController as report
 import Helpers.utils as util
+import json
 
 class VarianceAnalysisController(Resource):
     def __init__(self):
-        self.db=DatabaseHelper()
+        tenant_info = json.loads(request.headers.get('Tenant'))
+        self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+        self.db=DatabaseHelper(self.tenant_info)
 
     def get(self):
         if request.endpoint=='get_variance_country_suggestion_list':

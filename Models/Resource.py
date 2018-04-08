@@ -2,6 +2,9 @@ from Helpers.DatabaseHelper import DatabaseHelper
 
 class Resource(object):
     def __init__(self,params=None):
+        tenant_info = json.loads(request.headers.get('Tenant'))
+        self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+        self.dbhelper = DatabaseHelper(self.tenant_info)
         if params:
             self.id=params['id']
             self.name=params['name']
@@ -10,21 +13,19 @@ class Resource(object):
             self.name=None
 
     def add(self):
-        dbhelper=DatabaseHelper()
         values=(self.id,self.name)
         queryString = "INSERT INTO resource(id, name) VALUES (%s, %s)"
 
-        rowid = dbhelper.transact(queryString, values)
+        rowid = self.dbhelper.transact(queryString, values)
         return self.get(rowid)
 
     def get(self,id=None):
-        dbhelper=DatabaseHelper()
 
         if id:
             queryParams=(id,)
             queryString="select * from resource where id=%s"
 
-            resources=dbhelper.query(queryString,queryParams)
+            resources=self.dbhelper.query(queryString,queryParams)
             resource = resources.fetchone()
 
             if resource:
@@ -36,7 +37,7 @@ class Resource(object):
         else:
             resourceslist=[]
             queryString="select * from resource"
-            allresources=dbhelper.query(queryString)
+            allresources=self.dbhelper.query(queryString)
 
             for rsc in allresources:
               resourceslist.append({'id':rsc['id'],'name':rsc['name']})
@@ -44,5 +45,3 @@ class Resource(object):
             return resourceslist
 
         return None
-
-

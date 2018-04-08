@@ -4,11 +4,14 @@ from flask import Flask, request, redirect, url_for
 from Helpers.DatabaseHelper import DatabaseHelper
 import pandas as pd
 from datetime import datetime
+import json
 
 UPLOAD_FOLDER='./uploads/source-files/'
 class LoadDataController(Resource):
     def __init__(self):
-        self.db=DatabaseHelper()
+        tenant_info = json.loads(request.headers.get('Tenant'))
+        self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+        self.db=DatabaseHelper(self.tenant_info)
 
     def post(self):
         data=request.get_json(force=True)

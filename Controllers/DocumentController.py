@@ -21,6 +21,11 @@ from Controllers.GenerateReportController import GenerateReportController as rep
 UPLOAD_FOLDER = './uploads/templates'
 ALLOWED_EXTENSIONS = set(['txt', 'xls', 'xlsx'])
 class DocumentController(Resource):
+    def __init__(self):
+        tenant_info = json.loads(request.headers.get('Tenant'))
+        self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+        self.db=DatabaseHelper(self.tenant_info)
+
     def allowed_file(self,filename):
         return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
     def get(self, doc_id=None):
@@ -89,13 +94,12 @@ class DocumentController(Resource):
         else:
             return {"msg: Report capture failed. Please check."}, 400
     def insert_report_def_catalog(self):
-        db = DatabaseHelper()
-        count = db.query("select count(*) as count from report_def_catalog where report_id=%s and country=%s",\
+        count = self.db.query("select count(*) as count from report_def_catalog where report_id=%s and country=%s",\
                             (self.report_id,self.country,)).fetchone()
         if not count['count']:
-            res = db.transact("insert into report_def_catalog(report_id,country,report_description) values(%s,%s,%s)",\
+            res = self.db.transact("insert into report_def_catalog(report_id,country,report_description) values(%s,%s,%s)",\
                     (self.report_id,self.country,self.report_description,))
-            db.commit()
+            self.db.commit()
             return res
         return 1
 
@@ -107,22 +111,21 @@ class DocumentController(Resource):
         target_dir = UPLOAD_FOLDER + "/"
         wb = xls.load_workbook(target_dir + template_file_name)
 
-        db = DatabaseHelper()
 
         for sheet in wb.worksheets:
 
-            db.transact('delete from report_def where report_id=%s and sheet_id=%s', (self.report_id, sheet.title,))
+            self.db.transact('delete from report_def where report_id=%s and sheet_id=%s', (self.report_id, sheet.title,))
 
             # First capture the dimensions of the cells of the sheet
             rowHeights = [sheet.row_dimensions[r + 1].height for r in range(sheet.max_row)]
             colWidths = [sheet.column_dimensions[get_column_letter(c + 1)].width for c in range(sheet.max_column)]
 
             for row, height in enumerate(rowHeights):
-                db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
+                self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
                              values(%s,%s,%s,%s,%s)', (self.report_id, sheet.title, str(row + 1), 'ROW_HEIGHT', str(height)))
 
             for col, width in enumerate(colWidths):
-                db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
+                self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
                             values(%s,%s,%s,%s,%s)',
                             (self.report_id, sheet.title, get_column_letter(col + 1), 'COLUMN_WIDTH', str(width)))
 
@@ -133,7 +136,7 @@ class DocumentController(Resource):
                 # print sheet.cell(startcell).border
                 rng_startcell.append(startcell)
 
-                db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
+                self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
                             values(%s,%s,%s,%s,%s)',
                             (self.report_id, sheet.title, rng, 'MERGED_CELL', sheet[startcell].value))
 
@@ -150,10 +153,10 @@ class DocumentController(Resource):
                                 else:
                                     cell_render_ref = 'STATIC_TEXT'
 
-                            db.transact('insert into report_def(report_id,sheet_id ,cell_id ,cell_render_def ,cell_calc_ref)\
+                            self.db.transact('insert into report_def(report_id,sheet_id ,cell_id ,cell_render_def ,cell_calc_ref)\
                                       values(%s,%s,%s,%s,%s)',
                                         (self.report_id, sheet.title, cell_ref, cell_render_ref, cell_obj_value.strip()))
-        db.commit()
+        self.db.commit()
         print('====================================')
         print('End of load report template')
         print('====================================')
@@ -161,9 +164,8 @@ class DocumentController(Resource):
 
     def render_report_json(self,reporting_date='19000101',cell_format_yn='Y'):
 
-        db = DatabaseHelper()
 
-        cur = db.query("select distinct sheet_id from report_def where report_id=%s", (self.report_id,))
+        cur = self.db.query("select distinct sheet_id from report_def where report_id=%s", (self.report_id,))
         sheets = cur.fetchall()
         print(sheets)
 
@@ -184,12 +186,12 @@ class DocumentController(Resource):
             matrix_list = []
             row_attr = {}
             col_attr = {}
-            cur = db.query(
+            cur = self.db.query(
                 "select cell_id,cell_render_def,cell_calc_ref from report_def where report_id=%s and sheet_id=%s",
                 (self.report_id, sheet["sheet_id"]))
             report_template = cur.fetchall()
 
-            data = db.query('select b.report_id,b.sheet_id,b.cell_id,a.cell_summary,\
+            data = self.db.query('select b.report_id,b.sheet_id,b.cell_id,a.cell_summary,\
                                 b.reporting_scale,b.rounding_option \
                                 from report_comp_agg_def b left join report_summary a\
                                 on a.report_id=b.report_id and\
@@ -282,9 +284,8 @@ class DocumentController(Resource):
                        '11':'November',
                        '12':'December'
                        }
-        db = DatabaseHelper()
 
-        catalog=db.query("select distinct as_of_reporting_date from report_catalog where as_of_reporting_date between "+ start_reporting_date + " and " + end_reporting_date + " order by as_of_reporting_date").fetchall()
+        catalog=self.db.query("select distinct as_of_reporting_date from report_catalog where as_of_reporting_date between "+ start_reporting_date + " and " + end_reporting_date + " order by as_of_reporting_date").fetchall()
 
         catalog_list=[]
 
@@ -323,7 +324,6 @@ class DocumentController(Resource):
         if (not reporting_date) and ( not reporting_date_start or not reporting_date_end):
             print("Please supply parameters: reporting_date or (reporting_date_start and reporting_date_end)")
 
-        db=DatabaseHelper()
         if reporting_date:
             sql = "select * from report_catalog where as_of_reporting_date='"+reporting_date+"'"
         if reporting_date_start and reporting_date_end:
@@ -332,7 +332,7 @@ class DocumentController(Resource):
             data_sources['end_date']=reporting_date_end
             sql = "select * from report_catalog where as_of_reporting_date between " \
                   + "'" + reporting_date_start + "' and '" + reporting_date_end + "'"
-        reports = db.query(sql).fetchall()
+        reports = self.db.query(sql).fetchall()
 
         #print(data_sources)
         if reporting_date:
@@ -356,9 +356,8 @@ class DocumentController(Resource):
         wr = xls.Workbook()
         # target_dir='../output/'
         target_dir = './static/'
-        db=DatabaseHelper()
 
-        sheets=db.query('select distinct sheet_id from report_def where report_id=%s', (report_id,)).fetchall()
+        sheets=self.db.query('select distinct sheet_id from report_def where report_id=%s', (report_id,)).fetchall()
 
         agg_format_data ={}
         if cell_format_yn == 'Y':
@@ -382,7 +381,7 @@ class DocumentController(Resource):
             else:
                 ws = wr.create_sheet(title=sheet["sheet_id"])
 
-            report_template=db.query('select cell_id,cell_render_def,cell_calc_ref from report_def where report_id=%s and sheet_id=%s',
+            report_template=self.db.query('select cell_id,cell_render_def,cell_calc_ref from report_def where report_id=%s and sheet_id=%s',
                         (report_id, sheet["sheet_id"],)).fetchall()
 
             for row in report_template:
@@ -423,7 +422,7 @@ class DocumentController(Resource):
 
         #Create report body
         wb = xls.load_workbook(target_dir + target_file_name)
-        data=db.query('select b.report_id,b.sheet_id,b.cell_id,a.cell_summary,\
+        data=self.db.query('select b.report_id,b.sheet_id,b.cell_id,a.cell_summary,\
                     b.reporting_scale,b.rounding_option \
                     from report_comp_agg_def b left join report_summary a\
                     on a.report_id=b.report_id and\
@@ -467,7 +466,6 @@ class DocumentController(Resource):
         wr = xls.Workbook()
         # target_dir='../output/'
         target_dir = './static/'
-        db=DatabaseHelper()
 
         # print sheets
         # The default sheet of the workbook
@@ -480,7 +478,7 @@ class DocumentController(Resource):
             else:
                 ws = wr.create_sheet(title=sheet["table_name"])
 
-            cur = db.query('select * from ' + sheet["table_name"]+ ' where report_id=%s ',
+            cur = self.db.query('select * from ' + sheet["table_name"]+ ' where report_id=%s ',
                         (report_id,))
             report_rules=cur.fetchall()
 
@@ -502,15 +500,14 @@ class DocumentController(Resource):
         return { "file_name": target_file_name }
 
     def cell_drill_down_rules(self,report_id,sheet_id,cell_id):
-        db=DatabaseHelper()
 
         sql="select cell_calc_ref from report_def where report_id=%s and sheet_id=%s and (cell_id=%s or cell_id like %s) and cell_render_def='COMP_AGG_REF'"
-        comp_agg_ref=db.query(sql,(report_id,sheet_id,cell_id,cell_id+":%")).fetchone()
+        comp_agg_ref=self.db.query(sql,(report_id,sheet_id,cell_id,cell_id+":%")).fetchone()
 
         sql="select * from report_comp_agg_def where report_id=%s and sheet_id=%s and cell_id=%s"
 
         cell_calc_ref_list = ''
-        comp_agg_rules=db.query(sql,(report_id,sheet_id,cell_id)).fetchall()
+        comp_agg_rules=self.db.query(sql,(report_id,sheet_id,cell_id)).fetchall()
         if comp_agg_rules:
             formula = comp_agg_rules[0]['comp_agg_rule']
             variables = list(set([node.id for node in ast.walk(ast.parse(formula)) if isinstance(node, ast.Name)]))
@@ -523,9 +520,9 @@ class DocumentController(Resource):
         if cell_calc_ref_list != '':
             sql += " union select  a.* from report_calc_def a,data_source_information b where a.source_id=b.source_id and \
                 report_id=%s and cell_calc_ref in (%s)"
-            cell_rules = db.query(sql, (report_id, sheet_id, cell_id, report_id, cell_calc_ref_list)).fetchall()
+            cell_rules = self.db.query(sql, (report_id, sheet_id, cell_id, report_id, cell_calc_ref_list)).fetchall()
         else:
-            cell_rules = db.query(sql, (report_id, sheet_id, cell_id)).fetchall()
+            cell_rules = self.db.query(sql, (report_id, sheet_id, cell_id)).fetchall()
 
 
         #print(sql)
@@ -564,11 +561,10 @@ class DocumentController(Resource):
             print("Please supply parameters: " + str(parameter_list))
             print(kwargs.keys())
 
-        db=DatabaseHelper()
 
-        src_inf=db.query("select * from data_source_information where source_id=" + str(source_id)).fetchone()
+        src_inf=self.db.query("select * from data_source_information where source_id=" + str(source_id)).fetchone()
 
-        key_column = util.get_keycolumn(db._cursor(), src_inf['source_table_name'])
+        key_column = util.get_keycolumn(self.db._cursor(), src_inf['source_table_name'])
 
         startPage = int(page) * 100
         data_dict = {}
@@ -578,7 +574,7 @@ class DocumentController(Resource):
               " and b.sheet_id='" + sheet_id + "' and b.cell_id='" + cell_id + "' and b.reporting_date='" + reporting_date + "'\
                 and b.cell_calc_ref='"+cell_calc_ref+"' limit " + str(startPage) + ", 100"
 
-        cur = db.query(sql)
+        cur = self.db.query(sql)
         data = cur.fetchall()
 
         cols = [i[0] for i in cur.description]
@@ -589,7 +585,7 @@ class DocumentController(Resource):
               " and b.sheet_id='" + sheet_id + "' and b.cell_id='" + cell_id + "' and b.reporting_date='" + reporting_date + "'\
                 and b.cell_calc_ref='"+cell_calc_ref+"'"
         print(sql)
-        count = db.query(sql).fetchone()
+        count = self.db.query(sql).fetchone()
         sql = sql = "select a.* from " + src_inf['source_table_name'] + " a, report_qualified_data_link b\
              where a." + key_column + "=b.qualifying_key and b.report_id='" + report_id + "' and b.source_id='" + str(
             source_id)  + "' and a.business_date = b.business_date " + \
@@ -605,8 +601,7 @@ class DocumentController(Resource):
 
     def suggesstion_list(self,search_string):
 
-        db=DatabaseHelper()
-        catalog = db.query("select distinct report_id from report_catalog where report_id like '"+search_string+"%'" ).fetchall()
+        catalog = self.db.query("select distinct report_id from report_catalog where report_id like '"+search_string+"%'" ).fetchall()
 
         if not catalog:
             return {"msg":"No report name found starting with '"+search_string+"'"}
@@ -614,34 +609,33 @@ class DocumentController(Resource):
             return catalog
     def report_template_suggesstion_list(self,report_id='ALL',country='ALL'):
 
-        db=DatabaseHelper()
         data_dict={}
         where_clause = ''
 
         sql = "select distinct country from report_def_catalog where 1 "
-        country_suggestion = db.query(sql).fetchall()
+        country_suggestion = self.db.query(sql).fetchall()
         if country is not None and country !='ALL':
              where_clause =  " and instr('" + country.upper() + "', upper(country)) > 0"
         if report_id is not None and report_id !='ALL':
              where_clause +=  " and instr('" + report_id.upper() + "', upper(report_id)) > 0"
 
-        country = db.query(sql + where_clause).fetchall()
+        country = self.db.query(sql + where_clause).fetchall()
 
         # sql = "select distinct report_id from report_def_catalog"
-        # report_suggestion = db.query(sql).fetchall()
+        # report_suggestion = self.db.query(sql).fetchall()
         data_dict['country'] = country
         for i,c in enumerate(data_dict['country']):
             sql = "select distinct report_id from report_def_catalog where country = '" + c['country'] + "'"
             if report_id is not None and report_id !='ALL':
                  where_clause =  " and instr(upper('" + report_id + "'), upper(report_id)) > 0"
-            report = db.query(sql + where_clause).fetchall()
+            report = self.db.query(sql + where_clause).fetchall()
             print(data_dict['country'][i])
             data_dict['country'][i]['report'] = report
             where_report = ''
             for j,r in enumerate(data_dict['country'][i]['report']):
                 sql = "select distinct report_id, valid_from, valid_to, last_updated_by from report_def where 1 "
                 where_report =  " and report_id = '" + data_dict['country'][i]['report'][j]['report_id'] + "'"
-                reportversions = db.query(sql + where_report).fetchone()
+                reportversions = self.db.query(sql + where_report).fetchone()
                 print(data_dict['country'][i]['report'][j])
                 data_dict['country'][i]['report'][j] = reportversions
             print(data_dict)

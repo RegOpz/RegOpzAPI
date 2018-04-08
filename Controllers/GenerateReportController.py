@@ -18,8 +18,13 @@ from operator import itemgetter
 from datetime import datetime
 from numpy import where
 from Helpers.Tree import tree
+import json
 
 class GenerateReportController(Resource):
+    def __init__(self):
+        tenant_info = json.loads(request.headers.get('Tenant'))
+        self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+        self.db=DatabaseHelper(self.tenant_info)
 
     def get(self):
         if(request.endpoint=='get_report_list_ep'):
@@ -71,7 +76,6 @@ class GenerateReportController(Resource):
             report_kwargs = eval("{'report_id':'" + report_id + "' ," + report_parameters.replace('"',"'") + "}")
             #report_kwargs = {'report_id': 'MAS1003', 'business_date_from': '20160930', 'reporting_currency': 'SGD', 'ref_date_rate': 'B', 'business_date_to': '20160930', 'rate_type': 'MAS'}
             print(report_kwargs)
-            db=DatabaseHelper()
             #try:
             self.update_report_catalog(status='RUNNING',report_id=report_id,reporting_date=reporting_date,report_parameters=report_parameters,report_create_date=report_create_date)
             self.create_report_detail(**report_kwargs)
@@ -79,35 +83,31 @@ class GenerateReportController(Resource):
             self.create_report_summary_by_source(**report_kwargs)
             print("create_report_summary_final")
             self.create_report_summary_final(**report_kwargs)
-            db.commit()
+            self.db.commit()
             self.update_report_catalog(status='SUCCESS',report_id=report_id,reporting_date=reporting_date,report_create_date=report_create_date)
             #except Exception as e:
                 #print("Error ... : " + str(e))
-                #db.rollback()
+                #self.db.rollback()
             #finally:
                 #return report_kwargs
             return {"msg": "Report generated SUCCESSFULLY for ["+str(report_id)+"] Reporting date ["+str(reporting_date)+"]."}, 200
 
     def get_report_list(self,country='ALL'):
-        db=DatabaseHelper()
-        report_list=db.query("select distinct report_id from report_def_catalog where country='"+country+"'").fetchall()
+        report_list=self.db.query("select distinct report_id from report_def_catalog where country='"+country+"'").fetchall()
         return report_list
 
     def get_country_list(self):
-        db=DatabaseHelper()
-        country_list=db.query("select distinct country from report_def_catalog").fetchall()
+        country_list=self.db.query("select distinct country from report_def_catalog").fetchall()
         return country_list
 
     def create_report_catalog(self,report_id,reporting_date,report_create_date,
                               report_parameters,report_create_status,as_of_reporting_date):
-        db=DatabaseHelper()
         sql="insert into report_catalog(report_id,reporting_date,report_create_date,\
             report_parameters,report_create_status,as_of_reporting_date) values(%s,%s,%s,%s,%s,%s)"
-        db.transact(sql,(report_id,reporting_date,report_create_date,report_parameters,report_create_status,as_of_reporting_date))
-        db.commit()
+        self.db.transact(sql,(report_id,reporting_date,report_create_date,report_parameters,report_create_status,as_of_reporting_date))
+        self.db.commit()
 
     def update_report_catalog(self,status,report_id,reporting_date,report_parameters=None,report_create_date=None):
-        db=DatabaseHelper()
         update_clause = "report_create_status='{0}'".format(status,)
         if report_parameters != None:
             # Replace all singlequotes(') with double quote(") as update sql requires all enclosed in ''
@@ -116,8 +116,8 @@ class GenerateReportController(Resource):
             # Replace all singlequotes(') with double quote(") as update sql requires all enclosed in ''
             update_clause += ", report_create_date='{0}'".format(report_create_date.replace("'",'"'),)
         sql = "update report_catalog set {0} where report_id='{1}' and reporting_date='{2}'".format(update_clause,report_id,reporting_date,)
-        db.transact(sql)
-        db.commit()
+        self.db.transact(sql)
+        self.db.commit()
 
 
     def map_data_to_cells(self,list_business_rules,exch_rt_dict,reporting_currency,qualified_data):
@@ -175,16 +175,15 @@ class GenerateReportController(Resource):
         else:
             print("Please supply parameters: "+str(parameter_list))
 
-        db=DatabaseHelper()
-        all_sources=db.query('select distinct source_id \
+        all_sources=self.db.query('select distinct source_id \
                     from report_calc_def where report_id=%s and in_use=\'Y\'',(report_id,)).fetchall()
             #Changes required for incoporating exchange rates
 
         if ref_date_rate=='B':
-            exch_rt=db.query('select business_date,from_currency,to_currency,rate from exchange_rate where business_date between %s and %s\
+            exch_rt=self.db.query('select business_date,from_currency,to_currency,rate from exchange_rate where business_date between %s and %s\
                     and rate_type=%s',(business_date_from,business_date_to,rate_type)).fetchall()
         else:
-            exch_rt=db.query('select business_date,from_currency,to_currency,rate from exchange_rate where business_date=%s and rate_type=%s',\
+            exch_rt=self.db.query('select business_date,from_currency,to_currency,rate from exchange_rate where business_date=%s and rate_type=%s',\
                     (business_date_to,rate_type)).fetchall()
 
         exch_rt_dict=defaultdict(dict)
@@ -195,7 +194,7 @@ class GenerateReportController(Resource):
         #Clean the link table before populating for same reporting date
         print('Before clean_table report_qualified_data_link')
         start = time.time()
-        util.clean_table(db._cursor(), 'report_qualified_data_link', '', reporting_date,'report_id=\''+ report_id + '\'')
+        util.clean_table(self.db._cursor(), 'report_qualified_data_link', '', reporting_date,'report_id=\''+ report_id + '\'')
         print('Time taken for clean_table report_qualified_data_link ' + str((time.time() - start) * 1000))
 
 
@@ -203,7 +202,7 @@ class GenerateReportController(Resource):
         for source in all_sources:
             source_id=source['source_id']
             print("Processing source id: ",source_id)
-            all_business_rules=db.query('select report_id,sheet_id,cell_id,cell_calc_ref,cell_business_rules \
+            all_business_rules=self.db.query('select report_id,sheet_id,cell_id,cell_calc_ref,cell_business_rules \
                     from report_calc_def where report_id=%s and source_id=%s and in_use=\'Y\'',(report_id,source_id,)).fetchall()
 
             start = time.time()
@@ -221,7 +220,6 @@ class GenerateReportController(Resource):
             #print('All business rules after report parameter', all_business_rules)
             print('Time taken for converting to dictionary all_business_rules ' + str((time.time() - start) * 1000))
 
-            dbqd=DatabaseHelper()
             curdata =dbqd.query('select source_id,qualifying_key,business_rules,buy_currency,sell_currency,mtm_currency,\
                         %s as reporting_currency,business_date,%s as reporting_date,%s as business_date_to, \
                         %s as ref_date_rate \
@@ -261,7 +259,7 @@ class GenerateReportController(Resource):
                 start=time.time()
                 #for result_set_flat in rs:
                 print('Database inserts for 50000 .....')
-                db.transactmany('insert into report_qualified_data_link \
+                self.db.transactmany('insert into report_qualified_data_link \
                                 (report_id,sheet_id ,cell_id ,cell_calc_ref,source_id ,qualifying_key,\
                                  buy_currency,sell_currency,mtm_currency,business_date,reporting_date,\
                                  buy_reporting_rate,sell_reporting_rate,mtm_reporting_rate,\
@@ -269,7 +267,7 @@ class GenerateReportController(Resource):
                                   values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',result_set_flat)
 
                 print('Time taken by database inserts '+ str((time.time() - start) * 1000))
-                db.commit()
+                self.db.commit()
                 #return
             print('Time taken by complete loop of qualified data '+ str((time.time() - startcur) * 1000))
         print('Time taken by complete loop of all sources '+ str((time.time() - startsource) * 1000))
@@ -357,8 +355,7 @@ class GenerateReportController(Resource):
         return df
 
     def get_list_of_columns_for_dataframe(self,agg_df,table_name):
-        db=DatabaseHelper()
-        table_def = db.query("describe " + table_name).fetchall()
+        table_def = self.db.query("describe " + table_name).fetchall()
 
         #Now build the agg column list
         df_agg_column_list=''
@@ -395,7 +392,6 @@ class GenerateReportController(Resource):
         else:
             print("Please supply parameters: " + str(parameter_list))
 
-        db=DatabaseHelper()
 
         # Fetch all aggregate clauses into a dataframe
         sql = "select a.report_id,a.sheet_id,a.cell_id,b.source_id,\
@@ -404,7 +400,7 @@ class GenerateReportController(Resource):
                         where  a.source_id=b.source_id and a.in_use='Y' \
                         and a.report_id='REPORT_ID' order by a.source_id".replace(
             'REPORT_ID', report_id)
-        all_agg_cls = pd.read_sql(sql, db.connection())
+        all_agg_cls = pd.read_sql(sql, self.db.connection())
         #Convert to float where possible to reduce memory usage
         for col_to_convert in all_agg_cls.columns:
             all_agg_cls[[col_to_convert]]=all_agg_cls[[col_to_convert]].astype(dtype=float,errors='ignore')
@@ -428,7 +424,7 @@ class GenerateReportController(Resource):
                 .replace('REPORT_DATE',reporting_date)
 
         print(sql)
-        report_qualified_data_link=pd.read_sql(sql,db.connection())
+        report_qualified_data_link=pd.read_sql(sql,self.db.connection())
         #Convert to float where possible to reduce memory usage
         for col_to_convert in report_qualified_data_link.columns:
             report_qualified_data_link[[col_to_convert]]=report_qualified_data_link[[col_to_convert]].astype(dtype=float,errors='ignore')
@@ -442,7 +438,7 @@ class GenerateReportController(Resource):
         merge_grouped={}
         for idx,grp in grouped:
             source_table=grp['source_table_name'].unique()[0]
-            key_column = util.get_keycolumn(db._cursor(), source_table)
+            key_column = util.get_keycolumn(self.db._cursor(), source_table)
             print('key column ['+key_column+']')
 
             col_list = ''
@@ -453,7 +449,7 @@ class GenerateReportController(Resource):
                 .replace('TBL', source_table) \
                 .replace('DATE_FROM', business_date_from).replace('DATE_TO', business_date_to)
 
-            data_frms = pd.read_sql(sql, db.connection(), chunksize=50000)
+            data_frms = pd.read_sql(sql, self.db.connection(), chunksize=50000)
             df_group_list = []
             for frm in data_frms:
                 #print(frm.columns)
@@ -473,7 +469,7 @@ class GenerateReportController(Resource):
 
         # clean summary table before populating it for reporting_date
         # util.clean_table(cur, 'report_summary', '', reporting_date)
-        util.clean_table(db._cursor(), 'report_summary_by_source', '', reporting_date,'report_id=\''+ report_id + '\'')
+        util.clean_table(self.db._cursor(), 'report_summary_by_source', '', reporting_date,'report_id=\''+ report_id + '\'')
 
         for src in sources:
             print('Processing data frame for source id [' + str(src) + '].')
@@ -501,12 +497,12 @@ class GenerateReportController(Resource):
                         result_set.append((row['report_id'], row['sheet_id'], row['cell_id'], \
                                            row['source_id'], row['cell_calc_ref'], float(summary), reporting_date))
 
-                db.transactmany('insert into report_summary_by_source(report_id,sheet_id,cell_id,\
+                self.db.transactmany('insert into report_summary_by_source(report_id,sheet_id,cell_id,\
                                     source_id,cell_calc_ref,cell_summary,reporting_date)\
                                     values(%s,%s,%s,%s,%s,%s,%s)', result_set)
 
 
-        db.commit()
+        self.db.commit()
         #return
 
     def create_report_summary_final(self,populate_summary = True,cell_format_yn = 'N',**kwargs):
@@ -520,15 +516,14 @@ class GenerateReportController(Resource):
         else:
             print("Please supply parameters: " + str(parameter_list))
 
-        db = DatabaseHelper()
 
         if populate_summary:
-            util.clean_table(db._cursor(), 'report_summary', '', reporting_date, 'report_id=\''+ report_id + '\'')
+            util.clean_table(self.db._cursor(), 'report_summary', '', reporting_date, 'report_id=\''+ report_id + '\'')
 
-        contributors = db.query("SELECT * FROM report_summary_by_source WHERE reporting_date='{0}' AND report_id='{1}'"\
+        contributors = self.db.query("SELECT * FROM report_summary_by_source WHERE reporting_date='{0}' AND report_id='{1}'"\
             .format(reporting_date, report_id)).fetchall()
 
-        comp_agg_cls = db.query("SELECT * FROM report_comp_agg_def WHERE report_id=%s AND in_use='Y'",\
+        comp_agg_cls = self.db.query("SELECT * FROM report_comp_agg_def WHERE report_id=%s AND in_use='Y'",\
             (report_id,)).fetchall()
 
         formula_set = {}
@@ -560,9 +555,9 @@ class GenerateReportController(Resource):
 
         if populate_summary:
             try:
-                rowId = db.transactmany("INSERT INTO report_summary(report_id,sheet_id,cell_id,cell_summary,reporting_date)\
+                rowId = self.db.transactmany("INSERT INTO report_summary(report_id,sheet_id,cell_id,cell_summary,reporting_date)\
                                 VALUES(%s,%s,%s,%s,%s)", result_set)
-                db.commit()
+                self.db.commit()
                 return rowId
             except Exception as e:
                 print("Transaction Failed:", e)

@@ -4,11 +4,14 @@ from flask_restful import Resource
 from Helpers.DatabaseHelper import DatabaseHelper
 from Helpers.DatabaseOps import DatabaseOps
 from Helpers.AuditHelper import AuditHelper
+import json
 
 class DataChangeController(Resource):
     def __init__(self):
-        self.db=DatabaseHelper()
-        self.audit=AuditHelper('data_change_log')
+        tenant_info = json.loads(request.headers.get('Tenant'))
+        self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+        self.audit=AuditHelper('data_change_log',self.tenant_info)
+        self.db=DatabaseHelper(self.tenant_info)
 
     def get(self):
         if request.endpoint=="get_data_audit_list":
