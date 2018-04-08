@@ -7,11 +7,14 @@ import time
 from Constants.Status import *
 import mysql.connector
 from mysql.connector import errorcode
+import json
 
 
 class MaintainSourcesController(Resource):
 	def __init__(self):
-		self.db=DatabaseHelper()
+		tenant_info = json.loads(request.headers.get('Tenant'))
+		self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+		self.db=DatabaseHelper(self.tenant_info)
 
 	def get(self):
 		app.logger.info(request.endpoint)

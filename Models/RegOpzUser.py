@@ -3,6 +3,7 @@ from flask import url_for, request
 from Models.Token import Token
 # import bcrypt
 from Constants.Status import *
+import json
 
 labelList = {
     'name': "User Name",
@@ -22,8 +23,12 @@ labelList = {
 }
 
 class RegOpzUser(object):
-    def __init__(self, tenant_info,user = None):
-        self.tenant_info=tenant_info
+    def __init__(self, tenant_info = None ,user = None):
+        if tenant_info:
+            self.tenant_info=tenant_info
+        else:
+            tenant_info = json.loads(request.headers.get('Tenant'))
+            self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
         self.dbhelper = DatabaseHelper(self.tenant_info)
         if user and user['password'] == user['passwordConfirm']:
             self.id = True

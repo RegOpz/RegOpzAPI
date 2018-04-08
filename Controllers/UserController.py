@@ -11,7 +11,7 @@ class UserController(Resource):
 	def __init__(self):
 		tenant_info=json.loads(request.headers.get('Tenant'))
 		self.tenant_conn_details=json.loads(tenant_info['tenant_conn_details'])
-		print(self.tenant_conn_details)
+		# print(self.tenant_conn_details)
 		if self.tenant_conn_details:
 			self.regopzUser=RegOpzUser(self.tenant_conn_details)
 

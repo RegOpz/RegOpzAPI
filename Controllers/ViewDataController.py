@@ -8,10 +8,14 @@ from Helpers.DatabaseOps import DatabaseOps
 from Constants.Status import *
 from operator import itemgetter
 from datetime import datetime
+import json
+
 class ViewDataController(Resource):
     def __init__(self):
-        self.dbOps = DatabaseOps('data_change_log')
-        self.db=DatabaseHelper()
+        tenant_info = json.loads(request.headers.get('Tenant'))
+        self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+        self.dbOps=DatabaseOps('data_change_log',self.tenant_info)
+        self.db=DatabaseHelper(self.tenant_info)
     def get(self):
         if(request.endpoint == 'get_date_heads_ep'):
             start_date = request.args.get('start_date') if request.args.get('start_date') != None else '19000101'

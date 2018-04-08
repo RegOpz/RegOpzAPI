@@ -2,7 +2,13 @@ from Helpers.DatabaseHelper import DatabaseHelper
 from flask_restful import Resource,request
 import Models.Resource as rsc
 from Constants.Status import *
+import json
+
 class ResourceController(Resource):
+    def __init__(self):
+        tenant_info = json.loads(request.headers.get('Tenant'))
+        self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+        self.dbhelper=DatabaseHelper(self.tenant_info)
 
     def get(self,id=None):
         return rsc.Resource().get(id)
@@ -13,10 +19,9 @@ class ResourceController(Resource):
         if id==None:
             return RESOURCE_EMPTY
 
-        dbhelper=DatabaseHelper()
         queryString="update resource set name=%s where id=%s"
         values=(res['name'],id)
-        rowid=dbhelper.transact(queryString,values)
+        rowid=self.dbhelper.transact(queryString,values)
 
         return rowid
 
@@ -24,20 +29,16 @@ class ResourceController(Resource):
     def post(self):
         res = request.get_json(force=True)
 
-        dbhelper = DatabaseHelper()
         queryString = "insert into resource(name) values(%s)"
         values = (res['name'],)
-        rowid = dbhelper.transact(queryString, values)
+        rowid = self.dbhelper.transact(queryString, values)
         return rowid
 
     def delete(self,id=None):
         if id == None:
             return RESOURCE_EMPTY
 
-        dbhelper = DatabaseHelper()
         queryString = "delete from resource where id=%s"
         values = (id,)
-        rowid = dbhelper.transact(queryString, values)
+        rowid = self.dbhelper.transact(queryString, values)
         return rowid
-
-
