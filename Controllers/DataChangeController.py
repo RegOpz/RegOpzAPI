@@ -5,14 +5,19 @@ from Helpers.DatabaseHelper import DatabaseHelper
 from Helpers.DatabaseOps import DatabaseOps
 from Helpers.AuditHelper import AuditHelper
 import json
+from Helpers.utils import autheticateTenant
+from Helpers.authenticate import *
 
 class DataChangeController(Resource):
     def __init__(self):
-        tenant_info = json.loads(request.headers.get('Tenant'))
-        self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
-        self.audit=AuditHelper('data_change_log',self.tenant_info)
-        self.db=DatabaseHelper(self.tenant_info)
+        self.domain_info = autheticateTenant()
+        if self.domain_info:
+            tenant_info = json.loads(self.domain_info)
+            self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+            self.audit=AuditHelper('data_change_log',self.tenant_info)
+            self.db=DatabaseHelper(self.tenant_info)
 
+    @authenticate
     def get(self):
         if request.endpoint=="get_data_audit_list":
             table_name=request.args.get("table_name")

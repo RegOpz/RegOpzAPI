@@ -4,6 +4,8 @@ from Models.Token import Token
 # import bcrypt
 from Constants.Status import *
 import json
+from Helpers.authenticate import *
+from Helpers.utils import autheticateTenant
 
 labelList = {
     'name': "User Name",
@@ -23,13 +25,12 @@ labelList = {
 }
 
 class RegOpzUser(object):
-    def __init__(self, tenant_info = None ,user = None):
-        if tenant_info:
-            self.tenant_info=tenant_info
-        else:
-            tenant_info = json.loads(request.headers.get('Tenant'))
+    def __init__(self, user = None):
+        self.domain_info=autheticateTenant()
+        if self.domain_info:
+            tenant_info = json.loads(self.domain_info)
             self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
-        self.dbhelper = DatabaseHelper(self.tenant_info)
+            self.dbhelper = DatabaseHelper(self.tenant_info)
         if user and user['password'] == user['passwordConfirm']:
             self.id = True
             self.name = user['name']
@@ -43,6 +44,7 @@ class RegOpzUser(object):
             self.ip = request.remote_addr
             self.image = None
 
+    @authenticate
     def save(self):
         queryString = "INSERT INTO regopzuser (name,password,role_id,status,first_name,last_name,\
             contact_number,email,ip,image) VALUES (%s,%s,(SELECT id from roles where role=%s),%s,%s,%s,%s,%s,%s,%s)"
@@ -143,5 +145,5 @@ class RegOpzUser(object):
         cur = self.dbhelper.query(queryString, (username, password, ))
         data = cur.fetchone()
         if data:
-            return Token(self.tenant_info).create(data)
+            return Token().create(data)
         return {"msg": "Login failed", "donotUseMiddleWare": True },403

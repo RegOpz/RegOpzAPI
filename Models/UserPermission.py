@@ -3,14 +3,17 @@ from Helpers.AuditHelper import AuditHelper
 from Constants.Status import *
 from flask import request
 import json
+from Helpers.utils import autheticateTenant
 
 class UserPermission(object):
     def __init__(self, tenant_info = None,userId = None):
         if tenant_info:
             self.tenant_info=tenant_info
         else:
-            tenant_info = json.loads(request.headers.get('Tenant'))
-            self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+            self.domain_info = autheticateTenant()
+            if self.domain_info:
+                tenant_info = json.loads(self.domain_info)
+                self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
         self.dbhelper = DatabaseHelper(self.tenant_info)
         self.audit = AuditHelper("def_change_log",self.tenant_info)
         self.user_id = userId

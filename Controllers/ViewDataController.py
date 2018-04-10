@@ -9,13 +9,19 @@ from Constants.Status import *
 from operator import itemgetter
 from datetime import datetime
 import json
+from Helpers.utils import autheticateTenant
+from Helpers.authenticate import *
 
 class ViewDataController(Resource):
     def __init__(self):
-        tenant_info = json.loads(request.headers.get('Tenant'))
-        self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
-        self.dbOps=DatabaseOps('data_change_log',self.tenant_info)
-        self.db=DatabaseHelper(self.tenant_info)
+        self.domain_info=autheticateTenant()
+        if self.domain_info:
+            tenant_info = json.loads(self.domain_info)
+            self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+            self.dbOps=DatabaseOps('data_change_log',self.tenant_info)
+            self.db=DatabaseHelper(self.tenant_info)
+
+    @authenticate
     def get(self):
         if(request.endpoint == 'get_date_heads_ep'):
             start_date = request.args.get('start_date') if request.args.get('start_date') != None else '19000101'
@@ -82,9 +88,11 @@ class ViewDataController(Resource):
             params=(business_date,id,)
             #print(params)
             res=self.db.transact(sql,params)
+            self.db.commit()
 
             return res
         except Exception as e:
+            self.db.rollback()
             app.logger.error(e)
             return {"msg":e},500
 
@@ -322,9 +330,9 @@ class ViewDataController(Resource):
     def run_rules_engine(self,source_id,business_date,business_or_validation='ALL'):
 
         #db to insert qualified/invalid_data
-        db=DatabaseHelper()
+        db=DatabaseHelper(self.tenant_info)
         #dbsf to query data and create source data cursor
-        dbsf=DatabaseHelper()
+        dbsf=DatabaseHelper(self.tenant_info)
 
         sql_str = 'Select source_id,source_table_name from data_source_information'
         if source_id!='ALL':
@@ -409,9 +417,11 @@ class ViewDataController(Resource):
                      else:
                          code += '\t\tif ('+NoneType_chk_str+') and ('+final_str+'):\n'
                          if row["business_or_validation"] == 'VALIDATION':
-                             code += '\t\t\tvalidation_rule+=\'' + row["business_rule"].strip() + ',\'\n'
+                             code += '\t\t\tif \'' + row["business_rule"].strip() + '\' not in validation_rule.split(\',\'):\n'
+                             code += '\t\t\t\tvalidation_rule+=\'' + row["business_rule"].strip() + ',\'\n'
                          else:
-                             code += '\t\t\tbusiness_rule+=\''+row["business_rule"].strip()+',\'\n'
+                             code += '\t\t\tif \'' + row["business_rule"].strip() + '\' not in business_rule.split(\',\'):\n'
+                             code += '\t\t\t\tbusiness_rule+=\''+row["business_rule"].strip()+',\'\n'
 
             code += '\t\tif business_rule!=\'\' and validation_rule==\'\' and business_or_validation in [\'ALL\',\'BUSINESSRULES\']:\n'
             code += '\t\t\tqualified_data.append((source_id,business_date,'+qualifying_key+',business_rule,'+buy_currency+','+sell_currency+','+mtm_currency+'))\n'
@@ -466,5 +476,6 @@ class ViewDataController(Resource):
                         where source_id=%s and business_date=%s",(status,source_id,business_date))
             self.db.commit()
         except Exception as e:
+            self.db.rollback()
             app.logger.error(e)
             return {"msg":e},500

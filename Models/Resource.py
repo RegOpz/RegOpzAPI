@@ -1,10 +1,13 @@
 from Helpers.DatabaseHelper import DatabaseHelper
+from Helpers.utils import autheticateTenant
 
 class Resource(object):
     def __init__(self,params=None):
-        tenant_info = json.loads(request.headers.get('Tenant'))
-        self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
-        self.dbhelper = DatabaseHelper(self.tenant_info)
+        self.domain_info = autheticateTenant()
+        if self.domain_info:
+            tenant_info = json.loads(self.domain_info)
+            self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+            self.dbhelper = DatabaseHelper(self.tenant_info)
         if params:
             self.id=params['id']
             self.name=params['name']

@@ -1,13 +1,18 @@
 from Helpers.DatabaseHelper import DatabaseHelper
 from flask_restful import Resource,request
 import json
+from Helpers.utils import autheticateTenant
+from Helpers.authenticate import *
 
 class PermissionController(Resource):
     def __init__(self):
-        tenant_info = json.loads(request.headers.get('Tenant'))
-        self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
-        self.dbhelper=DatabaseHelper(self.tenant_info)
-        
+        self.domain_info = autheticateTenant()
+        if self.domain_info:
+            tenant_info = json.loads(self.domain_info)
+            self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+            self.dbhelper=DatabaseHelper(self.tenant_info)
+
+    @authenticate
     def get(self):
         permissions_list = []
         queryString = "SELECT * FROM components"

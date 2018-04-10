@@ -12,16 +12,20 @@ import openpyxl as xls
 from openpyxl.styles import Border, Side, PatternFill, Font, GradientFill, Alignment, Protection
 from openpyxl.utils import get_column_letter
 import json
+from Helpers.utils import autheticateTenant
+from Helpers.authenticate import *
 
 class MaintainReportRulesController(Resource):
 	def __init__(self):
-		#print("Inside MaintainReportRulesController", request.headers.get('Tenant'))
-		tenant_info = json.loads(request.headers.get('Tenant'))
-		self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
-		self.dbOps=DatabaseOps('def_change_log',self.tenant_info)
-		self.audit=AuditHelper('def_change_log',self.tenant_info)
-		self.db=DatabaseHelper(self.tenant_info)
+		self.domain_info = autheticateTenant()
+		if self.domain_info:
+			tenant_info = json.loads(self.domain_info)
+			self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+			self.dbOps=DatabaseOps('def_change_log',self.tenant_info)
+			self.audit=AuditHelper('def_change_log',self.tenant_info)
+			self.db=DatabaseHelper(self.tenant_info)
 
+	@authenticate
 	def get(self,report_id=None):
 		#print(request.endpoint)
 		if request.endpoint == 'get_business_rules_suggestion_list_ep':

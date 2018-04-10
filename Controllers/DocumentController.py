@@ -18,14 +18,19 @@ from operator import itemgetter
 from datetime import datetime
 import time
 from Controllers.GenerateReportController import GenerateReportController as report
+from Helpers.utils import autheticateTenant
+from Helpers.authenticate import *
 UPLOAD_FOLDER = './uploads/templates'
 ALLOWED_EXTENSIONS = set(['txt', 'xls', 'xlsx'])
 class DocumentController(Resource):
     def __init__(self):
-        tenant_info = json.loads(request.headers.get('Tenant'))
-        self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
-        self.db=DatabaseHelper(self.tenant_info)
+        self.domain_info = autheticateTenant()
+        if self.domain_info:
+            tenant_info = json.loads(self.domain_info)
+            self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+            self.db=DatabaseHelper(self.tenant_info)
 
+    @authenticate
     def allowed_file(self,filename):
         return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
     def get(self, doc_id=None):

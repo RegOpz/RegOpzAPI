@@ -18,13 +18,18 @@ from operator import itemgetter
 from datetime import datetime
 import pandas as pd
 from Helpers.Tree import tree
+from Helpers.utils import autheticateTenant
+from Helpers.authenticate import *
 
 class DynamicReportController(Resource):
     def __init__(self):
-        tenant_info = json.loads(request.headers.get('Tenant'))
-        self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
-        self.db=DatabaseHelper(self.tenant_info)
+        self.domain_info = autheticateTenant()
+        if self.domain_info:
+            tenant_info = json.loads(self.domain_info)
+            self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+            self.db=DatabaseHelper(self.tenant_info)
 
+    @authenticate
     def post(self):
         if request.endpoint=='create_dynamic_report_ep':
             report_info=request.get_json(force=True)

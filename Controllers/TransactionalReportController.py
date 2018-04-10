@@ -21,16 +21,21 @@ import time
 import math
 import re
 import pandas as pd
+from Helpers.utils import autheticateTenant
+from Helpers.authenticate import *
 
 UPLOAD_FOLDER = './uploads/templates'
 ALLOWED_EXTENSIONS = set(['xls', 'xlsx'])
 
 class TransactionalReportController(Resource):
     def __init__(self):
-        tenant_info = json.loads(request.headers.get('Tenant'))
-        self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
-        self.db=DatabaseHelper(self.tenant_info)
+        self.domain_info = autheticateTenant()
+        if self.domain_info:
+            tenant_info = json.loads(self.domain_info)
+            self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+            self.db=DatabaseHelper(self.tenant_info)
 
+    @authenticate
     def get(self,report_id=None,cell_id=None, rule_cell_id=None,reporting_date=None):
         if report_id and reporting_date:
             self.report_id=report_id
@@ -163,14 +168,14 @@ class TransactionalReportController(Resource):
 
     def create_report_catalog(self,report_id,reporting_date,report_create_date,
                               report_parameters,report_create_status,as_of_reporting_date):
-        db=DatabaseHelper()
+        db=self.db
         sql="insert into report_catalog(report_id,reporting_date,report_create_date,\
             report_parameters,report_create_status,as_of_reporting_date) values(%s,%s,%s,%s,%s,%s)"
         db.transact(sql,(report_id,reporting_date,report_create_date,report_parameters,report_create_status,as_of_reporting_date))
         db.commit()
 
     def update_report_catalog(self,status,report_id,reporting_date,report_parameters=None,report_create_date=None):
-        db=DatabaseHelper()
+        db=self.db
         update_clause = "report_create_status='{0}'".format(status,)
         if report_parameters != None:
             # Replace all singlequotes(') with double quote(") as update sql requires all enclosed in ''

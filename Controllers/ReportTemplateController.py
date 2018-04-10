@@ -20,16 +20,21 @@ from datetime import datetime
 import time
 import math
 import re
+from Helpers.utils import autheticateTenant
+from Helpers.authenticate import *
 
 UPLOAD_FOLDER = './uploads/templates'
 ALLOWED_EXTENSIONS = set(['txt', 'xls', 'xlsx'])
 
 class ReportTemplateController(Resource):
     def __init__(self):
-        tenant_info = json.loads(request.headers.get('Tenant'))
-        self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
-        self.db=DatabaseHelper(self.tenant_info)
+        self.domain_info = autheticateTenant()
+        if self.domain_info:
+            tenant_info = json.loads(self.domain_info)
+            self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+            self.db=DatabaseHelper(self.tenant_info)
 
+    @authenticate
     def get(self):
 
         if request.endpoint == 'get_report_template_suggestion_list_ep':
