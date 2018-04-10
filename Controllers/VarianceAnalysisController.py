@@ -5,13 +5,18 @@ from Helpers.DatabaseHelper import DatabaseHelper
 from Controllers.ViewReportController import ViewReportController as report
 import Helpers.utils as util
 import json
+from Helpers.utils import autheticateTenant
+from Helpers.authenticate import *
 
 class VarianceAnalysisController(Resource):
     def __init__(self):
-        tenant_info = json.loads(request.headers.get('Tenant'))
-        self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
-        self.db=DatabaseHelper(self.tenant_info)
+        self.domain_info = autheticateTenant()
+        if self.domain_info:
+            tenant_info = json.loads(self.domain_info)
+            self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+            self.db=DatabaseHelper(self.tenant_info)
 
+    @authenticate
     def get(self):
         if request.endpoint=='get_variance_country_suggestion_list':
             return self.get_country_suggestion_list()

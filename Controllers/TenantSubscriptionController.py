@@ -1,7 +1,9 @@
 from app import *
 from flask_restful import Resource,abort
 from flask import Flask, request, redirect, url_for
+from jwt import JWT, jwk_from_pem
 from Helpers.DatabaseHelper import DatabaseHelper
+import json
 
 
 class TenantSubscirptionController(Resource):
@@ -20,7 +22,14 @@ class TenantSubscirptionController(Resource):
             if not subscr_info:
                 return {"msg":"Subscriber information not found!","donotUseMiddleWare": True},403
 
-            return subscr_info
+            user = {
+                'domainInfo': json.dumps(subscr_info)
+            }
+            jwtObject = JWT()
+            with open('private_key', 'rb') as fh:
+                salt = jwk_from_pem(fh.read())
+            jwt = jwtObject.encode(user, salt, 'RS256')
+            return jwt
 
         except Exception as e:
             app.logger.error(str(e))

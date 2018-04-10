@@ -8,14 +8,19 @@ from Constants.Status import *
 import mysql.connector
 from mysql.connector import errorcode
 import json
+from Helpers.utils import autheticateTenant
+from Helpers.authenticate import *
 
 
 class MaintainSourcesController(Resource):
 	def __init__(self):
-		tenant_info = json.loads(request.headers.get('Tenant'))
-		self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
-		self.db=DatabaseHelper(self.tenant_info)
+		self.domain_info = autheticateTenant()
+		if self.domain_info:
+			tenant_info = json.loads(self.domain_info)
+			self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+			self.db=DatabaseHelper(self.tenant_info)
 
+	@authenticate
 	def get(self):
 		app.logger.info(request.endpoint)
 		if request.endpoint == 'get_source_feed_suggestion_list_ep':

@@ -19,13 +19,19 @@ from datetime import datetime
 from numpy import where
 from Helpers.Tree import tree
 import json
+from Helpers.utils import autheticateTenant
+from Helpers.authenticate import *
+import math
 
 class GenerateReportController(Resource):
     def __init__(self):
-        tenant_info = json.loads(request.headers.get('Tenant'))
-        self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
-        self.db=DatabaseHelper(self.tenant_info)
+        self.domain_info = autheticateTenant()
+        if self.domain_info:
+            tenant_info = json.loads(self.domain_info)
+            self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+            self.db=DatabaseHelper(self.tenant_info)
 
+    @authenticate
     def get(self):
         if(request.endpoint=='get_report_list_ep'):
             country=request.args.get('country') if request.args.get('country') != None else 'ALL'
@@ -61,6 +67,7 @@ class GenerateReportController(Resource):
             self.create_report_summary_by_source(**report_kwargs)
             print("create_report_summary_final")
             self.create_report_summary_final(**report_kwargs)
+            self.db.commit()
             self.update_report_catalog(status='SUCCESS', report_id=report_id, reporting_date=reporting_date,report_create_date=report_create_date)
 
             return {"msg": "Report generated SUCCESSFULLY for ["+str(report_id)+"] Reporting date ["+str(reporting_date)+"]."}, 200
@@ -220,6 +227,7 @@ class GenerateReportController(Resource):
             #print('All business rules after report parameter', all_business_rules)
             print('Time taken for converting to dictionary all_business_rules ' + str((time.time() - start) * 1000))
 
+            dbqd=DatabaseHelper(self.tenant_info)
             curdata =dbqd.query('select source_id,qualifying_key,business_rules,buy_currency,sell_currency,mtm_currency,\
                         %s as reporting_currency,business_date,%s as reporting_date,%s as business_date_to, \
                         %s as ref_date_rate \
@@ -239,7 +247,7 @@ class GenerateReportController(Resource):
                 #print(exch_rt_dict)
                 start=time.time()
 
-                #mp=partial(map_data_to_cells,all_bus_rl_dict,exch_rt_dict,reporting_currency)
+                # mp=partial(map_data_to_cells,all_bus_rl_dict,exch_rt_dict,reporting_currency)
                 mp = partial(self.map_data_to_cells, all_business_rules, exch_rt_dict, reporting_currency)
 
                 print('CPU Count: ' + str(cpu_count()))
@@ -495,7 +503,7 @@ class GenerateReportController(Resource):
                         mrg_src['reporting_value'] = mrg_src['reporting_value'].map(float)
                         summary = eval('mrg_src[\'reporting_value\'].' + row["aggregation_func"] + '()')
                         result_set.append((row['report_id'], row['sheet_id'], row['cell_id'], \
-                                           row['source_id'], row['cell_calc_ref'], float(summary), reporting_date))
+                                           row['source_id'], row['cell_calc_ref'], ( 0 if math.isnan(float(summary)) else float(summary)), reporting_date))
 
                 self.db.transactmany('insert into report_summary_by_source(report_id,sheet_id,cell_id,\
                                     source_id,cell_calc_ref,cell_summary,reporting_date)\
@@ -560,6 +568,7 @@ class GenerateReportController(Resource):
                 self.db.commit()
                 return rowId
             except Exception as e:
+                self.db.rollback()
                 print("Transaction Failed:", e)
         else:
             return result_set

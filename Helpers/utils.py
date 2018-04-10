@@ -3,6 +3,8 @@
 
 from openpyxl.utils import get_column_letter
 import math
+from flask import Flask, request, Response
+from jwt import JWT, jwk_from_pem
 
 def cell_index(col_idx,row_idx):
     return get_column_letter(col_idx)+str(row_idx)
@@ -71,3 +73,28 @@ def round_value(number_to_round,option):
         rounded_number=number_to_round
 
     return rounded_number
+
+def autheticateTenant():
+    subscriber = request.headers.get('Subscriber')
+    if subscriber:
+        token = subscriber
+    else:
+        token = request.headers.get('Authorization')
+    if token:
+        extracted_token = token.replace("Bearer ", "")
+        with open('public_key', 'r') as fh:
+            salt = jwk_from_pem(fh.read().encode())
+        try:
+            token_decode = JWT().decode(extracted_token, salt)
+            if 'domainInfo' in token_decode.keys():
+                return token_decode['domainInfo']
+            else:
+                # raise ValueError("Forbidden! No valid subscriber info found!")
+                return None
+        except Exception:
+            # print("autheticateTenant ...........Invalid Token Recieved for Subscriber Authentication")
+            # raise TypeError("Invalid Token Recieved for Subscriber Authentication")
+            return None
+    else:
+        # raise ValueError("Forbidden! No Token Recieved for Subscriber Authentication")
+        return None

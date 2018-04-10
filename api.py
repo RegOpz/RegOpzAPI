@@ -115,6 +115,7 @@ api.add_resource(MaintainBusinessRulesController,
 api.add_resource(UserController,
     apiPath + "/users",
     apiPath + "/users/<string:userId>",
+    apiPath + "/users/<string:userCheck>/<string:userId>",
     endpoint="users_ep"
 )
 api.add_resource(RoleController,

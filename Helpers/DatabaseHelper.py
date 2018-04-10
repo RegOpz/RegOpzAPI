@@ -80,7 +80,7 @@ class DatabaseHelper(object):
             raise(e)
 
 
-    def __del__(self):
-        self.commit()
-        self.cursor.close()
-        self.cnx.close()
+    # def __del__(self):
+    #     self.commit()
+    #     self.cursor.close()
+    #     self.cnx.close()

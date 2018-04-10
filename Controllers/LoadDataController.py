@@ -5,14 +5,19 @@ from Helpers.DatabaseHelper import DatabaseHelper
 import pandas as pd
 from datetime import datetime
 import json
+from Helpers.utils import autheticateTenant
+from Helpers.authenticate import *
 
 UPLOAD_FOLDER='./uploads/source-files/'
 class LoadDataController(Resource):
     def __init__(self):
-        tenant_info = json.loads(request.headers.get('Tenant'))
-        self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
-        self.db=DatabaseHelper(self.tenant_info)
+        self.domain_info = autheticateTenant()
+        if self.domain_info:
+            tenant_info = json.loads(self.domain_info)
+            self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+            self.db=DatabaseHelper(self.tenant_info)
 
+    @authenticate
     def post(self):
         data=request.get_json(force=True)
         app.logger.info("Inside post of Loading data {}".format(data))
@@ -93,6 +98,7 @@ class LoadDataController(Resource):
                   app.logger.info("Another {} records uploaded...".format(chunk.shape[0]))
 
                except Exception as e:
+                  self.db.rollback()
                   file_load_status='DATALOADING-FAILED'
                   app.logger.error(e)
                   break

@@ -6,17 +6,17 @@ from jwt import JWT, jwk_from_pem
 from flask import request
 from Constants.Status import *
 import json
+from Helpers.utils import autheticateTenant
 
 TokenKey = 'HTTP_AUTHORIZATION'
 
 class Token(object):
-	def __init__(self,tenant_info = None):
-		if tenant_info:
-			self.tenant_info=tenant_info
-		else:
-			tenant_info = json.loads(request.headers.get('Tenant'))
+	def __init__(self):
+		self.domain_info=autheticateTenant()
+		if self.domain_info:
+			tenant_info = json.loads(self.domain_info)
 			self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
-		self.dbhelper = DatabaseHelper(self.tenant_info)
+			self.dbhelper = DatabaseHelper(self.tenant_info)
 		if TokenKey in request.environ:
 			self.token = request.environ[TokenKey]
 
@@ -37,6 +37,7 @@ class Token(object):
 			values = (self.tokenId, self.lease_start, self.lease_end, self.ip, self.user_agent, self.user_id, )
 			try:
 				rowid = self.dbhelper.transact(queryString, values)
+				self.dbhelper.commit()
 			except Exception:
 				return NO_USER_FOUND
 		user_permission = UserPermission(self.tenant_info).get(role)
@@ -46,7 +47,8 @@ class Token(object):
 				'userId': user_id,
 				'name': firstname,
 				'role': user_permission['role'],
-				'permission': user_permission['components']
+				'permission': user_permission['components'],
+				'domainInfo': self.domain_info
 			}
 			jwtObject = JWT()
 			with open('private_key', 'rb') as fh:
@@ -54,7 +56,7 @@ class Token(object):
 			jwt = jwtObject.encode(user, salt, 'RS256')
 			return jwt
 		else:
-			return { "msg": "Permission Denied" },301
+			return { "msg": "Permission Denied" },401
 
 	def get(self, userId):
 		queryString = "SELECT token FROM token WHERE user_id=%s and lease_end > %s"
@@ -66,22 +68,31 @@ class Token(object):
 		else:
 			raise ValueError("User not logged in!")
 
-	def authenticate(self, auth=None):
-		token = auth if auth else self.token
+	def authenticate(self):
+		token = self.token
 		if token:
 			extracted_token = token.replace("Bearer ", "")
 			with open('public_key', 'r') as fh:
 				salt = jwk_from_pem(fh.read().encode())
 			try:
 				token_decode = JWT().decode(extracted_token, salt)
+				print(token_decode)
 			except Exception:
 				raise TypeError("Invalid Token Recieved for Authentication")
-			queryString = "SELECT user_id FROM token WHERE token=%s AND user_id=%s AND lease_end > %s"
-			queryParams = (token_decode['tokenId'], token_decode['userId'], datetime.now(), )
-			cur = self.dbhelper.query(queryString, queryParams)
-			data = cur.fetchone()
-			if data:
-				return data['user_id']
+			# Check whether tokenId, UserId as well as domainInfo exists, then check for logged in user
+			# Authentication else check whether only domainInfo present (as may be after domain validation,
+			# but before login, during signup of new user request etc)
+			if 'tokenId' in token_decode.keys() and 'userId' in token_decode.keys():
+				queryString = "SELECT user_id FROM token WHERE token=%s AND user_id=%s AND lease_end > %s"
+				queryParams = (token_decode['tokenId'], token_decode['userId'], datetime.now(), )
+				cur = self.dbhelper.query(queryString, queryParams)
+				data = cur.fetchone()
+				if data:
+					return data['user_id']
+				else:
+					raise ValueError("Invalid Credentials Recieved for Authentication")
+			elif [*token_decode.keys()] == ['domainInfo']:
+				return 'domainInfo'
 			else:
 				raise ValueError("Invalid Credentials Recieved for Authentication")
 		else:

@@ -3,13 +3,18 @@ from flask_restful import Resource,request
 import Models.Resource as rsc
 from Constants.Status import *
 import json
+from Helpers.utils import autheticateTenant
+from Helpers.authenticate import *
 
 class ResourceController(Resource):
     def __init__(self):
-        tenant_info = json.loads(request.headers.get('Tenant'))
-        self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
-        self.dbhelper=DatabaseHelper(self.tenant_info)
+        self.domain_info = autheticateTenant()
+        if self.domain_info:
+            tenant_info = json.loads(self.domain_info)
+            self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+            self.dbhelper=DatabaseHelper(self.tenant_info)
 
+    @authenticate
     def get(self,id=None):
         return rsc.Resource().get(id)
 
@@ -22,6 +27,7 @@ class ResourceController(Resource):
         queryString="update resource set name=%s where id=%s"
         values=(res['name'],id)
         rowid=self.dbhelper.transact(queryString,values)
+        self.dbhelper.commit()
 
         return rowid
 
@@ -32,6 +38,7 @@ class ResourceController(Resource):
         queryString = "insert into resource(name) values(%s)"
         values = (res['name'],)
         rowid = self.dbhelper.transact(queryString, values)
+        self.dbhelper.commit()
         return rowid
 
     def delete(self,id=None):
@@ -41,4 +48,5 @@ class ResourceController(Resource):
         queryString = "delete from resource where id=%s"
         values = (id,)
         rowid = self.dbhelper.transact(queryString, values)
+        self.dbhelper.commit()
         return rowid
