@@ -44,7 +44,6 @@ class RegOpzUser(object):
             self.ip = request.remote_addr
             self.image = None
 
-    @authenticate
     def save(self):
         queryString = "INSERT INTO regopzuser (name,password,role_id,status,first_name,last_name,\
             contact_number,email,ip,image) VALUES (%s,%s,(SELECT id from roles where role=%s),%s,%s,%s,%s,%s,%s,%s)"
