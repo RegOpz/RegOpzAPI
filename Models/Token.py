@@ -76,7 +76,7 @@ class Token(object):
 				salt = jwk_from_pem(fh.read().encode())
 			try:
 				token_decode = JWT().decode(extracted_token, salt)
-				print(token_decode)
+				# print(token_decode)
 			except Exception:
 				raise TypeError("Invalid Token Recieved for Authentication")
 			# Check whether tokenId, UserId as well as domainInfo exists, then check for logged in user
