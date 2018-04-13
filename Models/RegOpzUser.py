@@ -52,10 +52,11 @@ class RegOpzUser(object):
         try:
             rowid = self.dbhelper.transact(queryString, queryParams)
             self.dbhelper.commit()
-            return { "msg": "Added user successfully, please contact Admin to activate" },200
+            return { "msg": "Added user successfully, please contact Admin to activate",
+                    "donotUseMiddleWare": True },200
         except Exception as e:
             print(e)
-            return { "msg": "Cannot add this user, please review the details" },400
+            return { "msg": "Cannot add this user, please review the details","donotUseMiddleWare": True },400
 
     def get(self, userId = None, update = False):
         queryString = "SELECT name, role, first_name, last_name, email, contact_number, image, status FROM regopzuser\
