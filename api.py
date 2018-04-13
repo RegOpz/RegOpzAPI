@@ -314,7 +314,9 @@ api.add_resource(TransactionalReportController,
 )
 
 api.add_resource(TenantSubscirptionController,
-    apiPath+"/subscription"
+    apiPath+"/subscription",
+    apiPath+"/subscription/<string:domain_name>",
+    apiPath+"/subscription/<int:id>"
 )
 
 
