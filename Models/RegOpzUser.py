@@ -56,7 +56,7 @@ class RegOpzUser(object):
                     "donotUseMiddleWare": True },200
         except Exception as e:
             print(e)
-            return { "msg": "Cannot add this user, please review the details","donotUseMiddleWare": True },400
+            return { "msg": "Cannot add this user, please review the details" },400
 
     def get(self, userId = None, update = False):
         queryString = "SELECT name, role, first_name, last_name, email, contact_number, image, status FROM regopzuser\

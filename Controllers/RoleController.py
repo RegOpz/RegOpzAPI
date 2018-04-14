@@ -10,9 +10,9 @@ class RoleController(Resource):
     def post(self):
         userId = Token().authenticate()
         res = request.get_json(force=True)
-        return UserPermission(userId).post(res)
+        return UserPermission(userId=userId).post(res)
 
     def delete(self, role = None):
         userId = Token().authenticate()
         comment = request.args.get('comment')
-        return UserPermission(userId).delete(role, comment)
+        return UserPermission(userId=userId).delete(role, comment)
