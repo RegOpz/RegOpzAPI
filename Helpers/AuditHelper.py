@@ -130,7 +130,7 @@ class AuditHelper(object):
             self.update_approval_status(table_name=audit_info['table_name'],id=id, dml_allowed='N',in_use='N')
             self.db.commit()
 
-            return res
+            return id
         except Exception as e:
             app.logger.error(str(e))
             return {"msg":str(e)},500
