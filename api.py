@@ -20,6 +20,8 @@ from Controllers.LoadDataFileController import LoadDataFileController
 from Controllers.DynamicReportController import DynamicReportController
 from Controllers.TransactionalReportController import TransactionalReportController
 from Controllers.TenantSubscriptionController import TenantSubscirptionController
+from Controllers.SharedDataController import SharedDataController
+from Controllers.ManageMasterBusinessRulesController import ManageMasterBusinessRulesController
 from flask_cors import CORS, cross_origin
 
 api.add_resource(Info, apiPath + "/info")
@@ -319,7 +321,14 @@ api.add_resource(TenantSubscirptionController,
     apiPath+"/subscription/<int:id>"
 )
 
+api.add_resource(SharedDataController,
+    apiPath + "/shared-data/countries",
+    endpoint = "get_countries_ep"
+)
 
+api.add_resource(ManageMasterBusinessRulesController,
+    apiPath + "/business-rules-repo",
+)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=APIConfig.API['port'], threaded=True)

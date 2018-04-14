@@ -97,6 +97,5 @@ class TenantSubscirptionController(Resource):
                         "donotUseMiddleWare": True },200
             except Exception as e:
                 print(e)
-                return { "msg": "Uable to add subscriptionn request, please review the details",
-                        "donotUseMiddleWare": True },400
+                return { "msg": "Uable to add subscriptionn request, please review the details" },400
         return NO_USER_FOUND
