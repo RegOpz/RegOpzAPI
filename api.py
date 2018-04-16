@@ -328,6 +328,7 @@ api.add_resource(SharedDataController,
 
 api.add_resource(ManageMasterBusinessRulesController,
     apiPath + "/business-rules-repo",
+    apiPath + "/business-rules-repo/copy-to-tenant/<int:source_id>",
 )
 
 if __name__ == '__main__':
