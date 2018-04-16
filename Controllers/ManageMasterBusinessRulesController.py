@@ -36,9 +36,14 @@ class ManageMasterBusinessRulesController(Resource):
         res = self.dbOps_master.update_or_delete_data(br, self.id)
         return res
 
-    def post(self):
+    def post(self, source_id=None):
         br = request.get_json(force=True)
-        res = self.dbOps_master.insert_data(br)
+        if source_id:
+            br_list = br['rules']
+            comment = br['audit_comment']
+            res = self.copy_to_tenant(br_list,source_id,comment)
+        else:
+            res = self.dbOps_master.insert_data(br)
         return res
 
     def fetch_repository_rules(self,country,rule):
@@ -84,19 +89,27 @@ class ManageMasterBusinessRulesController(Resource):
         app.logger.info("Copying business rules to tenant")
         try:
             business_rules=pd.DataFrame(business_rules_list)
-            existing_business_rules=self.tenant_db.query("select business_rule,in_use from business_rules where source_id=%s and business_rules in (%s)",\
-                                                             source_id,",".join(["business_rule"].tolist())).fetchall()
-            existing_business_rules=pd.DataFrame(existing_business_rules)
-            existing_business_rules['exists']='Y'
-            business_rules=pd.merge(business_rules,existing_business_rules,how='left',on='business_rule',suffixes=('','_tenant'))
-            business_rules['exists'].fillna('N',inplace=True)
-            new_business_rules=business_rules.loc[business_rules['exists']=='N']
+            business_rules['rule_string']="'" + business_rules['business_rule'] + "'"
+            sql = "select business_rule,in_use, id,logical_condition from business_rules " + \
+                  "where source_id={0} and business_rule in ({1})" \
+                  .format(source_id,",".join(business_rules["rule_string"].tolist()))
+            existing_business_rules=self.tenant_db.query(sql).fetchall()
+            if existing_business_rules:
+                existing_business_rules=pd.DataFrame(existing_business_rules)
+                existing_business_rules['exists']='Y'
+                business_rules=pd.merge(business_rules,existing_business_rules,how='left',on='business_rule',suffixes=('','_tenant'))
+                business_rules['exists'].fillna('N',inplace=True)
+            else:
+                business_rules['exists']='N'
 
+            new_business_rules=business_rules.loc[business_rules['exists']=='N']
+            # app.logger.info("new_business_rules {}".format(new_business_rules,))
 
             for index,row in new_business_rules.iterrows():
                 app.logger.info("Inserting business rule to tenant table")
                 id=self.tenant_db.transact("insert into business_rules(rule_execution_order,business_rule,rule_description,source_id)\
-                                                        values(%s,%s,%s,%s", (1,row['business_rule'],row['rule_description'],source_id))
+                                                        values(%s,%s,%s,%s)", (1,row['business_rule'],row['rule_description'],source_id))
+                self.tenant_db.commit()
                 audit_info = {
                     "table_name": "business_rules",
                     "change_type": "INSERT",
@@ -109,10 +122,16 @@ class ManageMasterBusinessRulesController(Resource):
                 self.tenant_audit.audit_insert({"audit_info":audit_info},id)
             self.tenant_db.commit()
 
-            sucessfully_copied=business_rules.loc[business_rules['exists']=='N'].to_dict(orient='records')
+            # fillna with proper values to avoid error while processing to_dict, else it sends wrong
+            # JSON formatted string!!!!!
+            sucessfully_copied_df=business_rules.loc[business_rules['exists']=='N']
+            sucessfully_copied_df['logical_condition'].fillna('Not Applicable',inplace=True)
+            sucessfully_copied_df['in_use_tenant'].fillna('N',inplace=True)
+            sucessfully_copied_df['id_tenant'].fillna(0,inplace=True)
+            sucessfully_copied=sucessfully_copied_df.to_dict(orient='records')
             not_copied=business_rules.loc[business_rules['exists']=='Y'].to_dict(orient='records')
 
-            return {"successfully_copied":sucessfully_copied,"not_copied":not_copied}
+            return {"successfully_copied":sucessfully_copied,"not_copied":not_copied},200
         except Exception as e:
             self.tenant_db.rollback()
             app.logger.error(str(e))
