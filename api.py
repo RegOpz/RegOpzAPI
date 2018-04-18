@@ -326,6 +326,16 @@ api.add_resource(SharedDataController,
     endpoint = "get_countries_ep"
 )
 
+api.add_resource(SharedDataController,
+    apiPath + "/shared-data/components",
+    endpoint = "get_components_ep"
+)
+
+api.add_resource(SharedDataController,
+    apiPath + "/shared-data/testconnection",
+    endpoint = "test_connection_ep"
+)
+
 api.add_resource(ManageMasterBusinessRulesController,
     apiPath + "/business-rules-repo",
     apiPath + "/business-rules-repo/copy-to-tenant/<int:source_id>",
