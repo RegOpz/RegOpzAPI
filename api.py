@@ -22,6 +22,7 @@ from Controllers.TransactionalReportController import TransactionalReportControl
 from Controllers.TenantSubscriptionController import TenantSubscirptionController
 from Controllers.SharedDataController import SharedDataController
 from Controllers.ManageMasterBusinessRulesController import ManageMasterBusinessRulesController
+from Controllers.ManageMasterReportController import ManageMasterReportController
 from flask_cors import CORS, cross_origin
 
 api.add_resource(Info, apiPath + "/info")
@@ -339,6 +340,11 @@ api.add_resource(SharedDataController,
 api.add_resource(ManageMasterBusinessRulesController,
     apiPath + "/business-rules-repo",
     apiPath + "/business-rules-repo/copy-to-tenant/<int:source_id>",
+)
+
+api.add_resource(ManageMasterReportController,
+    apiPath + "/report-rules-repo",
+    apiPath + "/report-rules-repo/<string:country>",
 )
 
 if __name__ == '__main__':
