@@ -23,6 +23,9 @@ class ManageMasterReportController(Resource):
             self.tenant_audit=AuditHelper('def_change_log',self.tenant_info)
             self.user_id=Token().authenticate()
 
+    def get(self,country=None):
+        return self.report_template_catalog_list(country)
+
     def copy_template_to_tenant(self,country,report_id,comment,overwrite=False):
 
         try:
@@ -68,11 +71,27 @@ class ManageMasterReportController(Resource):
             return {"msg":str(e)},500
 
 
+    def report_template_catalog_list(self,country='ALL'):
 
+        try:
+            data_dict=[]
+            where_clause = ''
 
+            sql = "select distinct country from report_def_catalog_master where 1 "
+            if country is not None and country !='ALL':
+                 where_clause =  " and country = '{}'".format(country.upper())
 
+            country = self.master_db.query(sql + where_clause).fetchall()
 
+            if country:
+                for i,c in enumerate(country):
+                    sql = "select * from report_def_catalog_master where country = %s"
+                    report = self.master_db.query(sql,(c['country'],)).fetchall()
+                    data_dict.append({'country': c['country'], 'report': report})
 
+            return data_dict
 
-
-
+        except Exception as e:
+            self.tenant_db.rollback()
+            app.logger.error(str(e))
+            return {"msg":str(e)},500
