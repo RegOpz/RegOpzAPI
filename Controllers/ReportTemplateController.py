@@ -43,32 +43,39 @@ class ReportTemplateController(Resource):
             report_type = request.args.get('reportType')
             return self.report_template_suggesstion_list(report_id=reports,country=country,report_type=report_type)
 
-    def post(self):
-        if 'file' not in request.files:
-            return NO_FILE_SELECTED
+    def post(self,domainType=None):
+        try:
+            if 'file' not in request.files:
+                return NO_FILE_SELECTED
 
-        self.report_id = request.form.get('report_id')
-        self.country = request.form.get('country').upper()
-        self.report_description = request.form.get('report_description')
+            self.report_id = request.form.get('report_id')
+            self.country = request.form.get('country').upper()
+            self.report_description = request.form.get('report_description')
+            self.db_object_suffix=''
+            if domainType=='master':
+                self.db_object_suffix="master"
 
-        if self.report_id == None or self.report_id == "":
-            return REPORT_ID_EMPTY
+            if self.report_id == None or self.report_id == "":
+                return REPORT_ID_EMPTY
 
-        if self.country == None or self.country == "":
-            return COUNTRY_EMPTY
+            if self.country == None or self.country == "":
+                return COUNTRY_EMPTY
 
-        file = request.files['file']
-        self.selected_file=file.filename
-        if file and not self.allowed_file(file.filename):
-            return FILE_TYPE_IS_NOT_ALLOWED
-        filename = str(uuid.uuid4()) + "_" + secure_filename(file.filename)
-        file.save(os.path.join(UPLOAD_FOLDER, filename))
+            file = request.files['file']
+            self.selected_file=file.filename
+            if file and not self.allowed_file(file.filename):
+                return FILE_TYPE_IS_NOT_ALLOWED
+            filename = str(uuid.uuid4()) + "_" + secure_filename(file.filename)
+            file.save(os.path.join(UPLOAD_FOLDER, filename))
+            res = self.insert_report_def_catalog()
+            if res ==1:
+                return self.load_report_template(filename)
 
-        if self.insert_report_def_catalog():
-            return self.load_report_template(filename)
-
-        else:
-            return {"msg: Report capture failed. Please check."}, 400
+            else:
+                return res
+        except Exception as e:
+            app.logger.error(str(e))
+            return {"msg":str(e)},500
 
     def allowed_file(self,filename):
         return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -87,8 +94,8 @@ class ReportTemplateController(Resource):
                 return res
             return 1
         except Exception as e:
-            app.logger.error(e)
-            return {"msg":e},500
+            app.logger.error(str(e))
+            return {"msg":str(e)},500
 
     def load_report_template(self,template_file_name):
         app.logger.info("Loading report template")
@@ -211,8 +218,8 @@ class ReportTemplateController(Resource):
             self.db.commit()
             return {"msg": "Report [" + self.report_id + "] template has been captured successfully using " + self.selected_file}, 200
         except Exception as e:
-            app.logger.error(e)
-            return {"msg": e}, 500
+            app.logger.error(str(e))
+            return {"msg": str(e)}, 500
 
     def check_if_cell_isin_range(self,cell_id,rng_boundary_list):
 
