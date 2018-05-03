@@ -43,17 +43,16 @@ class ReportTemplateController(Resource):
             report_type = request.args.get('reportType')
             return self.report_template_suggesstion_list(report_id=reports,country=country,report_type=report_type)
 
-    def post(self,domainType=None):
+    def post(self):
         try:
             if 'file' not in request.files:
                 return NO_FILE_SELECTED
 
             self.report_id = request.form.get('report_id')
+            self.report_type = request.form.get('report_type').upper()
             self.country = request.form.get('country').upper()
             self.report_description = request.form.get('report_description')
-            self.db_object_suffix=''
-            if domainType=='master':
-                self.db_object_suffix="master"
+            self.db_object_suffix= request.form.get('domain_type')
 
             if self.report_id == None or self.report_id == "":
                 return REPORT_ID_EMPTY
@@ -83,13 +82,16 @@ class ReportTemplateController(Resource):
     def insert_report_def_catalog(self):
         app.logger.info("Creating entry for report catalog")
         try:
+            catalog_object = "report_def_catalog"
+            if self.db_object_suffix:
+                catalog_object += "_" + self.db_object_suffix
             app.logger.info("Checking if report {} for country {} already exists in catalog".format(self.report_id,self.country))
-            count = self.db.query("select count(*) as count from report_def_catalog where report_id=%s and country=%s",\
+            count = self.db.query("select count(*) as count from {} where report_id=%s and country=%s".format(catalog_object,),\
                                 (self.report_id,self.country,)).fetchone()
             app.logger.info("Creating catalog entry for country {} and report {}".format(self.country,self.report_id))
             if not count['count']:
-                res = self.db.transact("insert into report_def_catalog(report_id,country,report_description) values(%s,%s,%s)",\
-                        (self.report_id,self.country,self.report_description,))
+                res = self.db.transact("insert into {}(report_id,report_type,country,report_description) values(%s,%s,%s,%s)".format(catalog_object,),\
+                        (self.report_id,self.report_type,self.country,self.report_description,))
                 self.db.commit()
                 return res
             return 1
@@ -100,6 +102,10 @@ class ReportTemplateController(Resource):
     def load_report_template(self,template_file_name):
         app.logger.info("Loading report template")
         try:
+            def_object = "report_def"
+            if self.db_object_suffix:
+                def_object += "_" + self.db_object_suffix
+
             formula_dict = {'SUM': 'CALCULATE_FORMULA',
                             '=SUM': 'CALCULATE_FORMULA',
                             }
@@ -114,7 +120,7 @@ class ReportTemplateController(Resource):
             for sheet in wb.worksheets:
                 sheet_index+=1
                 app.logger.info("Deleting definition entries for sheet {} ,report {}".format(sheet.title,self.report_id))
-                self.db.transact('delete from report_def where report_id=%s and sheet_id=%s', (self.report_id, sheet.title,))
+                self.db.transact('delete from {} where report_id=%s and sheet_id=%s'.format(def_object,), (self.report_id, sheet.title,))
 
                 # First capture the dimensions of the cells of the sheet
                 rowHeights = [sheet.row_dimensions[r + 1].height for r in range(sheet.max_row)]
@@ -122,13 +128,13 @@ class ReportTemplateController(Resource):
 
                 app.logger.info("Creating entries for row height")
                 for row, height in enumerate(rowHeights):
-                    self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
-                                 values(%s,%s,%s,%s,%s)', (self.report_id, sheet.title, str(row + 1), 'ROW_HEIGHT', str(height)))
+                    self.db.transact('insert into {}(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
+                                 values(%s,%s,%s,%s,%s)'.format(def_object,), (self.report_id, sheet.title, str(row + 1), 'ROW_HEIGHT', str(height)))
 
                 app.logger.info("Creating entries for column width")
                 for col, width in enumerate(colWidths):
-                    self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
-                                values(%s,%s,%s,%s,%s)',
+                    self.db.transact('insert into {}(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
+                                values(%s,%s,%s,%s,%s)'.format(def_object,),
                                 (self.report_id, sheet.title, get_column_letter(col + 1), 'COLUMN_WIDTH', str(width)))
 
                 app.logger.info("Creating entries for merged cells")
@@ -161,14 +167,14 @@ class ReportTemplateController(Resource):
                                                 "colour":_cell.border.bottom.color.rgb if _cell.border.bottom.color else 'None'},}
                     }
 
-                    self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
-                                values(%s,%s,%s,%s,%s)',
+                    self.db.transact('insert into {}(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
+                                values(%s,%s,%s,%s,%s)'.format(def_object,),
                                 (self.report_id, sheet.title, rng, 'MERGED_CELL', sheet[startcell].value))
-                    self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
-                                values(%s,%s,%s,%s,%s)',
+                    self.db.transact('insert into {}(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
+                                values(%s,%s,%s,%s,%s)'.format(def_object,),
                                 (self.report_id, sheet.title, rng, 'COMP_AGG_REF', agg_ref))
-                    self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
-                                values(%s,%s,%s,%s,%s)',
+                    self.db.transact('insert into {}(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
+                                values(%s,%s,%s,%s,%s)'.format(def_object,),
                                 (self.report_id, sheet.title, rng, 'CELL_STYLE', str(cell_style)))
 
                 app.logger.info("Creating entries for static text and formulas")
@@ -205,15 +211,15 @@ class ReportTemplateController(Resource):
                                     else:
                                         cell_render_ref = 'STATIC_TEXT'
 
-                                self.db.transact('insert into report_def(report_id,sheet_id ,cell_id ,cell_render_def ,cell_calc_ref)\
-                                          values(%s,%s,%s,%s,%s)',
+                                self.db.transact('insert into {}(report_id,sheet_id ,cell_id ,cell_render_def ,cell_calc_ref)\
+                                          values(%s,%s,%s,%s,%s)'.format(def_object,),
                                             (self.report_id, sheet.title, cell_ref, cell_render_ref, cell_obj_value.strip()))
 
                             if not self.check_if_cell_isin_range(cell_ref,rng_boundary):
-                                self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
-                                                 values(%s,%s,%s,%s,%s)',(self.report_id, sheet.title, cell_ref, 'COMP_AGG_REF', agg_ref))
-                                self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
-                                                 values(%s,%s,%s,%s,%s)',(self.report_id, sheet.title, cell_ref, 'CELL_STYLE', str(cell_style)))
+                                self.db.transact('insert into {}(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
+                                                 values(%s,%s,%s,%s,%s)'.format(def_object,),(self.report_id, sheet.title, cell_ref, 'COMP_AGG_REF', agg_ref))
+                                self.db.transact('insert into {}(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
+                                                 values(%s,%s,%s,%s,%s)'.format(def_object,),(self.report_id, sheet.title, cell_ref, 'CELL_STYLE', str(cell_style)))
 
             self.db.commit()
             return {"msg": "Report [" + self.report_id + "] template has been captured successfully using " + self.selected_file}, 200
