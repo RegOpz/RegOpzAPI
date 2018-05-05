@@ -345,6 +345,18 @@ api.add_resource(ManageMasterBusinessRulesController,
 api.add_resource(ManageMasterReportController,
     apiPath + "/report-rules-repo",
     apiPath + "/report-rules-repo/<string:country>",
+    apiPath + "/report-rules-repo/report/<string:report_id>",
+    apiPath + "/report-rules-repo/report/report-rule",
+)
+
+api.add_resource(ManageMasterReportController,
+    apiPath + "/report-rules-repo/drilldown",
+    endpoint = "repository_drill_down_rule_ep"
+)
+
+api.add_resource(ManageMasterReportController,
+    apiPath + "/report-rules-repo/audit-list",
+    endpoint = "repository_report_rule_audit_ep"
 )
 
 if __name__ == '__main__':
