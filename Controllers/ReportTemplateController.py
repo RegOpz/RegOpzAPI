@@ -67,7 +67,7 @@ class ReportTemplateController(Resource):
             filename = str(uuid.uuid4()) + "_" + secure_filename(file.filename)
             file.save(os.path.join(UPLOAD_FOLDER, filename))
             res = self.insert_report_def_catalog()
-            if res ==1:
+            if res:
                 return self.load_report_template(filename)
 
             else:
@@ -115,12 +115,13 @@ class ReportTemplateController(Resource):
             wb = xls.load_workbook(target_dir + template_file_name)
 
             #db = DatabaseHelper()
+            app.logger.info("Deleting definition entries for report {}".format(self.report_id,))
+            self.db.transact('delete from {} where report_id=%s'.format(def_object,), (self.report_id,))
 
             sheet_index=0
             for sheet in wb.worksheets:
                 sheet_index+=1
-                app.logger.info("Deleting definition entries for sheet {} ,report {}".format(sheet.title,self.report_id))
-                self.db.transact('delete from {} where report_id=%s and sheet_id=%s'.format(def_object,), (self.report_id, sheet.title,))
+                app.logger.info("Processing definition entries for sheet {} ,report {}".format(sheet.title,self.report_id))
 
                 # First capture the dimensions of the cells of the sheet
                 rowHeights = [sheet.row_dimensions[r + 1].height for r in range(sheet.max_row)]
@@ -257,6 +258,7 @@ class ReportTemplateController(Resource):
 
             return within_rng
 
+        incl=False
         for rng in rng_boundary_list:
             incl=check_inclusion(cell_id,rng)
             if incl:
