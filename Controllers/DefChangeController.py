@@ -30,14 +30,15 @@ class DefChangeController(Resource):
             table_name=request.args.get("table_name")
             id_list=request.args.get("id_list")
             return self.get_audit_list(id_list,table_name)
+        if request.endpoint=="get_record_detail":
+            table_name=request.args.get("table_name")
+            id=request.args.get("id")
+            return self.get_record_detail(table_name,id)
+
 
 
     #@authenticate
     def post(self):
-        if request.endpoint=="get_record_detail":
-            record_list=request.get_json(force=True)
-            return self.get_record_detail(record_list)
-
         data=request.get_json(force=True)
         return self.audit_decision(data)
 
@@ -53,15 +54,23 @@ class DefChangeController(Resource):
             audit_list=[]
             for grp in pending_audit_df['group_id'].unique():
                 group=[]
+                inserts = 0
+                deletes = 0
+                updates = 0
                 df=pending_audit_df.loc[pending_audit_df['group_id']==grp]
                 maker=pending_audit_df['maker'].unique()[0]
-                tenant_id=pending_audit_df['tenant_id'].unique()[0]
+                maker_tenant_id=pending_audit_df['maker_tenant_id'].unique()[0]
+                checker_tenant_id=pending_audit_df['checker_tenant_id'].unique()[0]
+                group_tables=df['table_name'].unique()
+                group_date_of_change=df['date_of_change'].min()
                 non_update_df=df.loc[df['change_type']!='UPDATE']
                 update_df=df.loc[df['change_type']=='UPDATE']
 
                 #print(non_update_df,update_df)
 
                 if not non_update_df.empty:
+                    inserts = len(non_update_df[non_update_df['change_type']=='INSERT'].index)
+                    deletes = len(non_update_df[non_update_df['change_type']=='DELETE'].index)
                     group += non_update_df.to_dict(orient='records')
 
                 if not update_df.empty:
@@ -69,6 +78,7 @@ class DefChangeController(Resource):
 
                     for idx,ugrp in update_df.groupby(['table_name','id']):
                         update_info = []
+                        updates += 1
                         for ix, row in ugrp.iterrows():
                             update_info.append(
                                 {"field_name": row['field_name'], "old_val": row["old_val"], "new_val": row["new_val"]})
@@ -85,13 +95,18 @@ class DefChangeController(Resource):
                                             "date_of_checking": ugrp['date_of_checking'].unique()[0],
                                             "change_reference": ugrp['change_reference'].unique()[0],
                                             "group_id": str(ugrp['group_id'].unique()[0]),
-                                            "tenant_id":ugrp['tenant_id'].unique()[0],
+                                            "maker_tenant_id":ugrp['maker_tenant_id'].unique()[0],
+                                            "checker_tenant_id":ugrp['checker_tenant_id'].unique()[0],
                                             "update_info": update_info
                                             })
 
                     group +=update_list
 
-                audit_list.append({'group_id':grp,'maker':maker,'tenant_id':tenant_id,'group':group})
+                audit_list.append({'group_id':grp,'maker':maker,'maker_tenant_id':maker_tenant_id,
+                                    'checker_tenant_id':checker_tenant_id,
+                                    'group':group, 'group_tables': ','.join(group_tables),
+                                    'group_date_of_change': group_date_of_change.isoformat(),
+                                    'inserts': inserts, 'deletes': deletes, 'updates': updates})
             for lst in audit_list:
                 # app.logger.info('Processing index {}'.format(lst))
                 for d in lst['group']:
@@ -99,23 +114,21 @@ class DefChangeController(Resource):
                         if isinstance(v,datetime):
                             d[k] = d[k].isoformat()
                             # app.logger.info("{0} {1}".format(d[k], type(d[k])))
-
-            #app.logger.info("audit_list {}".format(audit_list,))
             return audit_list
         except Exception as e:
             app.logger.error(str(e))
             return {"msg":str(e)},500
 
-    def get_record_detail(self,record_list):
+    def get_record_detail(self,table_name,id):
         app.logger.info("Getting record detail")
         try:
-            record_details=[]
-            for rec in record_list:
-                if rec["table_name"]=="business_rules":
-                    detail=self.fetch_business_rule_detail(rec["id"])
-                    record_details.append({"type":"business_rules","payload":detail})
-
-            return record_details
+            if table_name=="business_rules":
+                return self.fetch_business_rule_detail(id)
+            if table_name:
+                record = self.db.query("select * from {} where id=%s".format(table_name,),(id,)).fetchone()
+                return record
+            else:
+                return {"msg": "Invalid source object referred, please check."},400
 
         except Exception as e:
             app.logger.error(str(e))
