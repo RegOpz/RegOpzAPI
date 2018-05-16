@@ -76,9 +76,13 @@ class UserPermission(object):
     def post(self, entry = None, add = True):
         if entry:
             print("\nData recieved via", "POST" if add else "DELETE", "in permissions:") #, entry)
+            print(entry)
             self.role = entry['role']
             self.comment = entry['comment']
             self.data = entry['components']
+            self.maker = entry['maker']
+            self.maker_tenant_id = entry['maker_tenant_id']
+            self.group_id = entry['group_id']
             roleId = self.getRoleId(True)
             if not roleId:
                 roleId = self.setRoleId(True)
@@ -138,7 +142,9 @@ class UserPermission(object):
             "change_type": dml,
             "comment": self.comment,
             "change_reference": "Role: " + self.role,
-            "maker": self.user_id
+            "maker": self.maker,
+            "maker_tenant_id": self.maker_tenant_id,
+            "group_id": self.group_id
         }
         id = self.getRoleId(False)
         if dml == "INSERT":
@@ -183,7 +189,9 @@ class UserPermission(object):
                 "change_type": dml,
                 "comment": self.comment,
                 "change_reference": "Role: " + self.role + " " + dml_narration + " Permission of " + self.permission + " on component " + self.component,
-                "maker": self.user_id
+                "maker": self.maker,
+                "maker_tenant_id": self.maker_tenant_id,
+                "group_id": self.group_id
             }
             queryString = "SELECT * FROM permissions WHERE role_id=%s AND component_id=%s AND permission_id=%s"
             queryParams = (roleId, componentId, permissionId, )
