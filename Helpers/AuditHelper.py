@@ -34,9 +34,14 @@ class AuditHelper(object):
         try:
             app.logger.info(data)
             app.logger.info(self.audit_table_name)
-            sql="update "+self.audit_table_name +" set status=%s,checker_comment=%s,date_of_checking=%s,checker=%s where table_name=%s and id=%s and status='PENDING'"
-            #app.logger.info(sql)
-            params=(data["status"],data["checker_comment"],datetime.now(),data["checker"],data["table_name"],data["id"])
+            if self.business_date_present:
+                sql="update "+self.audit_table_name +" set status=%s,checker_comment=%s,date_of_checking=%s,checker=%s where table_name=%s and id=%s and status='PENDING'"
+                #app.logger.info(sql)
+                params=(data["status"],data["checker_comment"],datetime.now(),data["checker"],data["table_name"],data["id"])
+            else:
+                sql="update "+self.audit_table_name +" set status=%s,checker_comment=%s,date_of_checking=%s,checker=%s, checker_tenant_id=%s where table_name=%s and id=%s and status='PENDING'"
+                #app.logger.info(sql)
+                params=(data["status"],data["checker_comment"],datetime.now(),data["checker"],data["checker_tenant_id"],data["table_name"],data["id"])
             res = self.db.transact(sql,params)
             # self.db.commit()
         except Exception as e:
@@ -50,17 +55,19 @@ class AuditHelper(object):
             audit_info=data['audit_info']
             if self.business_date_present:
                 sql = "insert into  " + self.audit_table_name + \
-                      " (id,table_name,change_type,maker_comment,status,change_reference,date_of_change,maker,business_date)\
-                        values(%s,%s,%s,%s,%s,%s,%s,%s,%s)"
+                      " (id,table_name,change_type,maker_comment,status,change_reference,date_of_change,maker,business_date,group_id)\
+                        values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
                 res = self.db.transact(sql, (id, audit_info['table_name'], audit_info['change_type'],
                                              audit_info['comment'], 'PENDING', audit_info['change_reference'],
-                                             datetime.now(), audit_info['maker'],audit_info['business_date']))
+                                             datetime.now(), audit_info['maker'],audit_info['business_date'],
+                                             audit_info['group_id']))
             else:
                 sql="insert into  "+self.audit_table_name +\
-                    " (id,table_name,change_type,maker_comment,status,change_reference,date_of_change,maker)\
-                     values(%s,%s,%s,%s,%s,%s,%s,%s)"
+                    " (id,table_name,change_type,maker_comment,status,change_reference,date_of_change,maker,maker_tenant_id, group_id)\
+                     values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
                 res=self.db.transact(sql,(id,audit_info['table_name'],audit_info['change_type'],audit_info['comment'],
-                                          'PENDING',audit_info['change_reference'],datetime.now(),audit_info['maker']))
+                                          'PENDING',audit_info['change_reference'],datetime.now(),audit_info['maker'],
+                                          audit_info['maker_tenant_id'], audit_info['group_id']))
 
             self.update_approval_status(table_name=audit_info['table_name'], id=id, dml_allowed='N')
             self.db.commit()
@@ -87,17 +94,19 @@ class AuditHelper(object):
                     #app.logger.info(col, old_val, new_val)
                     if self.business_date_present:
                         sql="insert into  "+self.audit_table_name +" (id,table_name,field_name,old_val,new_val,\
-                        change_type,maker_comment,status,change_reference,date_of_change,maker,business_date)\
-                        values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
+                        change_type,maker_comment,status,change_reference,date_of_change,maker,business_date,group_id)\
+                        values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
                         params=(id,audit_info['table_name'],col,old_val,new_val,audit_info['change_type'],audit_info['comment'],
-                        'PENDING',audit_info['change_reference'],datetime.now(),audit_info['maker'],audit_info['business_date'])
+                        'PENDING',audit_info['change_reference'],datetime.now(),audit_info['maker'],audit_info['business_date'],
+                        audit_info['group_id'])
                         res=self.db.transact(sql,params)
                     else:
                         sql = "insert into  " + self.audit_table_name + " (id,table_name,field_name,old_val,new_val,\
-                                            change_type,maker_comment,status,change_reference,date_of_change,maker)\
-                                            values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
+                                            change_type,maker_comment,status,change_reference,date_of_change,maker, maker_tenant_id,group_id)\
+                                            values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
                         params = (id, audit_info['table_name'], col, old_val, new_val, audit_info['change_type'],
-                                  audit_info['comment'],'PENDING', audit_info['change_reference'], datetime.now(), audit_info['maker'])
+                                  audit_info['comment'],'PENDING', audit_info['change_reference'], datetime.now(), audit_info['maker'],
+                                  audit_info['maker_tenant_id'],audit_info['group_id'])
                         res = self.db.transact(sql, params)
 
                     def_change_insert+=1
@@ -117,15 +126,17 @@ class AuditHelper(object):
             audit_info = data['audit_info']
             if self.business_date_present:
                 sql = "insert into  " + self.audit_table_name + " (id,table_name,change_type,maker_comment,status,change_reference,\
-                date_of_change,maker,business_date) values(%s,%s,%s,%s,%s,%s,%s,%s,%s)"
+                date_of_change,maker,business_date,group_id) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
                 res = self.db.transact(sql, (id, audit_info['table_name'], audit_info['change_type'], audit_info['comment'],
-                'PENDING', audit_info['change_reference'], datetime.now(), audit_info['maker'],audit_info['business_date']))
+                'PENDING', audit_info['change_reference'], datetime.now(), audit_info['maker'],audit_info['business_date'],
+                audit_info['group_id']))
 
             else:
                 sql = "insert into  "+self.audit_table_name +" (id,table_name,change_type,maker_comment,status,change_reference,\
-                date_of_change,maker) values(%s,%s,%s,%s,%s,%s,%s,%s)"
+                date_of_change,maker,maker_tenant_id,group_id) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
                 res = self.db.transact(sql, (id, audit_info['table_name'], audit_info['change_type'], audit_info['comment'],
-                'PENDING',audit_info['change_reference'],datetime.now(),audit_info['maker']))
+                'PENDING',audit_info['change_reference'],datetime.now(),audit_info['maker'],audit_info['maker_tenant_id'],
+                audit_info['group_id']))
                 #app.logger.info("this should be id of the record inserted..what it actually is ",res)
             self.update_approval_status(table_name=audit_info['table_name'],id=id, dml_allowed='N',in_use='N')
             self.db.commit()
