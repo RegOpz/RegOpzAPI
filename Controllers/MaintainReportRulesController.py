@@ -198,7 +198,7 @@ class MaintainReportRulesController(Resource):
 					comp_query += " AND cell_id=%s"
 					queryParams = (report_id, sheet_id, cell_id, report_id, sheet_id, cell_id,)
 				queryString = "SELECT DISTINCT id,table_name,change_type,change_reference,date_of_change,\
-					maker,maker_comment,checker,checker_comment,status,date_of_checking FROM def_change_log\
+					maker,maker_tenant_id,maker_comment,checker,checker_comment,status,date_of_checking FROM def_change_log\
 					WHERE (id,table_name) IN (" + calc_query + " UNION " + comp_query + " )"
 				return self.audit.get_audit_list(queryString, queryParams)
 		except Exception as e:

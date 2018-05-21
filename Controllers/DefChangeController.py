@@ -21,6 +21,7 @@ class DefChangeController(Resource):
                 self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
 
         self.db=DatabaseHelper(self.tenant_info)
+        self.db_master=DatabaseHelper()
         self.audit=AuditHelper('def_change_log',self.tenant_info)
 
     #@authenticate
@@ -28,8 +29,9 @@ class DefChangeController(Resource):
         if request.endpoint=="get_audit_list":
             table_name=request.args.get("table_name")
             id_list=request.args.get("id_list")
+            source_id=request.args.get("source_id")
             if table_name and table_name!='undefined':
-                return self.get_audit_history(id_list,table_name)
+                return self.get_audit_history(id_list,table_name,source_id)
             return self.get_audit_list()
         if request.endpoint=="get_record_detail":
             table_name=request.args.get("table_name")
@@ -120,23 +122,33 @@ class DefChangeController(Resource):
             app.logger.error(str(e))
             return {"msg":str(e)},500
 
-    def get_audit_history(self,id_list=None,table_name=None):
+    def get_audit_history(self,id_list=None,table_name=None,source_id=None):
         app.logger.info("Getting audit change history list")
         try:
             sql = "SELECT DISTINCT id,table_name,change_type,change_reference," + \
-                    "date_of_change,maker,maker_comment,checker,checker_comment,status,date_of_checking " + \
+                    "date_of_change,maker,maker_tenant_id,maker_comment,checker,checker_comment,status,date_of_checking " + \
                     "FROM def_change_log WHERE id IN (" + \
                     (id_list if id_list and id_list!='undefined' else "id") + \
                     ") AND table_name = '" + table_name + "'"
 
-            audit_hist = self.db.query(sql).fetchall()
+            if table_name=="business_rules":
+                sql += " and id in (select id from business_rules where source_id='{0}')".format(source_id,)
+            if table_name=="business_rules_master":
+                sql += " and id in (select id from business_rules_master where country='{0}')".format(source_id,)
+
+            if '_master' in table_name:
+                db=self.db_master
+            else:
+                db=self.db
+
+            audit_hist = db.query(sql).fetchall()
             # app.logger.info("Audit hist list {}".format(audit_hist,))
             for i,item in enumerate(audit_hist):
                 for k,v in item.items():
                     if isinstance(v,datetime):
                         item[k] = item[k].isoformat()
                 if item["change_type"]=="UPDATE":
-                    values=self.db.query("select field_name,old_val,new_val from def_change_log where id="+str(item["id"])+
+                    values=db.query("select field_name,old_val,new_val from def_change_log where id="+str(item["id"])+
                                          " and table_name='"+str(item["table_name"])+"' and status='"+str(item["status"])+
                                          "' and date_of_change='"+str(item["date_of_change"])+"'").fetchall()
                     update_info_list=[]
