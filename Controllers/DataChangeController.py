@@ -70,68 +70,69 @@ class DataChangeController(Resource):
     def get_audit_list(self):
         app.logger.info("Getting audit list")
         try:
-            pending_audit_df=pd.DataFrame(self.db.query("select * from data_change_log where status='PENDING'").fetchall())
-            pending_audit_df['date_of_change']=pending_audit_df['date_of_change'].astype(dtype=datetime,errors='ignore')
-            pending_audit_df['date_of_checking']=pending_audit_df['date_of_checking'].astype(dtype=datetime,errors='ignore')
-
             audit_list=[]
-            for grp in pending_audit_df['group_id'].unique():
-                group=[]
-                inserts = 0
-                deletes = 0
-                updates = 0
-                df=pending_audit_df.loc[pending_audit_df['group_id']==grp]
-                maker=df['maker'].unique()[0]
-                business_date=df['business_date'].unique()[0]
-                group_tables=df['table_name'].unique()
-                group_date_of_change=df['date_of_change'].min()
-                non_update_df=df.loc[df['change_type']!='UPDATE']
-                update_df=df.loc[df['change_type']=='UPDATE']
+            pending_audit_df=pd.DataFrame(self.db.query("select * from data_change_log where status='PENDING'").fetchall())
+            if not pending_audit_df.empty:
+                pending_audit_df['date_of_change']=pending_audit_df['date_of_change'].astype(dtype=datetime,errors='ignore')
+                pending_audit_df['date_of_checking']=pending_audit_df['date_of_checking'].astype(dtype=datetime,errors='ignore')
 
-                #print(non_update_df,update_df)
+                for grp in pending_audit_df['group_id'].unique():
+                    group=[]
+                    inserts = 0
+                    deletes = 0
+                    updates = 0
+                    df=pending_audit_df.loc[pending_audit_df['group_id']==grp]
+                    maker=df['maker'].unique()[0]
+                    business_date=df['business_date'].unique()[0]
+                    group_tables=df['table_name'].unique()
+                    group_date_of_change=df['date_of_change'].min()
+                    non_update_df=df.loc[df['change_type']!='UPDATE']
+                    update_df=df.loc[df['change_type']=='UPDATE']
 
-                if not non_update_df.empty:
-                    inserts = len(non_update_df[non_update_df['change_type']=='INSERT'].index)
-                    deletes = len(non_update_df[non_update_df['change_type']=='DELETE'].index)
-                    group += non_update_df.to_dict(orient='records')
+                    #print(non_update_df,update_df)
 
-                if not update_df.empty:
-                    update_list = []
+                    if not non_update_df.empty:
+                        inserts = len(non_update_df[non_update_df['change_type']=='INSERT'].index)
+                        deletes = len(non_update_df[non_update_df['change_type']=='DELETE'].index)
+                        group += non_update_df.to_dict(orient='records')
 
-                    for idx,ugrp in update_df.iterrows():
-                        update_info = json.loads(ugrp['change_summary'])
-                        updates += 1
-                        update_list.append({"id": str(ugrp['id']),
-                                            "prev_id": str(ugrp['prev_id']),
-                                            "origin_id": str(ugrp['origin_id']),
-                                            "table_name": ugrp['table_name'],
-                                            "change_type": ugrp['change_type'],
-                                            "date_of_change": ugrp['date_of_change'],
-                                            "maker": ugrp['maker'],
-                                            "maker_comment": ugrp['maker_comment'],
-                                            "checker": ugrp['checker'],
-                                            "checker_comment": ugrp['checker_comment'],
-                                            "status": ugrp['status'],
-                                            "date_of_checking": ugrp['date_of_checking'],
-                                            "change_reference": ugrp['change_reference'],
-                                            "group_id": str(ugrp['group_id']),
-                                            "business_date": int(ugrp['business_date']),
-                                            "update_info": update_info
-                                            })
+                    if not update_df.empty:
+                        update_list = []
 
-                    group +=update_list
+                        for idx,ugrp in update_df.iterrows():
+                            update_info = json.loads(ugrp['change_summary'])
+                            updates += 1
+                            update_list.append({"id": str(ugrp['id']),
+                                                "prev_id": str(ugrp['prev_id']),
+                                                "origin_id": str(ugrp['origin_id']),
+                                                "table_name": ugrp['table_name'],
+                                                "change_type": ugrp['change_type'],
+                                                "date_of_change": ugrp['date_of_change'],
+                                                "maker": ugrp['maker'],
+                                                "maker_comment": ugrp['maker_comment'],
+                                                "checker": ugrp['checker'],
+                                                "checker_comment": ugrp['checker_comment'],
+                                                "status": ugrp['status'],
+                                                "date_of_checking": ugrp['date_of_checking'],
+                                                "change_reference": ugrp['change_reference'],
+                                                "group_id": str(ugrp['group_id']),
+                                                "business_date": int(ugrp['business_date']),
+                                                "update_info": update_info
+                                                })
 
-                audit_list.append({'group_id':grp,'maker':maker, 'business_date': int(business_date),
-                                    'group':group, 'group_tables': ','.join(group_tables),
-                                    'group_date_of_change': group_date_of_change.isoformat(),
-                                    'inserts': inserts, 'deletes': deletes, 'updates': updates})
-            for lst in audit_list:
-                # app.logger.info('Processing index {}'.format(lst))
-                for d in lst['group']:
-                    for k,v in d.items():
-                        if isinstance(v,datetime):
-                            d[k] = d[k].isoformat()
-                            # app.logger.info("{0} {1}".format(d[k], type(d[k])))
+                        group +=update_list
+
+                    audit_list.append({'group_id':grp,'maker':maker, 'business_date': int(business_date),
+                                        'group':group, 'group_tables': ','.join(group_tables),
+                                        'group_date_of_change': group_date_of_change.isoformat(),
+                                        'inserts': inserts, 'deletes': deletes, 'updates': updates})
+                for lst in audit_list:
+                    # app.logger.info('Processing index {}'.format(lst))
+                    for d in lst['group']:
+                        for k,v in d.items():
+                            if isinstance(v,datetime):
+                                d[k] = d[k].isoformat()
+                                # app.logger.info("{0} {1}".format(d[k], type(d[k])))
             return audit_list
         except Exception as e:
             app.logger.error(str(e))

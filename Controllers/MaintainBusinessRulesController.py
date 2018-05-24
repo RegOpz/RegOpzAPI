@@ -1,7 +1,6 @@
 from flask import Flask, jsonify, request
 from flask_restful import Resource
 from Helpers.DatabaseHelper import DatabaseHelper
-from Helpers.DatabaseOps import DatabaseOps
 import csv
 import time
 from datetime import datetime
@@ -10,6 +9,7 @@ from Constants.Status import *
 import json
 from Helpers.utils import autheticateTenant
 from Helpers.authenticate import *
+from Controllers.DefChangeController import DefChangeController
 
 class MaintainBusinessRulesController(Resource):
 	def __init__(self):
@@ -17,7 +17,7 @@ class MaintainBusinessRulesController(Resource):
 		if self.domain_info:
 			tenant_info = json.loads(self.domain_info)
 			self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
-			self.dbOps=DatabaseOps('def_change_log',self.tenant_info)
+			self.dcc=DefChangeController()
 			self.db=DatabaseHelper(self.tenant_info)
 
 	@authenticate
@@ -65,15 +65,13 @@ class MaintainBusinessRulesController(Resource):
 			return self.validate_python_expression(expr_obj)
 
 		br = request.get_json(force=True)
-		res = self.dbOps.insert_data(br)
-		return res
+		return self.dcc.insert_data(br)
 
 	def put(self, id=None):
 		if id == None:
 			return BUSINESS_RULE_EMPTY
 		data = request.get_json(force=True)
-		res = self.dbOps.update_or_delete_data(data, id)
-		return res
+		return self.dcc.update_or_delete_data(data, id)
 
 	# def delete(self, id=None):
 	# 	if id == None:
