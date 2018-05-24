@@ -2,8 +2,7 @@ from app import *
 from flask import Flask, jsonify, request
 from flask_restful import Resource
 from Helpers.DatabaseHelper import DatabaseHelper
-from Helpers.DatabaseOps import DatabaseOps
-from Helpers.AuditHelper import AuditHelper
+from Controllers.DefChangeController import DefChangeController
 from datetime import datetime
 from decimal import Decimal
 import json
@@ -11,21 +10,19 @@ import ast
 from Helpers.utils import autheticateTenant
 from Helpers.authenticate import *
 import pandas as pd
-from Helpers.AuditHelper import AuditHelper
 from Models.Token import Token
 
 class ManageMasterReportController(Resource):
 
     def __init__(self):
         self.master_db=DatabaseHelper()
-        self.master_dbOps=DatabaseOps('def_change_log',None)
-        self.master_audit=AuditHelper('def_change_log',None)
+        self.dcc_master=DefChangeController(tenant_info="master")
         self.domain_info = autheticateTenant()
         if self.domain_info:
             tenant_info = json.loads(self.domain_info)
             self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
             self.tenant_db=DatabaseHelper(self.tenant_info)
-            self.tenant_audit=AuditHelper('def_change_log',self.tenant_info)
+            self.dcc_tenant=DefChangeController(tenant_info=self.tenant_info)
             self.user_id=Token().authenticate()
 
     def get(self,country=None, report_id=None):
@@ -48,14 +45,14 @@ class ManageMasterReportController(Resource):
 
     def post(self):
         data = request.get_json(force=True)
-        return self.master_dbOps.insert_data(data)
+        return self.dcc_master.insert_data(data)
 
     def put(self):
         data = request.get_json(force=True)
         id = data['audit_info']['id']
         if not id:
             return BUSINESS_RULE_EMPTY
-        return self.master_dbOps.update_or_delete_data(data, id)
+        return self.dcc_master.update_or_delete_data(data, id)
 
     def copy_template_to_tenant(self,country,report_id,comment,overwrite=False):
 
@@ -71,28 +68,28 @@ class ManageMasterReportController(Resource):
             app.logger.info("Fetching report template from master space.")
             report_template=self.master_db.query("select * from report_def_master where country=%s and report_id=%s",(country,report_id)).fetchall()
 
-            if template_present and overwrite:
-               app.logger.info("Erasing existing report template.")
-               self.tenant_db.transact("delete from report_def where report_id=%s",(report_id,))
-               components.remove('TEMPLATE')
-               components_list=",".join(components)
-               self.tenant_db.transact("update report_def_catalog set report_components=%s where report_id=%s",(components_list,report_id))
-
-            for rec in report_template:
-                id=self.tenant_db.transact("insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref) values(%s,%s,%s,%s,%s)",
-                                           rec["report_id"],rec["sheet_id"],rec["cell_id"],rec["cell_render_def"],rec["cell_calc_ref"])
-
-                audit_info = {
-                    "table_name": "report_def",
-                    "change_type": "INSERT",
-                    "comment": comment,
-                    "change_reference": "Copying report template from master database",
-                    "maker": self.user_id
-                }
-
-                app.logger.info("Inserting audit info")
-                self.tenant_audit.audit_insert({"audit_info": audit_info}, id)
-                self.tenant_db.commit()
+            # if template_present and overwrite:
+            #    app.logger.info("Erasing existing report template.")
+            #    self.tenant_db.transact("delete from report_def where report_id=%s",(report_id,))
+            #    components.remove('TEMPLATE')
+            #    components_list=",".join(components)
+            #    self.tenant_db.transact("update report_def_catalog set report_components=%s where report_id=%s",(components_list,report_id))
+            #
+            # for rec in report_template:
+            #     id=self.tenant_db.transact("insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref) values(%s,%s,%s,%s,%s)",
+            #                                rec["report_id"],rec["sheet_id"],rec["cell_id"],rec["cell_render_def"],rec["cell_calc_ref"])
+            #
+            #     audit_info = {
+            #         "table_name": "report_def",
+            #         "change_type": "INSERT",
+            #         "comment": comment,
+            #         "change_reference": "Copying report template from master database",
+            #         "maker": self.user_id
+            #     }
+            #
+            #     app.logger.info("Inserting audit info")
+            #     self.dcc_tenant.audit_insert({"audit_info": audit_info}, id)
+            #     self.tenant_db.commit()
 
             return {"msg":"Template successfully copied into tenant space."},200
 
@@ -291,24 +288,24 @@ class ManageMasterReportController(Resource):
             return {"msg": str(e)}, 500
 
     def get_report_audit_list(self, report_id=None, sheet_id=None, cell_id=None):
-        app.logger.info("Getting report audit list")
+        app.logger.info("Getting repository report audit list")
         try:
+            audit_list=[]
+            sql = "SELECT id FROM {0} WHERE 1 "
             if report_id:
-                calc_query = "SELECT id,'report_calc_def_master' FROM report_calc_def_master WHERE report_id=%s"
-                comp_query = "SELECT id,'report_comp_agg_def_master' FROM report_comp_agg_def_master WHERE report_id=%s"
-                queryParams = (report_id, report_id)
+                sql += " AND report_id='{}' ".format(report_id,)
                 if sheet_id:
-                    calc_query += " AND sheet_id=%s"
-                    comp_query += " AND sheet_id=%s"
-                    queryParams = (report_id, sheet_id, report_id, sheet_id,)
+                    sql += " AND sheet_id='{}'".format(sheet_id,)
                 if cell_id:
-                    calc_query += " AND cell_id=%s"
-                    comp_query += " AND cell_id=%s"
-                    queryParams = (report_id, sheet_id, cell_id, report_id, sheet_id, cell_id,)
-                queryString = "SELECT DISTINCT id,table_name,change_type,change_reference,date_of_change,\
-					maker,maker_tenant_id,maker_comment,checker,checker_comment,status,date_of_checking FROM def_change_log\
-					WHERE (id,table_name) IN (" + calc_query + " UNION " + comp_query + " )"
-                return self.master_audit.get_audit_list(queryString, queryParams)
+                    sql += " AND cell_id='{}'".format(cell_id)
+                calc_id_list = self.master_db.query(sql.format('report_calc_def_master',)).fetchall()
+                calc_id_list = ",".join(map(str,[id['id'] for id in calc_id_list]))
+                audit_list+=self.dcc_master.get_audit_history(id_list=calc_id_list,table_name='report_calc_def_master')
+
+                agg_id_list = self.master_db.query(sql.format('report_comp_agg_def_master',)).fetchall()
+                agg_id_list = ",".join(map(str,[id['id'] for id in agg_id_list]))
+                audit_list+=self.dcc_master.get_audit_history(id_list=agg_id_list,table_name='report_comp_agg_def_master')
+                return audit_list
         except Exception as e:
-            app.logger.error(str(e))
-            return {"msg": str(e)}, 500
+            app.logger.error(e)
+            return {"msg": e}, 500

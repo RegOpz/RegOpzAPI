@@ -2,8 +2,7 @@ from app import *
 from flask import Flask, jsonify, request
 from flask_restful import Resource
 from Helpers.DatabaseHelper import DatabaseHelper
-from Helpers.DatabaseOps import DatabaseOps
-from Helpers.AuditHelper import AuditHelper
+from Controllers.DefChangeController import DefChangeController
 import csv
 import time
 from datetime import datetime
@@ -21,8 +20,7 @@ class MaintainReportRulesController(Resource):
 		if self.domain_info:
 			tenant_info = json.loads(self.domain_info)
 			self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
-			self.dbOps=DatabaseOps('def_change_log',self.tenant_info)
-			self.audit=AuditHelper('def_change_log',self.tenant_info)
+			self.dcc=DefChangeController()
 			self.db=DatabaseHelper(self.tenant_info)
 
 	@authenticate
@@ -57,7 +55,7 @@ class MaintainReportRulesController(Resource):
 
 	def post(self):
 		data = request.get_json(force=True)
-		res = self.dbOps.insert_data(data)
+		res = self.dcc.insert_data(data)
 		return res
 
 	def put(self, id=None, report=None):
@@ -65,7 +63,7 @@ class MaintainReportRulesController(Resource):
 			return BUSINESS_RULE_EMPTY
 		data = request.get_json(force=True)
 		if request.endpoint == "report_rule_ep":
-			res = self.dbOps.update_or_delete_data(data, id)
+			res = self.dcc.update_or_delete_data(data, id)
 			return res
 		if request.endpoint == "report_parameter_ep":
 			return self.update_report_parameters(data, report)
@@ -185,22 +183,22 @@ class MaintainReportRulesController(Resource):
 	def get_report_audit_list(self, report_id=None, sheet_id=None, cell_id=None):
 		app.logger.info("Getting report audit list")
 		try:
+			audit_list=[]
+			sql = "SELECT id FROM {0} WHERE 1 "
 			if report_id:
-				calc_query = "SELECT id,'report_calc_def' FROM report_calc_def WHERE report_id=%s"
-				comp_query = "SELECT id,'report_comp_agg_def' FROM report_comp_agg_def WHERE report_id=%s"
-				queryParams = (report_id, report_id)
+				sql += " AND report_id='{}' ".format(report_id,)
 				if sheet_id:
-					calc_query += " AND sheet_id=%s"
-					comp_query += " AND sheet_id=%s"
-					queryParams = (report_id, sheet_id, report_id, sheet_id,)
+					sql += " AND sheet_id='{}'".format(sheet_id,)
 				if cell_id:
-					calc_query += " AND cell_id=%s"
-					comp_query += " AND cell_id=%s"
-					queryParams = (report_id, sheet_id, cell_id, report_id, sheet_id, cell_id,)
-				queryString = "SELECT DISTINCT id,table_name,change_type,change_reference,date_of_change,\
-					maker,maker_tenant_id,maker_comment,checker,checker_comment,status,date_of_checking FROM def_change_log\
-					WHERE (id,table_name) IN (" + calc_query + " UNION " + comp_query + " )"
-				return self.audit.get_audit_list(queryString, queryParams)
+					sql += " AND cell_id='{}'".format(cell_id)
+				calc_id_list = self.db.query(sql.format('report_calc_def',)).fetchall()
+				calc_id_list = ",".join(map(str,[id['id'] for id in calc_id_list]))
+				audit_list+=self.dcc.get_audit_history(id_list=calc_id_list,table_name='report_calc_def')
+
+				agg_id_list = self.db.query(sql.format('report_comp_agg_def',)).fetchall()
+				agg_id_list = ",".join(map(str,[id['id'] for id in agg_id_list]))
+				audit_list+=self.dcc.get_audit_history(id_list=agg_id_list,table_name='report_comp_agg_def')
+				return audit_list
 		except Exception as e:
 			app.logger.error(e)
 			return {"msg": e}, 500
