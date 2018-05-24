@@ -11,6 +11,7 @@ from datetime import datetime
 import json
 from Helpers.utils import autheticateTenant
 from Helpers.authenticate import *
+import pandas as pd
 
 class ViewDataController(Resource):
     def __init__(self):
@@ -334,6 +335,7 @@ class ViewDataController(Resource):
         #dbsf to query data and create source data cursor
         dbsf=DatabaseHelper(self.tenant_info)
 
+
         sql_str = 'Select source_id,source_table_name from data_source_information'
         if source_id!='ALL':
             sql_str+=' where source_id =' + str(source_id)
@@ -341,14 +343,17 @@ class ViewDataController(Resource):
         tables=db.query(sql_str).fetchall()
 
         for src in tables:
+            code = ''
+            qdf = pd.DataFrame()
+            # idf=pd.DataFrame()
             # Select the data in the rule ececution order to facilitate derived rules definitions in the rule
             data=db.query('select * from business_rules where source_id=%s and in_use=\'Y\' order by rule_execution_order asc',(src["source_id"],)).fetchall()
 
-            code = 'if business_or_validation in [\'ALL\',\'BUSINESSRULES\']:\n'
-            code += '\tdb.transact("delete from qualified_data where source_id='+str(src["source_id"])+' and business_date=%s",(business_date,))\n'
+            # code += 'if business_or_validation in [\'ALL\',\'BUSINESSRULES\']:\n'
+            # code += '\tdb.transact("delete from qualified_data where source_id='+str(src["source_id"])+' and business_date=%s",(business_date,))\n'
             code += 'if business_or_validation in [\'ALL\',\'VALIDATION\']:\n'
             code += '\tdb.transact("delete from invalid_data where source_id=' + str(src["source_id"]) + ' and business_date=%s",(business_date,))\n'
-            code += 'curdata=dbsf.query("SELECT * FROM  '+src["source_table_name"]+' where business_date=%s",(business_date,))\n'
+            code += 'curdata=dbsf.query("SELECT * FROM  '+src["source_table_name"]+' where business_date=%s and in_use=\'Y\'",(business_date,))\n'
             code += 'start_process=time.time()\n'
             code += 'while True:\n'
             code += '\tdata=curdata.fetchmany(50000)\n'
@@ -424,8 +429,9 @@ class ViewDataController(Resource):
                              code += '\t\t\t\tbusiness_rule+=\''+row["business_rule"].strip()+',\'\n'
 
             code += '\t\tif business_rule!=\'\' and validation_rule==\'\' and business_or_validation in [\'ALL\',\'BUSINESSRULES\']:\n'
-            code += '\t\t\tqualified_data.append((source_id,business_date,'+qualifying_key+',business_rule,'+buy_currency+','+sell_currency+','+mtm_currency+'))\n'
-
+            #code += '\t\t\tqualified_data.append((source_id,business_date,'+qualifying_key+',business_rule,'+buy_currency+','+sell_currency+','+mtm_currency+'))\n'
+            code += '\t\t\tqdf=qdf.append({\'source_id\':int(source_id),\'business_date\':int(business_date),\'qualifying_key\':int(' + qualifying_key + '),\'business_rules\':business_rule,\'buy_currency\':' + buy_currency + ',\'sell_currency\':' + sell_currency + ',\'mtm_currency\':' + mtm_currency + '},ignore_index=True)\n'
+            #code += '\t\tprint(qdf)\n'
 
             code += '\t\tif validation_rule!=\'\' and business_or_validation in [\'ALL\',\'VALIDATION\']:\n'
             code += '\t\t\tinvalid_data.append((source_id,business_date,' + qualifying_key + ',validation_rule))\n'
@@ -438,18 +444,59 @@ class ViewDataController(Resource):
             code += '\tstart=time.time()\n'
             code += '\tdb.transactmany("insert into invalid_data(source_id,business_date,qualifying_key,business_rules)\\\n \
                       values(%s,%s,%s,%s)",invalid_data)\n'
-            code += '\tdb.transactmany("insert into qualified_data(source_id,business_date,qualifying_key,business_rules,buy_currency,sell_currency,mtm_currency)\\\n \
-                      values(%s,%s,%s,%s,%s,%s,%s)",qualified_data)\n'
+            # code += '\tdb.transactmany("insert into qualified_data(source_id,business_date,qualifying_key,business_rules,buy_currency,sell_currency,mtm_currency)\\\n \
+            #           values(%s,%s,%s,%s,%s,%s,%s)",qualified_data)\n'
             code += '\tprint("Time taken for data inserts : "+ str((time.time()-start)*1000))\n'
             code += 'print("Total Time taken for data processing : "+ str((time.time()-start_process)*1000))\n'
-            #code += 'db.commit()\n'
             data_sources = db.query("select *  from data_catalog where business_date='"+business_date+"' and source_id="+str(source_id)).fetchone()
             try:
                 print("Before exec...")
 
                 self.update_data_catalog(status='RUNNING',source_id=source_id,business_date=business_date)
+                ldict=locals()
+                exec(code,globals(),ldict)
+                existing_qdf=pd.DataFrame(db.query("select * from qualified_data where source_id=%s and business_date=%s",(source_id,business_date)).fetchall())
+                #ldict['qdf'][['source_id','business_date','qualifying_key']].astype(dtype=int, errors='ignore')
+                #existing_qdf[['source_id', 'business_date', 'qualifying_key']].astype(dtype=int, errors='ignore')
+                #print(existing_qdf.dtypes)
+                #print(ldict['qdf'].dtypes)
+                if existing_qdf.empty:
+                    qdf=ldict['qdf']
+                    qdf['id']= qdf.index + 1
+                    qdf['id']=qdf['id'].astype(dtype='int32',errors='ignore')
+                    id_list=qdf['id'].tolist()
+                else:
+                    qdf = pd.merge(ldict['qdf'], existing_qdf, how='left', on=list(ldict['qdf'].columns),suffixes=('', '_old'))
+                    qdf['id'].fillna(0,inplace=True)
+                    qdf_old=qdf.loc[qdf['id']!=0]
+                    qdf_old['id'] = qdf_old['id'].astype(dtype='int32', errors='ignore')
+                    old_id_list=qdf_old['id'].tolist()
+                    qdf_new=qdf[qdf['id']==0]
+                    qdf_new=qdf_new.reset_index(drop=True)
+                    qdf_new['id'] = qdf_new['id'].astype(dtype='int32', errors='ignore')
+                    max_id=existing_qdf['id'].max()
+                    new_id_list=[max_id+idx+1 for idx,rec in qdf_new.iterrows() ]
+                    id_list=old_id_list+new_id_list
+                    id_df=pd.DataFrame({'id':new_id_list})
+                    qdf_new.update(id_df)
+                    qdf=qdf_new
 
-                exec(code)
+                print(qdf)
+                # print(max_id)
+                # print(id_list)
+
+                # for col in ['source_id','business_date','qualifying_key','id']:
+                #     qdf[col]=qdf[col].astype(dtype='int32',errors='ignore')
+                if not qdf.empty:
+                    qdf[['source_id','business_date','qualifying_key','id']]=qdf[['source_id','business_date','qualifying_key','id']].astype(dtype='int32',errors='ignore')
+                    qdf_records=list(qdf.itertuples(index=False, name=None))
+                    placeholder= ",".join(['%s']*len(qdf.columns))
+                    columns = ",".join(qdf.columns)
+                    id_list_str=",".join(map(str, id_list))
+                    max_version=db.query("select max(version) version from qualified_data_vers where business_date=%s and source_id=%s",(business_date,source_id)).fetchone()
+                    version=max_version['version']+1 if max_version['version'] else 1
+                    db.transactmany("insert into qualified_data({0}) values({1})".format(columns,placeholder),qdf_records)
+                    db.transact("insert into qualified_data_vers(business_date,source_id,version,id_list) values (%s,%s,%s,%s)",(business_date,source_id,version,id_list_str))
                 db.commit()
                 data_sources["file_load_status"] = "SUCCESS"
                 #print(code)
