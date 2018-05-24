@@ -4,7 +4,6 @@ from flask_restful import Resource
 import time
 import csv
 from Helpers.DatabaseHelper import DatabaseHelper
-from Helpers.DatabaseOps import DatabaseOps
 from Constants.Status import *
 from operator import itemgetter
 from datetime import datetime
@@ -12,6 +11,7 @@ import json
 from Helpers.utils import autheticateTenant
 from Helpers.authenticate import *
 import pandas as pd
+from Controllers.DataChangeController import DataChangeController
 
 class ViewDataController(Resource):
     def __init__(self):
@@ -19,7 +19,7 @@ class ViewDataController(Resource):
         if self.domain_info:
             tenant_info = json.loads(self.domain_info)
             self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
-            self.dbOps=DatabaseOps('data_change_log',self.tenant_info)
+            self.dcc=DataChangeController()
             self.db=DatabaseHelper(self.tenant_info)
 
     @authenticate
@@ -102,7 +102,7 @@ class ViewDataController(Resource):
 
         app.logger.info("Inseting data")
         try:
-            res = self.dbOps.insert_data(data)
+            res = self.dcc.insert_data(data)
             return res
         except Exception as e:
             app.logger.error(str(e))
@@ -111,7 +111,7 @@ class ViewDataController(Resource):
     def update_or_delete_data(self,data,id):
         app.logger.info("Updating or Deleting data")
         try:
-            res = self.dbOps.update_or_delete_data(data, id)
+            res = self.dcc.update_or_delete_data(data, id)
             return res
         except Exception as e:
             app.logger.error(str(e))
