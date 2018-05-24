@@ -2,26 +2,24 @@ from app import *
 from flask import Flask, jsonify, request
 from flask_restful import Resource
 from Helpers.DatabaseHelper import DatabaseHelper
-from Helpers.DatabaseOps import DatabaseOps
-from Helpers.AuditHelper import AuditHelper
+from Controllers.DefChangeController import DefChangeController
 import json
 from Helpers.utils import autheticateTenant
 from Helpers.authenticate import *
 import pandas as pd
-from Helpers.AuditHelper import AuditHelper
 from Models.Token import Token
 
 class ManageMasterBusinessRulesController(Resource):
 
     def __init__(self):
         self.master_db=DatabaseHelper()
-        self.dbOps_master=DatabaseOps(audit_table_name='def_change_log',tenant_info=None)
+        self.dcc_master=DefChangeController(tenant_info="master")
         self.domain_info = autheticateTenant()
         if self.domain_info:
             tenant_info = json.loads(self.domain_info)
             self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
             self.tenant_db=DatabaseHelper(self.tenant_info)
-            self.tenant_audit=AuditHelper('def_change_log',self.tenant_info)
+            self.dcc_tenant=DefChangeController(tenant_info=self.tenant_info)
             self.user_id=Token().authenticate()
 
     def get(self):
@@ -33,7 +31,7 @@ class ManageMasterBusinessRulesController(Resource):
         br = request.get_json(force=True)
         if br['update_info']['id']:
             self.id = br['update_info']['id']
-        res = self.dbOps_master.update_or_delete_data(br, self.id)
+        res = self.dcc_master.update_or_delete_data(br, self.id)
         return res
 
     def post(self, source_id=None):
@@ -43,7 +41,7 @@ class ManageMasterBusinessRulesController(Resource):
             audit_info = br['audit_info']
             res = self.copy_to_tenant(br_list,source_id,audit_info)
         else:
-            res = self.dbOps_master.insert_data(br)
+            res = self.dcc_master.insert_data(br)
         return res
 
     def fetch_repository_rules(self,country,rule):
@@ -108,23 +106,30 @@ class ManageMasterBusinessRulesController(Resource):
 
             for index,row in new_business_rules.iterrows():
                 app.logger.info("Inserting business rule to tenant table")
-                id=self.tenant_db.transact("insert into business_rules(rule_execution_order,business_rule,rule_description,source_id)\
-                                                        values(%s,%s,%s,%s)", (1,row['business_rule'],row['rule_description'],source_id))
-                self.tenant_db.commit()
-                # app.logger.info("Preparing audit info {}".format(audit_info))
+                update_info={
+                                'rule_execution_order':1,
+                                'business_rule':row['business_rule'],
+                                'rule_description':row['rule_description'],
+                                'source_id':source_id
+                            }
                 audit_info_new = {
-                    "table_name": "business_rules",
-                    "change_type": "INSERT",
-                    "comment": audit_info["audit_comment"],
-                    "change_reference": "Copying business rule {} from master database".format(row['business_rule']),
-                    "maker": audit_info["maker"],
-                    "maker_tenant_id": audit_info["maker_tenant_id"],
-                    "group_id": audit_info["group_id"]
-                }
+                                "table_name": "business_rules",
+                                "change_type": "INSERT",
+                                "comment": audit_info["audit_comment"],
+                                "change_reference": "Copying business rule {} from master database".format(row['business_rule']),
+                                "maker": audit_info["maker"],
+                                "maker_tenant_id": audit_info["maker_tenant_id"],
+                                "group_id": audit_info["group_id"],
+                            }
+                data = {
+                          'table_name': "business_rules",
+                          "change_type": "INSERT",
+                          'update_info': update_info,
+                          'audit_info': audit_info_new
+                        }
 
                 app.logger.info("Inserting audit info")
-                self.tenant_audit.audit_insert({"audit_info":audit_info_new},id)
-            self.tenant_db.commit()
+                self.dcc_tenant.insert_data(data)
 
             # fillna with proper values to avoid error while processing to_dict, else it sends wrong
             # JSON formatted string!!!!!
