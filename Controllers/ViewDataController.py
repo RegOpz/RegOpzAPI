@@ -344,12 +344,33 @@ class ViewDataController(Resource):
 
         for src in tables:
             code = ''
-            qdf = pd.DataFrame()
+            qdf = pd.DataFrame(columns=['source_id', 'business_date', 'qualifying_key', 'business_rules', 'buy_currency',
+                         'sell_currency', 'mtm_currency'])
             # idf=pd.DataFrame()
             # Select the data in the rule ececution order to facilitate derived rules definitions in the rule
-            data=db.query('select * from business_rules where source_id=%s and in_use=\'Y\' order by rule_execution_order asc',(src["source_id"],)).fetchall()
+            #Stamp the business_rule version
+            br_version= db.query("select version,id_list from business_rules_vers where source_id=%s and version=(select\
+                        max(version) version from business_rules_vers where source_id=%s)",(src['source_id'],src['source_id'])).fetchone()
+            brdf = pd.DataFrame(db.query('select id,rule_execution_order,business_rule,source_id,rule_description,\
+                   logical_condition,data_fields_list,python_implementation, business_or_validation,rule_type\
+                    from business_rules where source_id=%s and in_use=\'Y\' order by rule_execution_order asc',\
+                                         (src["source_id"],)).fetchall())
+            brdf[['id', 'source_id', 'rule_execution_order']] = brdf[['id', 'source_id', 'rule_execution_order']].astype(dtype='int64', errors='ignore')
+            br_id_list = brdf['id'].tolist()
+            br_id_list.sort()
+            br_id_list_str = ",".join(map(str, br_id_list))
 
-            # code += 'if business_or_validation in [\'ALL\',\'BUSINESSRULES\']:\n'
+            if not br_version:
+                br_version_no=1
+            else:
+               old_id_list=map(int,br_version['id_list'].split(','))
+               #print(set(br_id_list),set(old_id_list))
+               br_version_no=br_version['version']+1 if set(br_id_list)!= set(old_id_list) else br_version['version']
+
+            #if br_version_no==1 or br_version_no != br_version['version']:
+            #    db.transact("insert into business_rules_vers(source_id,version,id_list) values(%s,%s,%s)",(src['source_id'],br_version_no,br_id_list_str))
+
+                            # code += 'if business_or_validation in [\'ALL\',\'BUSINESSRULES\']:\n'
             # code += '\tdb.transact("delete from qualified_data where source_id='+str(src["source_id"])+' and business_date=%s",(business_date,))\n'
             code += 'if business_or_validation in [\'ALL\',\'VALIDATION\']:\n'
             code += '\tdb.transact("delete from invalid_data where source_id=' + str(src["source_id"]) + ' and business_date=%s",(business_date,))\n'
@@ -369,7 +390,7 @@ class ViewDataController(Resource):
             buy_currency='\'\''
             sell_currency='\'\''
             mtm_currency='\'\''
-            for row in data:
+            for idx,row in brdf.iterrows():
                 if row["python_implementation"].strip():
                      fields=row["data_fields_list"].split(',')
                      #Replace "," of the fields list as " is not None and " to avoid NoneType error
@@ -429,8 +450,8 @@ class ViewDataController(Resource):
                              code += '\t\t\t\tbusiness_rule+=\''+row["business_rule"].strip()+',\'\n'
 
             code += '\t\tif business_rule!=\'\' and validation_rule==\'\' and business_or_validation in [\'ALL\',\'BUSINESSRULES\']:\n'
-            #code += '\t\t\tqualified_data.append((source_id,business_date,'+qualifying_key+',business_rule,'+buy_currency+','+sell_currency+','+mtm_currency+'))\n'
-            code += '\t\t\tqdf=qdf.append({\'source_id\':int(source_id),\'business_date\':int(business_date),\'qualifying_key\':int(' + qualifying_key + '),\'business_rules\':business_rule,\'buy_currency\':' + buy_currency + ',\'sell_currency\':' + sell_currency + ',\'mtm_currency\':' + mtm_currency + '},ignore_index=True)\n'
+            code += '\t\t\tqualified_data.append((source_id,business_date,'+qualifying_key+',business_rule,'+buy_currency+','+sell_currency+','+mtm_currency+'))\n'
+            # code += '\t\t\tqdf=qdf.append({\'source_id\':int(source_id),\'business_date\':int(business_date),\'qualifying_key\':int(' + qualifying_key + '),\'business_rules\':business_rule,\'buy_currency\':' + buy_currency + ',\'sell_currency\':' + sell_currency + ',\'mtm_currency\':' + mtm_currency + '},ignore_index=True)\n'
             #code += '\t\tprint(qdf)\n'
 
             code += '\t\tif validation_rule!=\'\' and business_or_validation in [\'ALL\',\'VALIDATION\']:\n'
@@ -446,6 +467,10 @@ class ViewDataController(Resource):
                       values(%s,%s,%s,%s)",invalid_data)\n'
             # code += '\tdb.transactmany("insert into qualified_data(source_id,business_date,qualifying_key,business_rules,buy_currency,sell_currency,mtm_currency)\\\n \
             #           values(%s,%s,%s,%s,%s,%s,%s)",qualified_data)\n'
+            code += '\tif len(qualified_data) > 0 :\n'
+            code += '\t\tqdf=qdf.append(pd.DataFrame(qualified_data,columns=[\'source_id\',\'business_date\',\'qualifying_key\',\'business_rules\',\'buy_currency\',\'sell_currency\',\'mtm_currency\']),ignore_index=True)\n'
+            code += '\telse:\n'
+            code += '\t\tqdf=pd.DataFrame(columns=[\'source_id\',\'business_date\',\'qualifying_key\',\'business_rules\',\'buy_currency\',\'sell_currency\',\'mtm_currency\'])\n'
             code += '\tprint("Time taken for data inserts : "+ str((time.time()-start)*1000))\n'
             code += 'print("Total Time taken for data processing : "+ str((time.time()-start_process)*1000))\n'
             data_sources = db.query("select *  from data_catalog where business_date='"+business_date+"' and source_id="+str(source_id)).fetchone()
@@ -456,6 +481,7 @@ class ViewDataController(Resource):
                 ldict=locals()
                 exec(code,globals(),ldict)
                 existing_qdf=pd.DataFrame(db.query("select * from qualified_data where source_id=%s and business_date=%s",(source_id,business_date)).fetchall())
+                ldict['qdf'][['source_id','business_date','qualifying_key']] = ldict['qdf'][['source_id','business_date','qualifying_key']].astype(dtype='int32', errors='ignore')
                 #ldict['qdf'][['source_id','business_date','qualifying_key']].astype(dtype=int, errors='ignore')
                 #existing_qdf[['source_id', 'business_date', 'qualifying_key']].astype(dtype=int, errors='ignore')
                 #print(existing_qdf.dtypes)
@@ -493,10 +519,12 @@ class ViewDataController(Resource):
                     placeholder= ",".join(['%s']*len(qdf.columns))
                     columns = ",".join(qdf.columns)
                     id_list_str=",".join(map(str, id_list))
-                    max_version=db.query("select max(version) version from qualified_data_vers where business_date=%s and source_id=%s",(business_date,source_id)).fetchone()
+                    max_version=db.query("select max(version) version from qualified_data_vers where business_date=%s and source_id=%s",\
+                                         (business_date,source_id)).fetchone()
                     version=max_version['version']+1 if max_version['version'] else 1
                     db.transactmany("insert into qualified_data({0}) values({1})".format(columns,placeholder),qdf_records)
-                    db.transact("insert into qualified_data_vers(business_date,source_id,version,id_list) values (%s,%s,%s,%s)",(business_date,source_id,version,id_list_str))
+                    db.transact("insert into qualified_data_vers(business_date,source_id,version,br_version,id_list) values (%s,%s,%s,%s,%s)",\
+                                (business_date,source_id,version,br_version_no,id_list_str))
                 db.commit()
                 data_sources["file_load_status"] = "SUCCESS"
                 #print(code)
