@@ -167,9 +167,6 @@ class GenerateReportController(Resource):
 
 
     def create_report_detail(self,**kwargs):
-
-        print(kwargs)
-
         parameter_list=['report_id','reporting_currency','business_date_from','business_date_to','ref_date_rate','rate_type']
         if set(parameter_list).issubset(set(kwargs.keys())):
             report_id=kwargs["report_id"]
