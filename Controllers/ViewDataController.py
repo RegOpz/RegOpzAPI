@@ -33,7 +33,8 @@ class ViewDataController(Resource):
             source_id = request.args['source_id']
             business_date = request.args['business_date']
             page = request.args['page']
-            return self.get_data_source(source_id=source_id,business_date=business_date,page=page)
+            filter = request.args['filter']
+            return self.get_data_source(source_id=source_id,business_date=business_date,page=page,filter=filter)
         if(request.endpoint == 'table_data_ep'):
             table = request.args['table']
             filter = request.args['filter']
@@ -130,12 +131,22 @@ class ViewDataController(Resource):
             app.logger.error(e)
             return {"msg":e},500
 
-    def get_data_source(self,source_id,business_date,page):
+    def get_data_source(self,source_id,business_date,page,filter=None):
 
         #db = DatabaseHelper()
         app.logger.info("Getting data source")
         try:
             app.logger.info("Getting source table name ")
+            filter_maps = {
+                "starts":{"operator": "like", "start_wild_char":"", "end_wild_char":"%"},
+                "notstarts":{"operator": "not like", "start_wild_char":"", "end_wild_char":"%"},
+                "ends":{"operator": "like", "start_wild_char":"%", "end_wild_char":""},
+                "notends":{"operator": "not like", "start_wild_char":"%", "end_wild_char":""},
+                "includes":{"operator": "like", "start_wild_char":"%", "end_wild_char":"%"},
+                "excludes":{"operator": "not like", "start_wild_char":"%", "end_wild_char":"%"},
+                "equals":{"operator": "=", "start_wild_char":"", "end_wild_char":""},
+                "notequals":{"operator": "!=", "start_wild_char":"", "end_wild_char":""},
+            }
             cur =self.db.query(
                 "select source_table_name from data_source_information where source_id={}".format(source_id))
             table = cur.fetchone()
@@ -143,11 +154,38 @@ class ViewDataController(Resource):
             start_page = int(page) * 100
             data_dict = {}
             app.logger.info("Getting data")
-            cur = self.db.query("select * from  {0} where business_date='{1}' limit {2}, 100".format( table['source_table_name'] ,business_date,start_page))
+            filter_sql = ''
+            if filter and filter != 'undefined':
+                filter=json.loads(filter)
+                for col in filter:
+                    col_filter_sql =''
+                    conditions = col['value'].split(",")
+                    for ss in conditions:
+                        if ss != '':
+                            ss = ss.lstrip().split(":")
+                            hint_list = ss[0].split(" ") if len(ss) > 1 else ["and","includes"]
+                            app.logger.info("hint_list values {}".format(hint_list,))
+                            hint_list = ["and"] + hint_list if len(hint_list)==1 else hint_list
+                            app.logger.info("hint_list values 2nd list {}".format(hint_list,))
+                            hint_join = hint_list[0]
+                            hint = hint_list[1] if hint_list[1] in filter_maps.keys() else "includes"
+                            c = ss[1] if len(ss) > 1 else ss[0]
+                            fm=filter_maps[hint]
+                            app.logger.info("fm values {}".format(fm,))
+                            col_filter_sql += ' {0} '.format(hint_join,) if len(col_filter_sql) > 0 else ''
+                            col_filter_sql += (col['id'] + ' {0} \'{1}' + c.replace("'","\'") + '{2}\'') \
+                                          .format(fm["operator"],fm["start_wild_char"],fm["end_wild_char"])
+                    filter_sql +="and ({0}) ".format(col_filter_sql)
+
+            limit_sql = ' limit {0},100'.format(start_page)
+            sqlqry = "select {0} from  {1} where business_date='{2}' {3} {4}"
+            app.logger.info(sqlqry.format( '*', table['source_table_name'] ,business_date, filter_sql, limit_sql))
+            cur = self.db.query(sqlqry.format( '*', table['source_table_name'] ,business_date, filter_sql, limit_sql))
             data = cur.fetchall()
             cols = [i[0] for i in cur.description]
-            count = self.db.query("select count(*) as count from {0} where business_date='{1}'".format( table['source_table_name'],business_date)).fetchone()
-            sql = "select * from {0} where business_date='{1}'".format( table['source_table_name'] ,business_date )
+            app.logger.info(sqlqry.format( 'count(*)', table['source_table_name'] ,business_date, filter_sql, ''))
+            count = self.db.query(sqlqry.format( 'count(*) as count', table['source_table_name'] ,business_date, filter_sql, '')).fetchone()
+            sql = sqlqry.format( '*', table['source_table_name'] ,business_date, filter_sql, '')
             data_dict['cols'] = cols
             data_dict['rows'] = data
             data_dict['count'] = count['count']
@@ -312,6 +350,7 @@ class ViewDataController(Resource):
         app.logger.info("Exporting to CSV")
         try:
             app.logger.info("Getting data from table")
+            app.logger.info(sql)
             cur = self.db.query(sql)
 
             data = cur.fetchall()
@@ -351,10 +390,11 @@ class ViewDataController(Resource):
             #Stamp the business_rule version
             br_version= db.query("select version,id_list from business_rules_vers where source_id=%s and version=(select\
                         max(version) version from business_rules_vers where source_id=%s)",(src['source_id'],src['source_id'])).fetchone()
-            brdf = pd.DataFrame(db.query('select id,rule_execution_order,business_rule,source_id,rule_description,\
-                   logical_condition,data_fields_list,python_implementation, business_or_validation,rule_type\
-                    from business_rules where source_id=%s and in_use=\'Y\' order by rule_execution_order asc',\
-                                         (src["source_id"],)).fetchall())
+            brdf = pd.DataFrame(db.query('select id,rule_execution_order,business_rule,source_id,'+\
+                            ' data_fields_list,python_implementation, business_or_validation,rule_type' +\
+                            ' from business_rules where source_id=%s and in_use=\'Y\' ' + \
+                            ' order by rule_execution_order asc',\
+                            (src["source_id"],)).fetchall())
             brdf[['id', 'source_id', 'rule_execution_order']] = brdf[['id', 'source_id', 'rule_execution_order']].astype(dtype='int64', errors='ignore')
             br_id_list = list(map(int,brdf['id'].tolist()))
             br_id_list.sort()
@@ -370,7 +410,7 @@ class ViewDataController(Resource):
             if not br_version or br_version_no != br_version['version']:
                db.transact("insert into business_rules_vers(source_id,version,id_list) values(%s,%s,%s)",(src['source_id'],br_version_no,br_id_list_str))
 
-                            # code += 'if business_or_validation in [\'ALL\',\'BUSINESSRULES\']:\n'
+            # code += 'if business_or_validation in [\'ALL\',\'BUSINESSRULES\']:\n'
             # code += '\tdb.transact("delete from qualified_data where source_id='+str(src["source_id"])+' and business_date=%s",(business_date,))\n'
             code += 'if business_or_validation in [\'ALL\',\'VALIDATION\']:\n'
             code += '\tdb.transact("delete from invalid_data where source_id=' + str(src["source_id"]) + ' and business_date=%s",(business_date,))\n'
@@ -507,7 +547,7 @@ class ViewDataController(Resource):
                     qdf_new.update(id_df)
                     qdf=qdf_new
 
-                print(qdf)
+                # print(qdf)
                 # print(max_id)
                 # print(id_list)
 
