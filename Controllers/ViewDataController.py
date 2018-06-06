@@ -356,7 +356,7 @@ class ViewDataController(Resource):
                     from business_rules where source_id=%s and in_use=\'Y\' order by rule_execution_order asc',\
                                          (src["source_id"],)).fetchall())
             brdf[['id', 'source_id', 'rule_execution_order']] = brdf[['id', 'source_id', 'rule_execution_order']].astype(dtype='int64', errors='ignore')
-            br_id_list = brdf['id'].tolist()
+            br_id_list = list(map(int,brdf['id'].tolist()))
             br_id_list.sort()
             br_id_list_str = ",".join(map(str, br_id_list))
 
@@ -367,8 +367,8 @@ class ViewDataController(Resource):
                #print(set(br_id_list),set(old_id_list))
                br_version_no=br_version['version']+1 if set(br_id_list)!= set(old_id_list) else br_version['version']
 
-            #if br_version_no==1 or br_version_no != br_version['version']:
-            #    db.transact("insert into business_rules_vers(source_id,version,id_list) values(%s,%s,%s)",(src['source_id'],br_version_no,br_id_list_str))
+            if not br_version or br_version_no != br_version['version']:
+               db.transact("insert into business_rules_vers(source_id,version,id_list) values(%s,%s,%s)",(src['source_id'],br_version_no,br_id_list_str))
 
                             # code += 'if business_or_validation in [\'ALL\',\'BUSINESSRULES\']:\n'
             # code += '\tdb.transact("delete from qualified_data where source_id='+str(src["source_id"])+' and business_date=%s",(business_date,))\n'
