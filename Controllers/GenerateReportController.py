@@ -1,21 +1,12 @@
-from flask import Flask, jsonify, request
 from flask_restful import Resource
-import openpyxl as xls
 import time
 from multiprocessing import Pool,cpu_count
 from functools import partial
-import csv
 import re
 import Helpers.utils as util
 from collections import defaultdict
-import sys
-import ast
-import mysql.connector as mysql
 import pandas as pd
 from Helpers.DatabaseHelper import DatabaseHelper
-from Constants.Status import *
-from operator import itemgetter
-from datetime import datetime
 from numpy import where
 from Helpers.Tree import tree
 import json
@@ -55,20 +46,21 @@ class GenerateReportController(Resource):
                                 "'rate_type':'" + report_info["rate_type"] +"'"
             if(report_info["report_parameters"]):
                 report_parameters=report_parameters+","+report_info["report_parameters"]
-            print(report_parameters)
-            report_kwargs=eval("{"+"'report_id':'" + report_id + "',"+ report_parameters + "}")
-            print(report_kwargs)
 
-            self.create_report_catalog(report_id,reporting_date,report_create_date,
+            report_kwargs=eval("{"+"'report_id':'" + report_id + "',"+ report_parameters + "}")
+
+            report_version_no=self.create_report_catalog(report_id,reporting_date,report_create_date,
                                        report_parameters,report_create_status,as_of_reporting_date)
-            self.update_report_catalog(status='RUNNING', report_id=report_id, reporting_date=reporting_date,report_create_date=report_create_date)
-            self.create_report_detail(**report_kwargs)
-            print("create_report_summary_by_source")
-            self.create_report_summary_by_source(**report_kwargs)
-            print("create_report_summary_final")
-            self.create_report_summary_final(**report_kwargs)
-            self.db.commit()
-            self.update_report_catalog(status='SUCCESS', report_id=report_id, reporting_date=reporting_date,report_create_date=report_create_date)
+            self.update_report_catalog(status='RUNNING', report_id=report_id, reporting_date=reporting_date,
+                                       report_create_date=report_create_date)
+            report_snapshot=self.create_report_detail(report_version_no,**report_kwargs)
+            #print("create_report_summary_by_source")
+            self.create_report_summary_by_source(report_version_no,report_snapshot,**report_kwargs)
+            # print("create_report_summary_final")
+            self.create_report_summary_final(report_version_no,report_snapshot,**report_kwargs)
+            # self.db.commit()
+            self.update_report_catalog(status='SUCCESS', report_id=report_id, reporting_date=reporting_date,
+                                       report_create_date=report_create_date,report_snapshot=report_snapshot)
 
             return {"msg": "Report generated SUCCESSFULLY for ["+str(report_id)+"] Reporting date ["+str(reporting_date)+"]."}, 200
 
@@ -81,9 +73,6 @@ class GenerateReportController(Resource):
             report_parameters = report_info['report_parameters']
             reporting_date = report_info['reporting_date']
             report_kwargs = eval("{'report_id':'" + report_id + "' ," + report_parameters.replace('"',"'") + "}")
-            #report_kwargs = {'report_id': 'MAS1003', 'business_date_from': '20160930', 'reporting_currency': 'SGD', 'ref_date_rate': 'B', 'business_date_to': '20160930', 'rate_type': 'MAS'}
-            print(report_kwargs)
-            #try:
             self.update_report_catalog(status='RUNNING',report_id=report_id,reporting_date=reporting_date,report_parameters=report_parameters,report_create_date=report_create_date)
             self.create_report_detail(**report_kwargs)
             print("create_report_summary_by_source")
@@ -92,11 +81,6 @@ class GenerateReportController(Resource):
             self.create_report_summary_final(**report_kwargs)
             self.db.commit()
             self.update_report_catalog(status='SUCCESS',report_id=report_id,reporting_date=reporting_date,report_create_date=report_create_date)
-            #except Exception as e:
-                #print("Error ... : " + str(e))
-                #self.db.rollback()
-            #finally:
-                #return report_kwargs
             return {"msg": "Report generated SUCCESSFULLY for ["+str(report_id)+"] Reporting date ["+str(reporting_date)+"]."}, 200
 
     def get_report_list(self,country='ALL'):
@@ -109,12 +93,18 @@ class GenerateReportController(Resource):
 
     def create_report_catalog(self,report_id,reporting_date,report_create_date,
                               report_parameters,report_create_status,as_of_reporting_date):
-        sql="insert into report_catalog(report_id,reporting_date,report_create_date,\
-            report_parameters,report_create_status,as_of_reporting_date) values(%s,%s,%s,%s,%s,%s)"
-        self.db.transact(sql,(report_id,reporting_date,report_create_date,report_parameters,report_create_status,as_of_reporting_date))
-        self.db.commit()
+        report_version=self.db.query("select max(version) version from report_catalog where report_id=%s and reporting_date=%s",
+                                     (report_id,reporting_date)).fetchone()
+        report_version_no=1 if not report_version['version'] else  report_version['version']+1
 
-    def update_report_catalog(self,status,report_id,reporting_date,report_parameters=None,report_create_date=None):
+        sql="insert into report_catalog(report_id,reporting_date,report_create_date,\
+            report_parameters,report_create_status,as_of_reporting_date,version) values(%s,%s,%s,%s,%s,%s,%s)"
+        self.db.transact(sql,(report_id,reporting_date,report_create_date,report_parameters,report_create_status,
+        as_of_reporting_date,report_version_no))
+        self.db.commit()
+        return report_version_no
+
+    def update_report_catalog(self,status,report_id,reporting_date,report_parameters=None,report_create_date=None,report_snapshot=None):
         update_clause = "report_create_status='{0}'".format(status,)
         if report_parameters != None:
             # Replace all singlequotes(') with double quote(") as update sql requires all enclosed in ''
@@ -122,51 +112,29 @@ class GenerateReportController(Resource):
         if report_create_date != None:
             # Replace all singlequotes(') with double quote(") as update sql requires all enclosed in ''
             update_clause += ", report_create_date='{0}'".format(report_create_date.replace("'",'"'),)
+        if report_snapshot !=None:
+            update_clause +=", report_snapshot='{0}'".format(report_snapshot)
         sql = "update report_catalog set {0} where report_id='{1}' and reporting_date='{2}'".format(update_clause,report_id,reporting_date,)
         self.db.transact(sql)
         self.db.commit()
 
 
-    def map_data_to_cells(self,list_business_rules,exch_rt_dict,reporting_currency,qualified_data):
+    def map_data_to_cells(self,list_business_rules,qualified_data):
 
         result_set=[]
         for qd in qualified_data:
             trd_rules_list=qd["business_rules"].split(',')
-            for rl in list_business_rules:
+            for idx,rl in list_business_rules.iterrows():
                 br_rules_list=rl["cell_business_rules"].split(',')
                 if set(br_rules_list).issubset(set(trd_rules_list)):
-                    d_r = {"buy_reporting_rate": None, "sell_reporting_rate": None, "mtm_reporting_rate": None}
-                    d_u = {"buy_usd_rate": None, "sell_usd_rate": None, "mtm_usd_rate": None}
-                    # To check which date to be considered for exchange rate calculation
-                    # B - business_date exchange rate
-                    # R - Reporting date exchange rate
-                    erd = lambda rr: qd["business_date"] if rr == 'B' else qd["business_date_to"]
-                    ref_date = str(erd(qd["ref_date_rate"]))
-
-                    for k in d_r.keys():
-                        key1 = qd[k[:k.find('_')] + "_currency"]
-                        if key1 != '' and (ref_date+reporting_currency in exch_rt_dict[ref_date+key1]):
-                            d_r[k] = exch_rt_dict[ref_date+key1][ref_date+reporting_currency]
-
-                    for k in d_u.keys():
-                        key1=qd[k[:k.find('_')] + "_currency"]
-                        if key1 != '' and (ref_date+'USD' in exch_rt_dict[ref_date+key1]):
-                            d_u[k] = exch_rt_dict[ref_date+key1][ref_date+'USD']
-
-                    # print(d_r["buy_reporting_rate"],d_r["sell_reporting_rate"],d_r["mtm_reporting_rate"],d_u["buy_usd_rate"],\
-                    #       d_u["sell_usd_rate"],d_u["mtm_usd_rate"])
-
-                    result_set.append((rl["report_id"], rl["sheet_id"],rl["cell_id"],\
-                    rl["cell_calc_ref"], qd["source_id"],qd["qualifying_key"],qd["buy_currency"],qd["sell_currency"],\
-                    qd["mtm_currency"],qd["business_date"],qd["reporting_date"],d_r["buy_reporting_rate"],\
-                    d_r["sell_reporting_rate"],d_r["mtm_reporting_rate"],d_u["buy_usd_rate"],d_u["sell_usd_rate"],\
-                    d_u["mtm_usd_rate"]))
+                   result_set.append((rl["report_id"], rl["sheet_id"],rl["cell_id"],rl["cell_calc_ref"],
+                   qd["source_id"],qd["qualifying_key"],qd["reporting_date"]))
 
         return result_set
 
 
 
-    def create_report_detail(self,**kwargs):
+    def create_report_detail(self,report_version_no,**kwargs):
         parameter_list=['report_id','reporting_currency','business_date_from','business_date_to','ref_date_rate','rate_type']
         if set(parameter_list).issubset(set(kwargs.keys())):
             report_id=kwargs["report_id"]
@@ -183,31 +151,64 @@ class GenerateReportController(Resource):
                     from report_calc_def where report_id=%s and in_use=\'Y\'',(report_id,)).fetchall()
             #Changes required for incoporating exchange rates
 
-        if ref_date_rate=='B':
-            exch_rt=self.db.query('select business_date,from_currency,to_currency,rate from exchange_rate where business_date between %s and %s\
-                    and rate_type=%s',(business_date_from,business_date_to,rate_type)).fetchall()
-        else:
-            exch_rt=self.db.query('select business_date,from_currency,to_currency,rate from exchange_rate where business_date=%s and rate_type=%s',\
-                    (business_date_to,rate_type)).fetchall()
-
-        exch_rt_dict=defaultdict(dict)
-
-        for er in exch_rt:
-            exch_rt_dict[str(er["business_date"])+er["from_currency"]][str(er["business_date"])+er["to_currency"]]=er["rate"]
-
         #Clean the link table before populating for same reporting date
         print('Before clean_table report_qualified_data_link')
         start = time.time()
         util.clean_table(self.db._cursor(), 'report_qualified_data_link', '', reporting_date,'report_id=\''+ report_id + '\'')
         print('Time taken for clean_table report_qualified_data_link ' + str((time.time() - start) * 1000))
 
+        #Create versionning for REPORT_COMP_AGG_DEF
+        cardf = pd.DataFrame(self.db.query("select id,report_id,sheet_id,cell_id,comp_agg_ref,comp_agg_rule,reporting_scale,rounding_option\
+                      from report_comp_agg_def WHERE report_id=%s AND in_use='Y'",(report_id,)).fetchall())
+        car_version=self.db.query("select report_id,version,id_list from report_comp_agg_def_vers where report_id=%s\
+                   and version=(select max(version) from report_comp_agg_def_vers where report_id=%s)",(report_id,report_id)).fetchone()
+        cardf['id']=cardf['id'].astype(dtype='int64',errors='ignore')
+        car_id_list=list(map(int,cardf['id'].tolist()))
+        car_id_list.sort()
+        car_id_list_str=",".join(map(str,car_id_list))
+
+        if not car_version:
+            car_version_no = 1
+        else:
+            old_id_list = list(map(int, car_version['id_list'].split(',')))
+            car_version_no = car_version['version'] + 1 if set(car_id_list) != set(old_id_list) else car_version['version']
+
+        if not car_version or car_version_no != car_version['version']:
+            self.db.transact("insert into report_comp_agg_def_vers(report_id,version,id_list) values(%s,%s,%s)",
+                (report_id, car_version_no, car_id_list_str))
+            self.db.commit()
 
         startsource = time.time()
+        comp_agg_rule_version=car_version_no
+        report_rule_version={}
+        qualified_data_version=defaultdict(dict)
+
         for source in all_sources:
             source_id=source['source_id']
-            print("Processing source id: ",source_id)
-            all_business_rules=self.db.query('select report_id,sheet_id,cell_id,cell_calc_ref,cell_business_rules \
-                    from report_calc_def where report_id=%s and source_id=%s and in_use=\'Y\'',(report_id,source_id,)).fetchall()
+
+            #Create versioning for REPORT_CALC_DEF
+            all_business_rules=pd.DataFrame(self.db.query("select id,report_id,sheet_id,cell_id,cell_calc_ref,cell_business_rules \
+                    from report_calc_def where report_id=%s and source_id=%s and in_use='Y'",(report_id,source_id,)).fetchall())
+
+            rr_version=self.db.query("select version,id_list from report_calc_def_vers where source_id=%s and report_id=%s and version=(select\
+                        max(version) version from report_calc_def_vers where source_id=%s and report_id=%s)",(source_id,report_id,source_id,report_id)).fetchone()
+            all_business_rules['id'] = all_business_rules['id'].astype(dtype='int64', errors='ignore')
+            #print(all_business_rules.dtypes)
+            rr_id_list=list(map(int,all_business_rules['id'].tolist()))
+            rr_id_list.sort()
+            rr_id_list_str=",".join(map(str,rr_id_list))
+
+            if not rr_version:
+                rr_version_no=1
+            else:
+                old_id_list = list(map(int, rr_version['id_list'].split(',')))
+                rr_version_no = rr_version['version'] + 1 if set(rr_id_list) != set(old_id_list) else rr_version['version']
+
+            if not rr_version or rr_version_no != rr_version['version']:
+                self.db.transact("insert into report_calc_def_vers(report_id,source_id,version,id_list) values(%s,%s,%s,%s)",(report_id,source_id,rr_version_no,rr_id_list_str))
+                self.db.commit()
+            report_rule_version[str(source_id)]=rr_version_no
+
 
             start = time.time()
             #report_parameter={'_TODAY':'20160930','_YESDAY':'20160929'}
@@ -216,67 +217,113 @@ class GenerateReportController(Resource):
                 if k.startswith('_'):
                     report_parameter[k]=v
 
-            for i,rl in enumerate(all_business_rules):
+            for i,rl in all_business_rules.iterrows():
                 #check for possible report parameter token replacement
                 for key, value in report_parameter.items():
-                    all_business_rules[i]['cell_business_rules'] = all_business_rules[i]['cell_business_rules'].replace(key, key + ':' + value)
+                    all_business_rules.iloc[i]['cell_business_rules'] = all_business_rules.iloc[i]['cell_business_rules'].replace(key, key + ':' + value)
 
             #print('All business rules after report parameter', all_business_rules)
             print('Time taken for converting to dictionary all_business_rules ' + str((time.time() - start) * 1000))
 
             dbqd=DatabaseHelper(self.tenant_info)
-            curdata =dbqd.query('select source_id,qualifying_key,business_rules,buy_currency,sell_currency,mtm_currency,\
-                        %s as reporting_currency,business_date,%s as reporting_date,%s as business_date_to, \
-                        %s as ref_date_rate \
-                         from qualified_data where source_id=%s and business_date between %s and %s',\
-                        (reporting_currency,reporting_date,business_date_to,ref_date_rate,source_id,business_date_from,business_date_to))
-            startcur = time.time()
-            while True:
-                all_qualified_trade=curdata.fetchmany(50000)
-                if not all_qualified_trade:
-                    break
+            qdvers=dbqd.query("select a.business_date,a.source_id,a.version,a.id_list,a.br_version from qualified_data_vers a,\
+                  (select business_date,source_id,max(version) version from qualified_data_vers where business_date between %s and %s and source_id=%s\
+                   group by business_date,source_id) b where a.business_date=b.business_date and a.source_id=b.source_id and a.version=b.version",
+                  (business_date_from,business_date_to,source_id)).fetchall()
 
-                print('Before converting to dictionary')
-                start = time.time()
-                all_qual_trd_dict_split = util.split(all_qualified_trade, 1000)
-                print('Time taken for converting to dictionary and spliting all_qual_trd '+str((time.time() - start)*1000))
+            id_list_df=pd.DataFrame(columns=['report_id','sheet_id' ,'cell_id' ,'cell_calc_ref','source_id','reporting_date','id_list_no'])
+            for vers in qdvers:
+                curdata =dbqd.query("select source_id,qualifying_key,business_rules,buy_currency,sell_currency,mtm_currency,\
+                            %s as reporting_currency,business_date,%s as reporting_date,%s as business_date_to, \
+                            %s as ref_date_rate from qualified_data where source_id=%s and business_date=%s \
+                             and instr(concat(',',%s,','),concat(',',id,','))" ,
+                            (reporting_currency,reporting_date,business_date_to,ref_date_rate,vers['source_id'],
+                             vers['business_date'],vers['id_list']))
+                startcur = time.time()
+                while True:
+                    all_qualified_trade=curdata.fetchmany(50000)
+                    if not all_qualified_trade:
+                        break
 
-                #print(exch_rt_dict)
-                start=time.time()
+                    print('Before converting to dictionary')
+                    start = time.time()
+                    all_qual_trd_dict_split = util.split(all_qualified_trade, 1000)
+                    print('Time taken for converting to dictionary and spliting all_qual_trd '+str((time.time() - start)*1000))
 
-                # mp=partial(map_data_to_cells,all_bus_rl_dict,exch_rt_dict,reporting_currency)
-                mp = partial(self.map_data_to_cells, all_business_rules, exch_rt_dict, reporting_currency)
+                    #print(exch_rt_dict)
+                    start=time.time()
 
-                print('CPU Count: ' + str(cpu_count()))
-                if cpu_count()>1 :
-                    pool=Pool(cpu_count()-1)
-                else:
-                    print('No of CPU is only 1, ... Inside else....')
-                    pool=Pool(1)
-                result_set=pool.map(mp,all_qual_trd_dict_split)
-                pool.close()
-                pool.join()
+                    # mp=partial(map_data_to_cells,all_bus_rl_dict,exch_rt_dict,reporting_currency)
+                    mp = partial(self.map_data_to_cells, all_business_rules)
 
-                print('Time taken by pool processes '+str((time.time() - start)*1000))
+                    print('CPU Count: ' + str(cpu_count()))
+                    if cpu_count()>1 :
+                        pool=Pool(cpu_count()-1)
+                    else:
+                        print('No of CPU is only 1, ... Inside else....')
+                        pool=Pool(1)
+                    result_set=pool.map(mp,all_qual_trd_dict_split)
+                    pool.close()
+                    pool.join()
 
-                start=time.time()
-                result_set_flat=util.flatten(result_set)
-                start=time.time()
-                #for result_set_flat in rs:
-                print('Database inserts for 50000 .....')
-                self.db.transactmany('insert into report_qualified_data_link \
-                                (report_id,sheet_id ,cell_id ,cell_calc_ref,source_id ,qualifying_key,\
-                                 buy_currency,sell_currency,mtm_currency,business_date,reporting_date,\
-                                 buy_reporting_rate,sell_reporting_rate,mtm_reporting_rate,\
-                                 buy_usd_rate,sell_usd_rate,mtm_usd_rate)\
-                                  values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',result_set_flat)
+                    print('Time taken by pool processes '+str((time.time() - start)*1000))
 
-                print('Time taken by database inserts '+ str((time.time() - start) * 1000))
-                self.db.commit()
-                #return
+                    start=time.time()
+                    result_set_flat=util.flatten(result_set)
+                    start=time.time()
+                    #for result_set_flat in rs:
+                    resultdf=pd.DataFrame(data=result_set_flat,columns=['report_id','sheet_id' ,'cell_id' ,'cell_calc_ref','source_id','qualifying_key','reporting_date'])
+
+                    for idx,grp in resultdf.groupby(['report_id','sheet_id' ,'cell_id' ,'cell_calc_ref','source_id','reporting_date']):
+                        #print(grp['report_id'],grp['sheet_id'])
+                        grp_report_id=grp['report_id'].unique()[0]
+                        grp_sheet_id=grp['sheet_id'].unique()[0]
+                        grp_cell_id = grp['cell_id'].unique()[0]
+                        grp_cell_calc_ref = grp['cell_calc_ref'].unique()[0]
+                        grp_source_id=grp['source_id'].unique()[0]
+                        grp_reporting_date = grp['reporting_date'].unique()[0]
+                        id_list=grp['qualifying_key'].tolist()
+
+                        if ((id_list_df['report_id']==grp_report_id) &
+                                (id_list_df['sheet_id']==grp_sheet_id) &
+                                (id_list_df['cell_id']==grp_cell_id) &
+                                (id_list_df['cell_calc_ref'] == grp_cell_calc_ref)&
+                                (id_list_df['source_id'] == grp_source_id)&
+                                (id_list_df['reporting_date'] == grp_reporting_date)).any():
+                            # print("Inside if......")
+                            id_list_df.loc[id_list_df['report_id']==grp_report_id &
+                                id_list_df['sheet_id']==grp_sheet_id &
+                                id_list_df['cell_id']==grp_cell_id &
+                                id_list_df['cell_calc_ref'] == grp_cell_calc_ref &
+                                id_list_df['source_id'] == grp_source_id &
+                                id_list_df['reporting_date'] == grp_reporting_date,'id_list_no']+=id_list
+                        else:
+                            # print("Inside else.......")
+                            id_list_df=id_list_df.append({'report_id':grp_report_id,'sheet_id':grp_sheet_id ,'cell_id':grp_cell_id,
+                            'cell_calc_ref':grp_cell_calc_ref,'source_id':grp_source_id,'reporting_date':grp_reporting_date,
+                             'id_list_no':id_list},ignore_index=True)
+
+                qualified_data_version[str(source_id)][vers['business_date']]= vers['version']
+
+            id_list_df['version']=report_version_no
+            id_list_df[['source_id','reporting_date','version']]=id_list_df[['source_id','reporting_date','version']].astype(dtype='int64',errors='ignore')
+            id_list_df['id_list']=id_list_df['id_list_no'].apply(lambda x: ",".join(map(str,list(x))))
+            id_list_df=id_list_df.drop(['id_list_no'],axis=1)
+            #print(id_list_df)
+            columns=",".join(id_list_df.columns)
+            placeholders=",".join(['%s']*len(id_list_df.columns))
+            id_list_rec=list(id_list_df.itertuples(index=False, name=None))
+
+            self.db.transactmany("insert into report_qualified_data_link ({0}) values({1})".format(columns,placeholders),id_list_rec)
+            print('Time taken by database inserts '+ str((time.time() - start) * 1000))
+            self.db.commit()
+
             print('Time taken by complete loop of qualified data '+ str((time.time() - startcur) * 1000))
         print('Time taken by complete loop of all sources '+ str((time.time() - startsource) * 1000))
-
+        report_snapshot=json.dumps({"report_calc_def":report_rule_version,"report_comp_agg_def":comp_agg_rule_version,
+                                    "qualified_data":qualified_data_version})
+        #print(report_snapshot)
+        return report_snapshot
 
     def apply_formula_to_frame(self, df, excel_formula,new_field_name):
         tokens_queue = re.split('(\W)', excel_formula)
@@ -384,8 +431,7 @@ class GenerateReportController(Resource):
 
 
 
-    def create_report_summary_by_source(self,**kwargs):
-
+    def create_report_summary_by_source(self,report_version_no,report_snapshot,**kwargs):
         parameter_list = ['report_id', 'business_date_from', 'business_date_to']
 
         if set(parameter_list).issubset(set(kwargs.keys())):
@@ -397,120 +443,64 @@ class GenerateReportController(Resource):
         else:
             print("Please supply parameters: " + str(parameter_list))
 
+        report_snapshot=json.loads(report_snapshot)
+        report_calc_def_vers=report_snapshot["report_calc_def"]
+        srcs=report_calc_def_vers.keys()
 
-        # Fetch all aggregate clauses into a dataframe
-        sql = "select a.report_id,a.sheet_id,a.cell_id,b.source_id,\
-                        b.source_table_name,a.aggregation_ref,a.cell_calc_ref,a.aggregation_func\
-                        from report_calc_def a,data_source_information b\
-                        where  a.source_id=b.source_id and a.in_use='Y' \
-                        and a.report_id='REPORT_ID' order by a.source_id".replace(
-            'REPORT_ID', report_id)
-        all_agg_cls = pd.read_sql(sql, self.db.connection())
-        #Convert to float where possible to reduce memory usage
-        for col_to_convert in all_agg_cls.columns:
-            all_agg_cls[[col_to_convert]]=all_agg_cls[[col_to_convert]].astype(dtype=float,errors='ignore')
+        result_set=[]
+        for src in srcs:
+            sql = "select a.sheet_id,a.cell_id,a.aggregation_ref,a.cell_calc_ref,a.aggregation_func from report_calc_def a,\
+                  (select id_list from report_calc_def_vers where report_id='{0}' and source_id={1} and version={2}) c \
+                  where a.report_id='{0}' and a.source_id={1} and instr(concat(',',c.id_list,','),concat(',',a.id,','))".format(report_id,src,
+                  report_calc_def_vers[src])
 
-        print(all_agg_cls.dtypes)
-        all_agg_cls_grp=all_agg_cls.groupby('source_id')
-        sources=all_agg_cls['source_id'].unique()
+            all_agg_cls = pd.DataFrame(self.db.query(sql).fetchall())
+            #Convert to float where possible to reduce memory usage
+            all_agg_cls=all_agg_cls.astype(dtype='float64',errors='ignore')
 
-        #Now get the required column list for data frames
-        col_list = ''
-        col_list = self.get_list_of_columns_for_dataframe(all_agg_cls,'report_qualified_data_link')
-        if col_list != '1 as const':
-            col_list = 'a.' + col_list.replace(',',',a.')
+            source_table_name=self.db.query("select source_table_name from data_source_information where \
+                              source_id=%s",(src,)).fetchone()['source_table_name']
+            key_column= util.get_keycolumn(self.db._cursor(), source_table_name)
 
-        sql= "select a.sheet_id, a.cell_id, a.cell_calc_ref,a.source_id,a.qualifying_key,\
-              a.business_date,COLUMN_LIST,b.source_table_name from report_qualified_data_link a , data_source_information b\
-              where business_date between 'DATE_FROM' and 'DATE_TO' and \
-               a.source_id=b.source_id and report_id='REPORT_ID' and \
-               reporting_date='REPORT_DATE'".replace('COLUMN_LIST',col_list).replace('REPORT_ID',report_id)\
-                .replace('DATE_FROM',business_date_from).replace('DATE_TO',business_date_to)\
-                .replace('REPORT_DATE',reporting_date)
-
-        print(sql)
-        report_qualified_data_link=pd.read_sql(sql,self.db.connection())
-        #Convert to float where possible to reduce memory usage
-        for col_to_convert in report_qualified_data_link.columns:
-            report_qualified_data_link[[col_to_convert]]=report_qualified_data_link[[col_to_convert]].astype(dtype=float,errors='ignore')
-
-        print(report_qualified_data_link.dtypes)
-        report_qualified_data_link.info(memory_usage='deep')
-
-        # break report_qualified_data_link into groups according to source_id
-        grouped = report_qualified_data_link.groupby('source_id')
-
-        merge_grouped={}
-        for idx,grp in grouped:
-            source_table=grp['source_table_name'].unique()[0]
-            key_column = util.get_keycolumn(self.db._cursor(), source_table)
-            print('key column ['+key_column+']')
-
-            col_list = ''
-            col_list = self.get_list_of_columns_for_dataframe(all_agg_cls,source_table)
+            col_list = self.get_list_of_columns_for_dataframe(all_agg_cls, source_table_name)
             if key_column not in col_list:
                 col_list = key_column + ',' + col_list
-            sql = "select COLUMN_LIST from TBL where business_date between 'DATE_FROM' and 'DATE_TO'".replace('COLUMN_LIST',col_list)\
-                .replace('TBL', source_table) \
-                .replace('DATE_FROM', business_date_from).replace('DATE_TO', business_date_to)
 
-            data_frms = pd.read_sql(sql, self.db.connection(), chunksize=50000)
-            df_group_list = []
-            for frm in data_frms:
-                #print(frm.columns)
-                #print(frm.dtypes)
-                #Convert to float where possible to reduce memory usage
-                for col_to_convert in frm.columns:
-                    frm[[col_to_convert]]=frm[[col_to_convert]].astype(dtype=float,errors='ignore')
-                print(frm.dtypes)
-                col_to_use = frm.columns.difference(grp.columns)
-                frm.info(memory_usage='deep')
-                #print(col_to_use)
-                df_group_list.append(pd.merge(grp, frm[col_to_use], left_on='qualifying_key', right_on=key_column))
+            report_qualified_data_link=self.db.query("select sheet_id,cell_id,cell_calc_ref,id_list from report_qualified_data_link \
+                                       a where report_id=%s and reporting_date=%s and version=%s\
+                                       and a.source_id=%s",(report_id,reporting_date,report_version_no,src)).fetchall()
 
-            #print("Df group list count: " + str(len(df_group_list)))
-            merge_grouped[idx]=pd.concat(df_group_list)
+            for row in report_qualified_data_link:
+                source_data=pd.DataFrame(self.db.query("select {3} from {0} where {1} in ({2})".format(source_table_name,key_column,row['id_list'],col_list)).fetchall())
 
+                #hack to go around exchange rate
+                source_data['buy_reporting_rate']=1
+                source_data['sell_reporting_rate']=1
 
-        # clean summary table before populating it for reporting_date
-        # util.clean_table(cur, 'report_summary', '', reporting_date)
-        util.clean_table(self.db._cursor(), 'report_summary_by_source', '', reporting_date,'report_id=\''+ report_id + '\'')
+                agg_ref=all_agg_cls.loc[(all_agg_cls['sheet_id']==row['sheet_id']) & (all_agg_cls['cell_id']==row['cell_id']) &
+                                        (all_agg_cls['cell_calc_ref'] == row['cell_calc_ref'])]['aggregation_ref'].reset_index(drop=True).at[0]
+                agg_func=all_agg_cls.loc[(all_agg_cls['sheet_id']==row['sheet_id']) & (all_agg_cls['cell_id']==row['cell_id']) &
+                                        (all_agg_cls['cell_calc_ref'] == row['cell_calc_ref'])]['aggregation_func'].reset_index(drop=True).at[0]
 
-        for src in sources:
-            print('Processing data frame for source id [' + str(src) + '].')
-            agg_cls_grp = all_agg_cls_grp.get_group(src)
-            result_set = []
-            # if the data frame is empty for a source id, then the source id would not be there as one of the keys
-            # of the merged group of data frames, so do nothing for empty data frames
-            if src not in merge_grouped.keys():
-                print('Empty data frame for source id [' + str(src) + '], so no action required.')
-            else:
-                mrg_src_grp = merge_grouped[src].groupby(['sheet_id', 'cell_id', 'cell_calc_ref'])
-                #print(mrg_src_grp.groups.keys())
+                source_data_trans = self.apply_formula_to_frame(source_data, agg_ref, 'reporting_value')
+                source_data_trans['reporting_value']=source_data_trans['reporting_value'].astype(dtype='float64',errors='ignore')
+                summary = eval("source_data_trans['reporting_value']." + agg_func + "()")
+                summary=0 if math.isnan(float(summary)) else float(summary)
 
-                for idx, row in agg_cls_grp.iterrows():
-                    key = (row['sheet_id'], row['cell_id'], row['cell_calc_ref'])
-                    #print(key)
-
-                    if key in mrg_src_grp.groups.keys():
-                        #print("Inside if..", key)
-                        mrg_src = mrg_src_grp.get_group(key)
-                        mrg_src = self.apply_formula_to_frame(mrg_src, row['aggregation_ref'], 'reporting_value')
-                        # print(mrg_src['reporting_value'])
-                        mrg_src['reporting_value'] = mrg_src['reporting_value'].map(float)
-                        summary = eval('mrg_src[\'reporting_value\'].' + row["aggregation_func"] + '()')
-                        result_set.append((row['report_id'], row['sheet_id'], row['cell_id'], \
-                                           row['source_id'], row['cell_calc_ref'], ( 0 if math.isnan(float(summary)) else float(summary)), reporting_date))
-
-                self.db.transactmany('insert into report_summary_by_source(report_id,sheet_id,cell_id,\
-                                    source_id,cell_calc_ref,cell_summary,reporting_date)\
-                                    values(%s,%s,%s,%s,%s,%s,%s)', result_set)
+                result_set.append({'source_id':src,'report_id':report_id,'sheet_id':row['sheet_id'],'cell_id':row['cell_id'],
+                                   'cell_calc_ref':row['cell_calc_ref'],'reporting_date':reporting_date,'cell_summary':summary,'version':report_version_no})
 
 
+        result_df=pd.DataFrame(result_set)
+        columns=",".join(result_df.columns)
+        placeholders=",".join(['%s']*len(result_df.columns))
+        data=list(result_df.itertuples(index=False,name=None))
+
+        self.db.transactmany("insert into report_summary_by_source({0}) values({1})".format(columns,placeholders),data)
         self.db.commit()
         #return
 
-    def create_report_summary_final(self,populate_summary = True,cell_format_yn = 'N',**kwargs):
+    def create_report_summary_final(self,report_version_no,report_snapshot,populate_summary = True,cell_format_yn = 'N',**kwargs):
         parameter_list = ['report_id', 'business_date_from', 'business_date_to']
 
         if set(parameter_list).issubset(set(kwargs.keys())):
@@ -521,15 +511,17 @@ class GenerateReportController(Resource):
         else:
             print("Please supply parameters: " + str(parameter_list))
 
+        report_snapshot=json.loads(report_snapshot)
+        comp_agg_rule_version=report_snapshot['report_comp_agg_def']
+        # if populate_summary:
+        #     util.clean_table(self.db._cursor(), 'report_summary', '', reporting_date, 'report_id=\''+ report_id + '\'')
 
-        if populate_summary:
-            util.clean_table(self.db._cursor(), 'report_summary', '', reporting_date, 'report_id=\''+ report_id + '\'')
+        contributors = self.db.query("SELECT * FROM report_summary_by_source WHERE reporting_date=%s AND report_id=%s and version=%s",
+            (reporting_date, report_id,report_version_no)).fetchall()
 
-        contributors = self.db.query("SELECT * FROM report_summary_by_source WHERE reporting_date='{0}' AND report_id='{1}'"\
-            .format(reporting_date, report_id)).fetchall()
-
-        comp_agg_cls = self.db.query("SELECT * FROM report_comp_agg_def WHERE report_id=%s AND in_use='Y'",\
-            (report_id,)).fetchall()
+        comp_agg_cls = self.db.query("SELECT a.* FROM report_comp_agg_def a,(select id_list from report_comp_agg_def_vers\
+                      where report_id=%s and version=%s) b where instr(concat(',',b.id_list,','),concat(',',a.id,','))",
+                      (report_id,comp_agg_rule_version)).fetchall()
 
         formula_set = {}
         for element in contributors:
@@ -541,7 +533,6 @@ class GenerateReportController(Resource):
 
         for cls in comp_agg_cls:
             ref = cls['comp_agg_ref']
-
             formula_set[ref] = {'formula': cls['comp_agg_rule'],
                                 'reporting_scale': cls['reporting_scale'] if cls['reporting_scale'] else 1,
                                 'rounding_option': cls['rounding_option'] if cls['rounding_option'] else "NONE"
@@ -553,15 +544,18 @@ class GenerateReportController(Resource):
 
         result_set = []
         for cls in comp_agg_cls:
-            result_set.append((cls['report_id'], cls['sheet_id'], cls['cell_id'],\
-            summary_set[cls['comp_agg_ref']], reporting_date))
+            result_set.append({'report_id':cls['report_id'],'sheet_id':cls['sheet_id'],'cell_id':cls['cell_id'],
+            'cell_summary':summary_set[cls['comp_agg_ref']],'reporting_date':reporting_date,'version':report_version_no})
 
         # print(result_set)
 
         if populate_summary:
             try:
-                rowId = self.db.transactmany("INSERT INTO report_summary(report_id,sheet_id,cell_id,cell_summary,reporting_date)\
-                                VALUES(%s,%s,%s,%s,%s)", result_set)
+                result_df = pd.DataFrame(result_set)
+                columns = ",".join(result_df.columns)
+                placeholders = ",".join(['%s'] * len(result_df.columns))
+                data = list(result_df.itertuples(index=False, name=None))
+                rowId = self.db.transactmany("INSERT INTO report_summary({0}) values({1})".format(columns,placeholders),data)
                 self.db.commit()
                 return rowId
             except Exception as e:
