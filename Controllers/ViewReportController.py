@@ -52,7 +52,7 @@ class ViewReportController(Resource):
                                    (self.report_id,)).fetchall()
 
             agg_format_data = {}
-            if cell_format_yn == 'Y':
+            if cell_format_yn == 'Y' and reporting_date != '19000101' and reporting_date:
                 app.logger.info("Creating formatted summary set")
                 summary_set = report.create_report_summary_final(self, populate_summary=False,
                                                                  cell_format_yn=cell_format_yn,
