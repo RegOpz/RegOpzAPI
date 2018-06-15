@@ -237,7 +237,7 @@ class MaintainSourcesController(Resource):
 		for col in columns:
 			not_null = 'not null' if col['Null'] == 'NO' else ''
 			sql+=col['Field'] +' ' + col['Type']+' '+not_null+','
-		sql=sql[:-1]+' )'
+		sql=sql[:-1]+' ) , ALGORITHM=INPLACE, LOCK=NONE'
 		try:
 			self.db.transact(sql)
 		except Exception as e:

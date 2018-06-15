@@ -386,7 +386,7 @@ class ViewDataController(Resource):
             code += '\tfor row in data:\n'
             code += '\t\tbusiness_rule=\'\'\n'
             code += '\t\tvalidation_rule=\'\'\n'
-            qualifying_key='\'\''
+            qualifying_key='\'row[\"id\"]\''
             buy_currency='\'\''
             sell_currency='\'\''
             mtm_currency='\'\''
@@ -427,7 +427,7 @@ class ViewDataController(Resource):
                      if row["rule_type"]=='DERIVED':
                          final_str=final_str.replace("DERIVED","business_rule")
                      if row["rule_type"]=='KEYCOLUMN':
-                         qualifying_key=final_str
+                         qualifying_key='row[\"id\"]' #final_str
                      elif row["rule_type"]=='BUYCURRENCY':
                          buy_currency=final_str
                      elif row["rule_type"]=='SELLCURRENCY':
