@@ -112,9 +112,13 @@ class FunctionNode(ASTNode):
         str = ''
         # Get the arguments
         args = self.children(ast)
-        # map to the correct name
-        f = self.funmap.get(fun, fun)
-        str = f + "(" + ",".join([n.emit(ast, context=context) for n in args]) + ")"
+        if fun=='rate':
+            apply_str=".apply(self.get_fx_rate, args=('{0}'),axis=1)".format(args[0].tvalue)
+            str=context.df+apply_str
+        else:
+            # map to the correct name
+            f = self.funmap.get(fun, fun)
+            str = f + "(" + ",".join([n.emit(ast, context=context) for n in args]) + ")"
 
         return str
 
