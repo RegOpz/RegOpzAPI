@@ -1,5 +1,5 @@
 from networkx.classes.digraph import DiGraph
-from Parser.Tokenizer import ExcelParser, f_token,ExcelParserTokens
+from Parser.Tokenizer import ExcelParser, f_token,ExcelParserTokens as ept
 import Parser.PandasLib as excellib
 import collections
 
@@ -56,7 +56,7 @@ class OperatorNode(ASTNode):
 
         op = self.opmap.get(xop, xop)
 
-        if self.ttype == ExcelParserTokens.TOK_TYPE_OP_PRE:
+        if self.ttype == ept.TOK_TYPE_OP_PRE:
             return "-" + args[0].emit(ast, context=context)
 
         parent = self.parent(ast)
@@ -75,9 +75,9 @@ class OperandNode(ASTNode):
     def emit(self, ast, context=None):
         t = self.tsubtype
 
-        if t == ExcelParserTokens.TOK_SUBTYPE_LOGICAL:
+        if t == ept.TOK_SUBTYPE_LOGICAL:
             return str(self.tvalue.lower() == "true")
-        elif t == ExcelParserTokens.TOK_SUBTYPE_TEXT or t == ExcelParserTokens.TOK_SUBTYPE_ERROR:
+        elif t == ept.TOK_SUBTYPE_TEXT or t == ept.TOK_SUBTYPE_ERROR:
             # if the string contains quotes, escape them
             val = self.tvalue.replace('"', '\\"')
             return '"' + val + '"'
@@ -121,14 +121,14 @@ class FunctionNode(ASTNode):
 
 def create_node(t):
     """Simple factory function"""
-    if t.ttype == ExcelParserTokens.TOK_TYPE_OPERAND:
-        if t.tsubtype == ExcelParserTokens.TOK_SUBTYPE_RANGE:
+    if t.ttype == ept.TOK_TYPE_OPERAND:
+        if t.tsubtype == ept.TOK_SUBTYPE_RANGE:
             return RangeNode(t)
         else:
             return OperandNode(t)
-    elif t.ttype == ExcelParserTokens.TOK_TYPE_FUNCTION:
+    elif t.ttype == ept.TOK_TYPE_FUNCTION:
         return FunctionNode(t)
-    elif t.ttype in [ExcelParserTokens.TOK_TYPE_OP_IN,ExcelParserTokens.TOK_TYPE_OP_PRE,ExcelParserTokens.TOK_TYPE_OP_POST]:
+    elif t.ttype in [ept.TOK_TYPE_OP_IN,ept.TOK_TYPE_OP_PRE,ept.TOK_TYPE_OP_POST]:
         return OperatorNode(t)
     else:
         return ASTNode(t)
@@ -161,16 +161,16 @@ def shunting_yard(expression):
     # insert tokens for '(' and ')', to make things clearer below
     tokens = []
     for t in p.tokens.items:
-        if t.ttype == ExcelParserTokens.TOK_TYPE_FUNCTION and t.tsubtype ==ExcelParserTokens.TOK_SUBTYPE_START:
+        if t.ttype == ept.TOK_TYPE_FUNCTION and t.tsubtype ==ept.TOK_SUBTYPE_START:
             t.tsubtype = ""
             tokens.append(t)
             tokens.append(f_token('(', 'arglist', 'start'))
-        elif t.ttype == ExcelParserTokens.TOK_TYPE_FUNCTION and t.tsubtype ==ExcelParserTokens.TOK_SUBTYPE_STOP:
+        elif t.ttype == ept.TOK_TYPE_FUNCTION and t.tsubtype ==ept.TOK_SUBTYPE_STOP:
             tokens.append(f_token(')', 'arglist', 'stop'))
-        elif t.ttype == ExcelParserTokens.TOK_TYPE_SUBEXPR and t.tsubtype == ExcelParserTokens.TOK_SUBTYPE_START:
+        elif t.ttype == ept.TOK_TYPE_SUBEXPR and t.tsubtype == ept.TOK_SUBTYPE_START:
             t.tvalue = '('
             tokens.append(t)
-        elif t.ttype == ExcelParserTokens.TOK_TYPE_SUBEXPR and t.tsubtype == ExcelParserTokens.TOK_SUBTYPE_STOP:
+        elif t.ttype == ept.TOK_TYPE_SUBEXPR and t.tsubtype == ept.TOK_SUBTYPE_STOP:
             t.tvalue = ')'
             tokens.append(t)
         else:
@@ -204,14 +204,14 @@ def shunting_yard(expression):
     arg_count = []
 
     for t in tokens:
-        if t.ttype == ExcelParserTokens.TOK_TYPE_OPERAND:
+        if t.ttype == ept.TOK_TYPE_OPERAND:
 
             output.append(create_node(t))
             if were_values:
                 were_values.pop()
                 were_values.append(True)
 
-        elif t.ttype == ExcelParserTokens.TOK_TYPE_FUNCTION:
+        elif t.ttype == ept.TOK_TYPE_FUNCTION:
 
             stack.append(t)
             arg_count.append(0)
@@ -220,9 +220,9 @@ def shunting_yard(expression):
                 were_values.append(True)
             were_values.append(False)
 
-        elif t.ttype == ExcelParserTokens.TOK_TYPE_ARGUMENT:
+        elif t.ttype == ept.TOK_TYPE_ARGUMENT:
 
-            while stack and (stack[-1].tsubtype != ExcelParserTokens.TOK_SUBTYPE_START):
+            while stack and (stack[-1].tsubtype != ept.TOK_SUBTYPE_START):
                 output.append(create_node(stack.pop()))
 
             if were_values.pop(): arg_count[-1] += 1
@@ -231,16 +231,16 @@ def shunting_yard(expression):
             if not len(stack):
                 raise Exception("Mismatched or misplaced parentheses")
 
-        elif t.ttype in [ExcelParserTokens.TOK_TYPE_OP_IN,ExcelParserTokens.TOK_TYPE_OP_PRE,ExcelParserTokens.TOK_TYPE_OP_POST]:
+        elif t.ttype in [ept.TOK_TYPE_OP_IN,ept.TOK_TYPE_OP_PRE,ept.TOK_TYPE_OP_POST]:
 
-            if t.ttype == ExcelParserTokens.TOK_TYPE_OP_PRE and t.tvalue == "-":
+            if t.ttype == ept.TOK_TYPE_OP_PRE and t.tvalue == "-":
                 o1 = operators['u-']
             else:
                 o1 = operators[t.tvalue]
 
-            while stack and stack[-1].ttype in [ExcelParserTokens.TOK_TYPE_OP_IN,ExcelParserTokens.TOK_TYPE_OP_PRE,ExcelParserTokens.TOK_TYPE_OP_POST]:
+            while stack and stack[-1].ttype in [ept.TOK_TYPE_OP_IN,ept.TOK_TYPE_OP_PRE,ept.TOK_TYPE_OP_POST]:
 
-                if stack[-1].ttype == ExcelParserTokens.TOK_TYPE_OP_PRE and stack[-1].tvalue == "-":
+                if stack[-1].ttype == ept.TOK_TYPE_OP_PRE and stack[-1].tvalue == "-":
                     o2 = operators['u-']
                 else:
                     o2 = operators[stack[-1].tvalue]
@@ -255,12 +255,12 @@ def shunting_yard(expression):
 
             stack.append(t)
 
-        elif t.tsubtype == ExcelParserTokens.TOK_SUBTYPE_START:
+        elif t.tsubtype == ept.TOK_SUBTYPE_START:
             stack.append(t)
 
-        elif t.tsubtype == ExcelParserTokens.TOK_SUBTYPE_STOP:
+        elif t.tsubtype == ept.TOK_SUBTYPE_STOP:
 
-            while stack and stack[-1].tsubtype != ExcelParserTokens.TOK_SUBTYPE_START:
+            while stack and stack[-1].tsubtype != ept.TOK_SUBTYPE_START:
                 output.append(create_node(stack.pop()))
 
             if not stack:
@@ -268,7 +268,7 @@ def shunting_yard(expression):
 
             stack.pop()
 
-            if stack and stack[-1].ttype == ExcelParserTokens.TOK_TYPE_FUNCTION:
+            if stack and stack[-1].ttype == ept.TOK_TYPE_FUNCTION:
                 f = create_node(stack.pop())
                 a = arg_count.pop()
                 w = were_values.pop()
@@ -278,7 +278,7 @@ def shunting_yard(expression):
                 output.append(f)
 
     while stack:
-        if stack[-1].tsubtype == ExcelParserTokens.TOK_SUBTYPE_START or stack[-1].tsubtype == ExcelParserTokens.TOK_SUBTYPE_STOP:
+        if stack[-1].tsubtype == ept.TOK_SUBTYPE_START or stack[-1].tsubtype == ept.TOK_SUBTYPE_STOP:
             raise Exception("Mismatched or misplaced parentheses")
 
         output.append(create_node(stack.pop()))
@@ -303,7 +303,7 @@ def build_ast(expression):
         # Since the graph does not maintain the order of adding nodes/edges
         # add an extra attribute 'pos' so we can always sort to the correct order
         if isinstance(n, OperatorNode):
-            if n.ttype == ExcelParserTokens.TOK_TYPE_OP_IN:
+            if n.ttype == ept.TOK_TYPE_OP_IN:
                 arg2 = stack.pop()
                 arg1 = stack.pop()
                 G.add_node(arg1, pos=1)
