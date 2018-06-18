@@ -13,6 +13,8 @@ import json
 from Helpers.utils import autheticateTenant
 from Helpers.authenticate import *
 import math
+import Parser.FormulaTranslator as fm_trns
+from Parser.PandasLib import *
 
 class GenerateReportController(Resource):
     def __init__(self):
@@ -351,90 +353,12 @@ class GenerateReportController(Resource):
             fxrate = float(self.er[str(dfrow['referece_rate_date'])][reporting_currency][dfrow[column]])
         return fxrate
 
-    def apply_formula_to_frame(self, df, excel_formula,new_field_name,reporting_currency='SGD'):
-        tokens_queue = re.split('(\W)', excel_formula)
-
-        # from this expression:if(sell_currency='SGD',sell_currency,buy_currency*buy_reporting_rate)
-        # to this expression:df['reporting_value'] = np.where(df['Sell_Currency'] == 'SGD', df['Amount_Sell'],df['Amount_Buy'] * df['buy_reporting_rate'])
-        num_token = 0
-        pandas_code = ''
-        pandas_float=''
-        while num_token < len(tokens_queue):
-
-            if tokens_queue[num_token] == 'if':
-                pandas_code += 'where'
-                num_token += 1
-
-            elif tokens_queue[num_token]=='rate':
-                # formula in calc ref can be rate(col)*amount_col or amount_col*rate(col)
-                # Since the function would be rate(currency_column,reporting_currency,referece_rate_date)
-                pandas_code += "df.apply(self.get_fx_rate, args=('{0}','{1}'),axis=1)".format(reporting_currency,tokens_queue[num_token+2])
-                num_token += 4
-            #Added other operators as well, +, -, /, *,>,<
-            elif tokens_queue[num_token] in ['(', ')', ',','+','-','/','*','>','<']:
-                pandas_code += tokens_queue[num_token]
-                num_token += 1
-
-            elif tokens_queue[num_token] == '=':
-                #check if its part of >=,<=, else set it ==
-                #num_token -2 since the previous token would be '' and the previous to previous one would be < or >
-                if tokens_queue[num_token-2] in ['>','<']:
-                    pandas_code += '='
-                else:
-                    pandas_code += '=='
-                num_token += 1
-
-            elif tokens_queue[num_token] in ["'", '"']:
-                open_quote = tokens_queue[num_token]
-                num_token += 1
-
-                str_lit = tokens_queue[num_token]
-                num_token += 1
-
-                close_quote = tokens_queue[num_token]
-                num_token += 1
-
-                pandas_code += open_quote + str_lit + close_quote
-
-            #if the list element in token is a column of the data frame then convert it to the data frame syntax
-            elif tokens_queue[num_token] in df.columns:
-                pandas_code += "df['TOKEN']".replace('TOKEN', tokens_queue[num_token])
-                num_token += 1
-
-            #This is to check whether any constant is part of the expression
-            #constants can be int e.g. 1, 2345, 67 or fractions e.g. .1,0.9,1.99 etc
-            #re.split('(\W)') splits int as an element in the list, however a fraction 0.99 would be split as follows:
-            # '0','.','99', so we need to add all these to the result.
-            elif re.match('\w', tokens_queue[num_token]) or tokens_queue[num_token] in ['.']:
-                pandas_code += tokens_queue[num_token]
-                num_token += 1
-
-            else:
-                num_token += 1
-
-            #make sure two operands of an arithmatic operation are float
-            if tokens_queue[num_token-1] in ['*']:
-                operand1,operand2=tokens_queue[num_token-2],tokens_queue[num_token]
-
-                # df['Amount_Sell']= df['Amount_Sell'].map(float)
-                #before doing float operation, check whether operand1 & 2 are  df columns
-                if operand1 in df.columns:
-                    pandas_float += 'df[\''+operand1+'\']=df[\'' + operand1 + '\'].map(float)\n'
-
-                if operand2 in df.columns:
-                    pandas_float += 'df[\'' + operand2 + '\']=df[\'' + operand2 + '\'].map(float)\n'
-
-                #print(pandas_float)
-
-        pandas_code = 'df[\''+new_field_name+'\']=' + pandas_code
-        #print(list(df))
-        #print(pandas_code)
-        exec(pandas_float)
-        exec(pandas_code)
-
-        #print(tokens_queue)
-        #print(pandas_code)
-
+    def apply_formula_to_frame(self, df, excel_formula,new_field_name):
+        context=fm_trns.Context('df')
+        rpn_expr=fm_trns.shunting_yard(excel_formula)
+        G,root=fm_trns.build_ast(rpn_expr)
+        df_expr=root.emit(G,context=context)
+        df[new_field_name]=eval(df_expr)
         return df
 
     def get_list_of_columns_for_dataframe(self,agg_df,table_name):
