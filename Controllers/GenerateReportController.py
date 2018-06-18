@@ -36,6 +36,7 @@ class GenerateReportController(Resource):
     def post(self):
         if (request.endpoint=='create_report_ep'):
             report_info=request.get_json(force=True)
+            self.reporting_currency = report_info["reporting_currency"]
             report_id=report_info['report_id']
             reporting_date=report_info['reporting_date']
             as_of_reporting_date=report_info['as_of_reporting_date']
@@ -71,7 +72,7 @@ class GenerateReportController(Resource):
 
         if(request.endpoint == 'generate_report_ep'):
             report_info = request.get_json(force=True)
-            print(report_info)
+            self.reporting_currency = report_info["reporting_currency"]
             report_id = report_info['report_id']
             report_create_date=report_info['report_create_date']
             report_parameters = report_info['report_parameters']
@@ -346,11 +347,11 @@ class GenerateReportController(Resource):
         #print(report_snapshot)
         return report_snapshot
 
-    def get_fx_rate(self,dfrow,reporting_currency,column):
+    def get_fx_rate(self,dfrow,column):
         # print(dfrow)
         fxrate = float(0)
         if str(dfrow['referece_rate_date']) in self.er.keys():
-            fxrate = float(self.er[str(dfrow['referece_rate_date'])][reporting_currency][dfrow[column]])
+            fxrate = float(self.er[str(dfrow['referece_rate_date'])][self.reporting_currency][dfrow[column]])
         return fxrate
 
     def apply_formula_to_frame(self, df, excel_formula,new_field_name):
@@ -463,7 +464,7 @@ class GenerateReportController(Resource):
                 agg_func=all_agg_cls.loc[(all_agg_cls['sheet_id']==row['sheet_id']) & (all_agg_cls['cell_id']==row['cell_id']) &
                                         (all_agg_cls['cell_calc_ref'] == row['cell_calc_ref'])]['aggregation_func'].reset_index(drop=True).at[0]
 
-                source_data_trans = self.apply_formula_to_frame(source_data, agg_ref, 'reporting_value',reporting_currency)
+                source_data_trans = self.apply_formula_to_frame(source_data, agg_ref, 'reporting_value')
                 source_data_trans['reporting_value']=source_data_trans['reporting_value'].astype(dtype='float64',errors='ignore')
                 summary = eval("source_data_trans['reporting_value']." + agg_func + "()")
                 summary=0 if math.isnan(float(summary)) else float(summary)
