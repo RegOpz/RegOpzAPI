@@ -223,7 +223,8 @@ class MaintainSourcesController(Resource):
 			not_null='not null' if col['Null']=='NO' else ''
 			auto_increment='auto_increment' if col['Field'] == 'id' else ''
 			sql += col['Field'] + ' ' + col['Type'] +' '+not_null+ ' ' + auto_increment +','
-		sql = sql[:-1] + ', primary key (id,business_date) ) character set utf16'
+		sql = sql[:-1] + ', primary key (id,business_date),' + \
+			'index (business_date) ) character set utf16'
 		app.logger.info(sql)
 		try:
 			self.db.transact(sql)
