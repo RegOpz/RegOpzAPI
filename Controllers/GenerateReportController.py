@@ -56,7 +56,7 @@ class GenerateReportController(Resource):
             report_version_no=self.create_report_catalog(report_id,reporting_date,report_create_date,
                                        report_parameters,report_create_status,as_of_reporting_date)
             self.update_report_catalog(status='RUNNING', report_id=report_id, reporting_date=reporting_date,
-                                       report_create_date=report_create_date)
+                                       report_create_date=report_create_date, version=report_version_no)
             report_snapshot=self.create_report_detail(report_version_no,**report_kwargs)
             #print("create_report_summary_by_source")
             self.create_report_summary_by_source(report_version_no,report_snapshot,**report_kwargs)
@@ -64,7 +64,8 @@ class GenerateReportController(Resource):
             self.create_report_summary_final(report_version_no,report_snapshot,**report_kwargs)
             # self.db.commit()
             self.update_report_catalog(status='SUCCESS', report_id=report_id, reporting_date=reporting_date,
-                                       report_create_date=report_create_date,report_snapshot=report_snapshot)
+                                       report_create_date=report_create_date,report_snapshot=report_snapshot,
+                                       version=report_version_no)
 
             return {"msg": "Report generated SUCCESSFULLY for ["+str(report_id)+"] Reporting date ["+str(reporting_date)+"]."}, 200
 
@@ -72,7 +73,6 @@ class GenerateReportController(Resource):
 
         if(request.endpoint == 'generate_report_ep'):
             report_info = request.get_json(force=True)
-            self.reporting_currency = report_info["reporting_currency"]
             report_id = report_info['report_id']
             report_create_date=report_info['report_create_date']
             report_parameters = report_info['report_parameters']
@@ -80,6 +80,7 @@ class GenerateReportController(Resource):
             as_of_reporting_date=report_info['as_of_reporting_date']
             report_create_status='CREATE'
             report_kwargs = eval("{'report_id':'" + report_id + "' ," + report_parameters.replace('"',"'") + "}")
+            self.reporting_currency = report_kwargs["reporting_currency"]
             # self.update_report_catalog(status='RUNNING',report_id=report_id,reporting_date=reporting_date,report_parameters=report_parameters,report_create_date=report_create_date)
             # self.create_report_detail(**report_kwargs)
             # print("create_report_summary_by_source")
@@ -91,7 +92,7 @@ class GenerateReportController(Resource):
             report_version_no=self.create_report_catalog(report_id,reporting_date,report_create_date,
                                        report_parameters,report_create_status,as_of_reporting_date)
             self.update_report_catalog(status='RUNNING', report_id=report_id, reporting_date=reporting_date,
-                                       report_create_date=report_create_date)
+                                       report_create_date=report_create_date, version=report_version_no)
             report_snapshot=self.create_report_detail(report_version_no,**report_kwargs)
             #print("create_report_summary_by_source")
             self.create_report_summary_by_source(report_version_no,report_snapshot,**report_kwargs)
@@ -99,7 +100,8 @@ class GenerateReportController(Resource):
             self.create_report_summary_final(report_version_no,report_snapshot,**report_kwargs)
             # self.db.commit()
             self.update_report_catalog(status='SUCCESS', report_id=report_id, reporting_date=reporting_date,
-                                       report_create_date=report_create_date,report_snapshot=report_snapshot)
+                                       report_create_date=report_create_date,report_snapshot=report_snapshot,
+                                       version=report_version_no)
             return {"msg": "Report generated SUCCESSFULLY for ["+str(report_id)+"] Reporting date ["+str(reporting_date)+"]."}, 200
 
     def get_report_list(self,country='ALL'):
@@ -123,7 +125,7 @@ class GenerateReportController(Resource):
         self.db.commit()
         return report_version_no
 
-    def update_report_catalog(self,status,report_id,reporting_date,report_parameters=None,report_create_date=None,report_snapshot=None):
+    def update_report_catalog(self,status,report_id,reporting_date,report_parameters=None,report_create_date=None,report_snapshot=None,version=0):
         update_clause = "report_create_status='{0}'".format(status,)
         if report_parameters != None:
             # Replace all singlequotes(') with double quote(") as update sql requires all enclosed in ''
@@ -133,7 +135,7 @@ class GenerateReportController(Resource):
             update_clause += ", report_create_date='{0}'".format(report_create_date.replace("'",'"'),)
         if report_snapshot !=None:
             update_clause +=", report_snapshot='{0}'".format(report_snapshot)
-        sql = "update report_catalog set {0} where report_id='{1}' and reporting_date='{2}'".format(update_clause,report_id,reporting_date,)
+        sql = "update report_catalog set {0} where report_id='{1}' and reporting_date='{2}' and version={3}".format(update_clause,report_id,reporting_date,version)
         self.db.transact(sql)
         self.db.commit()
 
@@ -171,10 +173,10 @@ class GenerateReportController(Resource):
             #Changes required for incoporating exchange rates
 
         #Clean the link table before populating for same reporting date
-        print('Before clean_table report_qualified_data_link')
-        start = time.time()
-        util.clean_table(self.db._cursor(), 'report_qualified_data_link', '', reporting_date,'report_id=\''+ report_id + '\'')
-        print('Time taken for clean_table report_qualified_data_link ' + str((time.time() - start) * 1000))
+        # print('Before clean_table report_qualified_data_link')
+        # start = time.time()
+        # util.clean_table(self.db._cursor(), 'report_qualified_data_link', '', reporting_date,'report_id=\''+ report_id + '\'')
+        # print('Time taken for clean_table report_qualified_data_link ' + str((time.time() - start) * 1000))
 
         #Create versionning for REPORT_COMP_AGG_DEF
         cardf = pd.DataFrame(self.db.query("select id,report_id,sheet_id,cell_id,comp_agg_ref,comp_agg_rule,reporting_scale,rounding_option\
@@ -253,19 +255,19 @@ class GenerateReportController(Resource):
                   (business_date_from,business_date_to,source_id)).fetchall()
 
             id_list_df=pd.DataFrame(columns=['report_id','sheet_id' ,'cell_id' ,'cell_calc_ref','source_id','reporting_date','id_list_no'])
-            dbqd.transact("create temporary table tmp_qd_id_list(id bigint)")
+            dbqd.transact("create temporary table tmp_qd_id_list(idlist bigint)")
             for vers in qdvers:
                 start = time.time()
                 qd_id_list = [(id,) for id in vers['id_list'].split(',')]
                 dbqd.transact("truncate table tmp_qd_id_list")
-                dbqd.transactmany("insert into tmp_qd_id_list(id) values (%s)",qd_id_list)
+                dbqd.transactmany("insert into tmp_qd_id_list(idlist) values (%s)",qd_id_list)
                 print('Time taken for populating tmp_qd_id_list ' + str((time.time() - start) * 1000))
                 curdata =dbqd.query("select q.source_id,q.qualifying_key,q.business_rules,q.buy_currency,\
                             q.sell_currency,q.mtm_currency,\
                             %s as reporting_currency,q.business_date,%s as reporting_date,%s as business_date_to, \
                             %s as ref_date_rate from qualified_data q, tmp_qd_id_list qv \
                             where q.source_id=%s and q.business_date=%s \
-                            and qv.id=q.id" ,
+                            and qv.idlist=q.id" ,
                             (reporting_currency,reporting_date,business_date_to,ref_date_rate,vers['source_id'],
                              vers['business_date']))
                 startcur = time.time()
@@ -351,7 +353,7 @@ class GenerateReportController(Resource):
         # print(dfrow)
         fxrate = float(0)
         if str(dfrow['referece_rate_date']) in self.er.keys():
-            fxrate = float(self.er[str(dfrow['referece_rate_date'])][self.reporting_currency][dfrow[column]])
+            fxrate = float(self.er[str(dfrow['referece_rate_date'])][str(self.reporting_currency)][dfrow[column]])
         return fxrate
 
     def apply_formula_to_frame(self, df, excel_formula,new_field_name):
@@ -359,6 +361,9 @@ class GenerateReportController(Resource):
         rpn_expr=fm_trns.shunting_yard(excel_formula)
         G,root=fm_trns.build_ast(rpn_expr)
         df_expr=root.emit(G,context=context)
+        for col in list(df.columns):
+            if col != 'referece_rate_date':
+                df[col]=df[col].astype(dtype='float64',errors='ignore')
         df[new_field_name]=eval(df_expr)
         return df
 
@@ -402,6 +407,7 @@ class GenerateReportController(Resource):
         else:
             print("Please supply parameters: " + str(parameter_list))
 
+        self.db.transact("create temporary table tmp_qd_id_list(idlist bigint)")
         if ref_date_rate=='B':
             sql = 'select business_date,from_currency,to_currency,rate from exchange_rate ' \
                     ' where business_date between {0} and {1} ' \
@@ -443,6 +449,7 @@ class GenerateReportController(Resource):
             col_list = self.get_list_of_columns_for_dataframe(all_agg_cls, source_table_name)
             if key_column not in col_list:
                 col_list = key_column + ',' + col_list
+            col_list_df = col_list + ',referece_rate_date'
             if ref_date_rate=='B':
                 col_list += ',business_date as referece_rate_date '
             else:
@@ -453,11 +460,30 @@ class GenerateReportController(Resource):
                                        and a.source_id=%s",(report_id,reporting_date,report_version_no,src)).fetchall()
 
             for row in report_qualified_data_link:
-                source_data=pd.DataFrame(self.db.query("select {3} from {0} where {1} in ({2})".format(source_table_name,key_column,row['id_list'],col_list)).fetchall())
+                source_data=pd.DataFrame(columns=list(col_list_df.split(',')))
+                start = time.time()
+                qd_id_list = [(id,) for id in row['id_list'].split(',')]
+                self.db.transact("truncate table tmp_qd_id_list")
+                self.db.transactmany("insert into tmp_qd_id_list(idlist) values (%s)",qd_id_list)
+                print('Time taken for populating tmp_qd_id_list ' + str((time.time() - start) * 1000))
+                curdata=self.db.query("select {2} from {0}, tmp_qd_id_list  where {1}=idlist".format(source_table_name,key_column,col_list))
 
+                startcur = time.time()
+                while True:
+                    start=time.time()
+                    all_qualified_trade=curdata.fetchmany(50000)
+                    print('Time taken for fetching next 50000 report qualfied data link '+str((time.time() - start)*1000))
+                    if not all_qualified_trade:
+                        break
+                    source_data=source_data.append(pd.DataFrame(all_qualified_trade))
+                print('Time taken for fetching source data .. ' + str((time.time() - startcur) * 1000))
+                source_data.fillna(0.0,inplace=True)
+                for col in list(source_data.columns):
+                    source_data[col]=source_data[col].astype(dtype='float64',errors='ignore')
+                # print(source_data.info())
                 #hack to go around exchange rate
-                source_data['buy_reporting_rate']=1
-                source_data['sell_reporting_rate']=1
+                # source_data['buy_reporting_rate']=1
+                # source_data['sell_reporting_rate']=1
 
                 agg_ref=all_agg_cls.loc[(all_agg_cls['sheet_id']==row['sheet_id']) & (all_agg_cls['cell_id']==row['cell_id']) &
                                         (all_agg_cls['cell_calc_ref'] == row['cell_calc_ref'])]['aggregation_ref'].reset_index(drop=True).at[0]
@@ -468,6 +494,7 @@ class GenerateReportController(Resource):
                 source_data_trans['reporting_value']=source_data_trans['reporting_value'].astype(dtype='float64',errors='ignore')
                 summary = eval("source_data_trans['reporting_value']." + agg_func + "()")
                 summary=0 if math.isnan(float(summary)) else float(summary)
+                print("Summary by source for ...{0} {1}".format(row['sheet_id'],row['cell_id'],))
 
                 result_set.append({'source_id':src,'report_id':report_id,'sheet_id':row['sheet_id'],'cell_id':row['cell_id'],
                                    'cell_calc_ref':row['cell_calc_ref'],'reporting_date':reporting_date,'cell_summary':summary,'version':report_version_no})
@@ -520,9 +547,9 @@ class GenerateReportController(Resource):
                                 'rounding_option': cls['rounding_option'] if cls['rounding_option'] else "NONE"
                                 }
 
-        # print(formula_set)
+        #print(formula_set)
         summary_set = tree(formula_set, format_flag=cell_format_yn)
-        # print(summary_set)
+        print(summary_set)
 
         result_set = []
         for cls in comp_agg_cls:

@@ -509,7 +509,7 @@ class DocumentController(Resource):
         sql="select cell_calc_ref from report_def where report_id=%s and sheet_id=%s and (cell_id=%s or cell_id like %s) and cell_render_def='COMP_AGG_REF'"
         comp_agg_ref=self.db.query(sql,(report_id,sheet_id,cell_id,cell_id+":%")).fetchone()
 
-        sql="select * from report_comp_agg_def where report_id=%s and sheet_id=%s and cell_id=%s"
+        sql="select * from report_comp_agg_def where report_id=%s and sheet_id=%s and cell_id=%s and in_use='Y'"
 
         cell_calc_ref_list = ''
         comp_agg_rules=self.db.query(sql,(report_id,sheet_id,cell_id)).fetchall()

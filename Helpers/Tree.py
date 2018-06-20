@@ -38,9 +38,10 @@ def tree(table = {}, **kwargs):
                 ref = self.node.value
                 if ref in eTree.keys():
                     eq = eTree[ref]
-                    if type(eq) == float:
+                    if isinstance(eq,(float,int)):
                         return eq
                     expt, rounding, scale = eq["tree"], eq["rounding"], eq["scale"]
+                    print(expt,rounding,scale)
                     round_val = roundOff(expt.dfs(), rounding, scale)
                     eTree[ref] = round_val
                     return round_val
@@ -73,6 +74,7 @@ Invalid Operator {0}".format(opcode))
     # Method Definitions
     def roundOff(value: float, rounding: str, scale: float):
         try:
+            #print("Inside roundoff..")
             return util.round_value(float(util.if_null_zero(value) / scale), rounding)
         except Exception:
             return 0.0
@@ -157,7 +159,7 @@ Invalid Operator {0}".format(opcode))
         }
 
     for key, value in eTree.items():
-        if type(value) != float:
+        if not isinstance(value,(int,float)):
             expt, rounding, scale = value["tree"], value["rounding"], value["scale"]
             round_val = roundOff(expt.dfs(), rounding, scale)
             eTree[key] = round_val
