@@ -6,7 +6,7 @@ import openpyxl as xls
 from openpyxl.styles import Border, Side, PatternFill, Font, GradientFill, Alignment, Protection
 import Helpers.utils as util
 import time
-from Controllers.GenerateReportController import GenerateReportController as report
+from Controllers.GenerateReportController import GenerateReportController
 import json
 from Helpers.utils import autheticateTenant
 from Helpers.authenticate import *
@@ -18,14 +18,18 @@ class ViewReportController(Resource):
             tenant_info = json.loads(self.domain_info)
             self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
             self.db = DatabaseHelper(self.tenant_info)
+        self.report = GenerateReportController()
 
     @authenticate
     def get(self,report_id=None):
         if request.endpoint == 'view_report_ep':
             self.report_id = report_id
             reporting_date = request.args.get('reporting_date')
+            version = request.args.get('version')
+            report_parameters = request.args.get('report_parameters')
+            report_snapshot = request.args.get('report_snapshot')
             # print(reporting_date)
-            return self.render_report_json(reporting_date)
+            return self.render_report_json(reporting_date=reporting_date,cell_format_yn='Y',version=version,report_snapshot=report_snapshot,report_parameters=report_parameters)
 
         if request.endpoint == 'report_list_ep':
             reporting_date = request.args.get('reporting_date')
@@ -42,26 +46,30 @@ class ViewReportController(Resource):
                 cell_format_yn = 'N'
             return self.export_to_excel(reporting_date=reporting_date,cell_format_yn=cell_format_yn)
 
-    def render_report_json(self, reporting_date='19000101', cell_format_yn='Y'):
+    def render_report_json(self, reporting_date='19000101', cell_format_yn='Y',version=1,report_snapshot="{}",report_parameters="{}"):
 
         app.logger.info("Rendering report")
 
         try:
-            app.logger.info("Getting list of sheet for report {0}".format(self.report_id))
+            app.logger.info("Getting list of sheet for report {0} version {1}".format(self.report_id,version))
             sheets = self.db.query("select distinct sheet_id from report_def where report_id=%s",
                                    (self.report_id,)).fetchall()
 
             agg_format_data = {}
-            if cell_format_yn == 'Y' and reporting_date != '19000101' and reporting_date:
+            if reporting_date != '19000101' and reporting_date and report_snapshot != 'null' and report_parameters!='null':
                 app.logger.info("Creating formatted summary set")
-                summary_set = report.create_report_summary_final(self, populate_summary=False,
-                                                                 cell_format_yn=cell_format_yn,
-                                                                 report_id=self.report_id,
-                                                                 business_date_from=str(reporting_date)[:8],
-                                                                 business_date_to=str(reporting_date)[8:])
-                # print(summary_set)
+                report_kwargs=eval("{"+"'report_id':'" + self.report_id + "'," + \
+                                    "'populate_summary': False," + report_parameters + "}")
+                app.logger.info(report_snapshot)
+                summary_set = {}
+                summary_set = self.report.create_report_summary_final(report_version_no=version,
+                                                                    report_snapshot=report_snapshot,
+                                                                    cell_format_yn=cell_format_yn,
+                                                                    **report_kwargs)
+
+                print("After create report summary final...")
                 for e in summary_set:
-                    agg_format_data[e[0] + e[1] + e[2]] = e[3]
+                    agg_format_data[e['report_id'] + e['sheet_id'] + e['cell_id']] = e['cell_summary']
                     # print(agg_format_data)
 
             sheet_d_list = []
@@ -70,25 +78,20 @@ class ViewReportController(Resource):
                 row_attr = {}
                 col_attr = {}
                 cell_style = {}
-                app.logger.info("Getting report definition for report {0},sheet {1}".format(self.report_id,sheet["sheet_id"]))
+                # app.logger.info("Getting report definition for report {0},sheet {1}".format(self.report_id,sheet["sheet_id"]))
                 report_template = self.db.query(
                     "select cell_id,cell_render_def,cell_calc_ref from report_def where report_id=%s and sheet_id=%s",
                     (self.report_id, sheet["sheet_id"])).fetchall()
 
-                app.logger.info("Getting data for report {0},sheet {1}".format(self.report_id, sheet["sheet_id"]))
-                data = self.db.query('select b.report_id,b.sheet_id,b.cell_id,a.cell_summary,\
+                # app.logger.info("Getting data for report {0},sheet {1}".format(self.report_id, sheet["sheet_id"]))
+                data = self.db.query('select b.report_id,b.sheet_id,b.cell_id,\
                                     b.reporting_scale,b.rounding_option \
-                                    from report_comp_agg_def b left join report_summary a\
-                                    on a.report_id=b.report_id and\
-                                    a.sheet_id=b.sheet_id and \
-                                    a.cell_id=b.cell_id and \
-                                    a.reporting_date=%s \
-                                    where b.report_id=%s \
+                                    from report_comp_agg_def b where b.report_id=%s \
                                     and b.sheet_id=%s\
                                     order by b.report_id,b.sheet_id,b.cell_id',
-                                     (reporting_date, self.report_id, sheet["sheet_id"])).fetchall()
+                                     (self.report_id, sheet["sheet_id"])).fetchall()
 
-                app.logger.info("Writing report definition to dictionary")
+                # app.logger.info("Writing report definition to dictionary")
                 for row in report_template:
                     cell_d = {}
                     if row["cell_render_def"] == 'STATIC_TEXT':
@@ -128,10 +131,10 @@ class ViewReportController(Resource):
                         else:
                             start_cell=row['cell_id']
 
-                        app.logger.info("Inside CELL_STYLE for cell {}".format(start_cell,))
+                        # app.logger.info("Inside CELL_STYLE for cell {}".format(start_cell,))
                         cell_style[start_cell] = eval(row['cell_calc_ref'])
 
-                if reporting_date == '19000101' or not reporting_date:
+                if reporting_date == '19000101' or not reporting_date or report_snapshot == 'null' or report_parameters=='null':
                     comp_agg_def = self.db.query("select cell_id,cell_render_def,cell_calc_ref from report_def where \
                     report_id=%s and sheet_id=%s and cell_render_def='COMP_AGG_REF'",
                                                  (self.report_id, sheet["sheet_id"])).fetchall()
@@ -151,20 +154,14 @@ class ViewReportController(Resource):
                             #print(cell_d)
                             matrix_list.append(cell_d)
                 else:
-                    app.logger.info("Writing report data to dictionary")
+                    # app.logger.info("Writing report data to dictionary")
                     for row in data:
                         cell_d = {}
-                        if cell_format_yn == 'Y':
-                            # print(row["cell_id"],row["cell_summary"])
-                            try:
-                                cell_summary = agg_format_data[row['report_id'] + row['sheet_id'] + row['cell_id']]
-                            except KeyError:
-                                cell_summary = util.round_value(
-                                    float(util.if_null_zero(row["cell_summary"])) / float(row["reporting_scale"]),
-                                    row["rounding_option"])
-
-                        else:
-                            cell_summary = float(util.if_null_zero(row["cell_summary"]))
+                        try:
+                            cell_summary = agg_format_data[row['report_id'] + row['sheet_id'] + row['cell_id']]
+                        except KeyError:
+                            cell_summary = 0
+                        # cell_summary = float(util.if_null_zero(row["cell_summary"]))
 
                         cell_d['cell'] = row['cell_id']
                         cell_d['value'] = cell_summary
@@ -186,8 +183,9 @@ class ViewReportController(Resource):
             # print(json_dump)
             return json_dump
         except Exception as e:
-            app.logger.error(e)
-            return {"msg": e}, 500
+            app.logger.error(str(e))
+            return {"msg": str(e)}, 500
+            #raise e
 
     def render_report_list(self,reporting_date=None, reporting_date_start=None, reporting_date_end=None):
         #db=DatabaseHelper()
@@ -201,10 +199,11 @@ class ViewReportController(Resource):
                 data_sources={}
                 data_sources['start_date']=reporting_date_start
                 data_sources['end_date']=reporting_date_end
-                app.logger.info("Getting list of rpeort between dates {0} and {1}".format(reporting_date_start ,reporting_date_end))
+                app.logger.info("Getting list of report between dates {0} and {1}".format(reporting_date_start ,reporting_date_end))
                 sql = "select rc.*,rdc.country,rdc.report_description,rdc.report_type from report_catalog rc, " + \
                     " report_def_catalog rdc where rc.report_id=rdc.report_id " +\
-                    " and rc.as_of_reporting_date between '{0}' and '{1}'".format(reporting_date_start ,reporting_date_end)
+                    " and rc.as_of_reporting_date between '{0}' and '{1}'".format(reporting_date_start ,reporting_date_end) + \
+                    " order by rc.report_id, rc.as_of_reporting_date, rc.version desc, rc.report_create_date"
 
             reports = self.db.query(sql).fetchall()
 
@@ -212,7 +211,24 @@ class ViewReportController(Resource):
             if reporting_date:
                 return (reports)
             else:
-                data_sources['data_sources']=reports
+                prv_rpt=''
+                report={}
+                data_sources['data_sources']=[]
+                for rpt in reports:
+                    if rpt['report_id'] + str(rpt['as_of_reporting_date']) == prv_rpt:
+                        report['versions'].append(dict(rpt))
+                        # pass
+                    else:
+                        if prv_rpt!='':
+                            data_sources['data_sources'].append(report)
+                            report={}
+                        report=rpt
+                        report['versions']=[dict(rpt)]
+                        prv_rpt = rpt['report_id'] + str(rpt['as_of_reporting_date'])
+                        # print("again....",report)
+                data_sources['data_sources'].append(report)
+                # data_sources['data_sources']=reports
+                # print("again....",data_sources)
                 return data_sources
         except Exception as e:
             app.logger.error(e)
