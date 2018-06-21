@@ -22,8 +22,9 @@ class DataChangeController(Resource):
             table_name=request.args.get("table_name")
             id_list=request.args.get("id_list")
             business_date=request.args.get("business_date")
+            cell_details=request.args.get("cell_details")
             if table_name and table_name != 'undefined':
-                return self.get_audit_history(id_list,table_name,business_date)
+                return self.get_audit_history(id_list,table_name,business_date,cell_details)
             return self.get_audit_list()
         if request.endpoint=="get_data_record_detail":
             table_name=request.args.get("table_name")
@@ -35,7 +36,7 @@ class DataChangeController(Resource):
         return self.audit_decision(data_list)
 
 
-    def get_audit_history(self,id_list = None,table_name = None,business_date = None):
+    def get_audit_history(self,id_list = None,table_name = None,business_date = None, cell_details=None):
         app.logger.info("Getting audit list history")
         try:
             sql = "SELECT * FROM data_change_log WHERE 1"
@@ -44,9 +45,27 @@ class DataChangeController(Resource):
             if id_list:
                 sql += " and (origin_id,business_date) in (" + \
                             "select origin_id,business_date from data_change_log " + \
-                            "where (id,business_date) in (" + id_list + ")" + \
+                            "where (id) in (" + id_list + ")" + \
                             ")"
                 # sql = sql + " and (id,business_date) in (" + id_list + ") "
+            elif cell_details:
+                cell = json.loads(cell_details)
+                self.db.transact("create temporary table tmp_rqd_id_list(idlist bigint)")
+                self.db.transact("truncate table tmp_rqd_id_list")
+                sqlrqdl = ("select * from report_qualified_data_link " + \
+                    " where report_id='{0}' and sheet_id='{1}' and cell_id='{2}' and reporting_date='{3}'" + \
+                    " and cell_calc_ref='{4}' and version={5}") \
+                    .format(cell['report_id'],cell['sheet_id'],cell['cell_id'],
+                        cell['reporting_date'],cell['cell_calc_ref'],cell['version'])
+                
+                rqdldata = self.db.query(sqlrqdl).fetchone()
+                if rqdldata:
+                    qd_id_list = [(id,) for id in rqdldata['id_list'].split(',')]
+                    self.db.transactmany("insert into tmp_rqd_id_list(idlist) values (%s)",qd_id_list)
+                
+                sql += " and (origin_id,business_date) in (" + \
+                            "select origin_id,business_date from data_change_log,tmp_rqd_id_list " + \
+                            "where id=idlist)"
             elif business_date:
                 sql = sql + " and business_date=" + business_date
             if table_name is not None and table_name != 'undefined':
