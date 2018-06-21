@@ -562,6 +562,7 @@ class DocumentController(Resource):
             cell_calc_ref=kwargs['cell_calc_ref']
             reporting_date = kwargs['reporting_date']
             page = kwargs['page']
+            version=kwargs['version']
         else:
             print("Please supply parameters: " + str(parameter_list))
             print(kwargs.keys())
@@ -569,38 +570,46 @@ class DocumentController(Resource):
 
         src_inf=self.db.query("select * from data_source_information where source_id=" + str(source_id)).fetchone()
 
-        key_column = util.get_keycolumn(self.db._cursor(), src_inf['source_table_name'])
+        key_column = 'id' #util.get_keycolumn(self.db._cursor(), src_inf['source_table_name'])
+        
+        self.db.transact("create temporary table tmp_rqd_id_list(idlist bigint)")
+        self.db.transact("truncate table tmp_rqd_id_list")
+        sql = ("select * from report_qualified_data_link " + \
+            " where report_id='{0}' and sheet_id='{1}' and cell_id='{2}' and reporting_date='{3}'" + \
+            " and cell_calc_ref='{4}' and version={5}") \
+            .format(report_id,sheet_id,cell_id,reporting_date,cell_calc_ref,version)
+        
+        rqdldata = self.db.query(sql).fetchone()
+        if rqdldata:
+            qd_id_list = [(id,) for id in rqdldata['id_list'].split(',')]
+            self.db.transactmany("insert into tmp_rqd_id_list(idlist) values (%s)",qd_id_list)
 
         startPage = int(page) * 100
         data_dict = {}
-        sql = "select a.* from " + src_inf['source_table_name'] + " a, report_qualified_data_link b\
-             where a." + key_column + "=b.qualifying_key and b.report_id='" + report_id + "' and b.source_id='" + str(
-            source_id) + "' and a.business_date = b.business_date "\
-              " and b.sheet_id='" + sheet_id + "' and b.cell_id='" + cell_id + "' and b.reporting_date='" + reporting_date + "'\
-                and b.cell_calc_ref='"+cell_calc_ref+"' limit " + str(startPage) + ", 100"
+        sql = "select a.* from " + src_inf['source_table_name'] + " a, tmp_rqd_id_list b " + \
+             " where a." + key_column + "=b.idlist limit " + str(startPage) + ", 100"
 
         cur = self.db.query(sql)
         data = cur.fetchall()
 
         cols = [i[0] for i in cur.description]
         print(cols)
-        sql = "select count(1) as count from " + src_inf['source_table_name'] + " a, report_qualified_data_link b\
-             where a." + key_column + "=b.qualifying_key and b.report_id='" + report_id + "' and b.source_id='" + str(
-            source_id) + "' and a.business_date = b.business_date " + \
-              " and b.sheet_id='" + sheet_id + "' and b.cell_id='" + cell_id + "' and b.reporting_date='" + reporting_date + "'\
-                and b.cell_calc_ref='"+cell_calc_ref+"'"
+        sql = "select count(*) as count from " + src_inf['source_table_name'] + " a, tmp_rqd_id_list b" + \
+             " where a." + key_column + "=b.idlist"
         print(sql)
         count = self.db.query(sql).fetchone()
-        sql = sql = "select a.* from " + src_inf['source_table_name'] + " a, report_qualified_data_link b\
-             where a." + key_column + "=b.qualifying_key and b.report_id='" + report_id + "' and b.source_id='" + str(
-            source_id)  + "' and a.business_date = b.business_date " + \
-              " and b.sheet_id='" + sheet_id + "' and b.cell_id='" + cell_id + "' and b.reporting_date='" + reporting_date + "'\
-                and b.cell_calc_ref='"+cell_calc_ref+"'"
+        # sql = "select a.* from " + src_inf['source_table_name'] + " a, tmp_rqd_id_list b" + \
+        #      " where a." + key_column + "=b.idlist"
         data_dict['cols'] = cols
         data_dict['rows'] = data
         data_dict['count'] = count['count']
         data_dict['table_name'] = src_inf['source_table_name']
-        data_dict['sql'] = sql
+        data_dict['cell_details'] = {'report_id': report_id,
+                            'sheet_id': sheet_id,
+                            'cell_id': cell_id,
+                            'reporting_date': reporting_date,
+                            'cell_calc_ref': cell_calc_ref,
+                            'version': version}
 
         return data_dict
 

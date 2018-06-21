@@ -318,27 +318,35 @@ class ViewDataController(Resource):
     def list_reports_for_data(self,source_id,qualifying_key,business_date):
         app.logger.info("Getting list of reports for data")
         try:
-            sql="select * from report_qualified_data_link where " + \
-            " (source_id,qualifying_key,business_date) in ("+ qualifying_key + ") "
+            data_key_list = eval("["+qualifying_key+"]")
+            app.logger.info("data key list {}".format(data_key_list,))
+            self.db.transact("create temporary table tmp_report_link_key_list(key_source_id int,key_id bigint,key_date int)")
+            self.db.transact("truncate table tmp_report_link_key_list")
+            self.db.transactmany("insert into tmp_report_link_key_list(key_source_id,key_id,key_date) values (%s,%s,%s)",data_key_list)
+            sql="select rqdl.source_id,rqdl.report_id,rqdl.sheet_id,rqdl.cell_id,rqdl.cell_calc_ref," + \
+            " rqdl.reporting_date,rqdl.version,k.key_id as qualifying_key,k.key_date as business_date " + \
+            " from report_qualified_data_link rqdl, tmp_report_link_key_list k where " + \
+            " rqdl.source_id= k.key_source_id " + \
+            " and instr(concat(',',rqdl.id_list,','),concat(',',k.key_id,','))"
 
             app.logger.info("Getting report list for particular data")
             report_list=self.db.query(sql).fetchall()
 
             result_set = []
             for data in report_list:
-                app.logger.info("Getting business rules for data")
+                app.logger.info("Getting business rules for data {}".format(data,))
                 data_qual = self.db.query(
                     "select * from qualified_data where source_id = %s and qualifying_key = %s and business_date=%s",
-                    (data['source_id'],data['qualifying_key'],data['business_date'])).fetchone()
+                    (data['source_id'],data['qualifying_key'],data['business_date'])).fetchall()
 
-                app.logger.info("Getting cell business rules for data")
+                app.logger.info("Getting cell business rules for data {}".format(data_qual[0],))
                 cell_rule=self.db.query("select * from report_calc_def where cell_calc_ref=%s and report_id = %s\
                             and sheet_id = %s and cell_id = %s",(data['cell_calc_ref'],data["report_id"],
                                                                  data["sheet_id"],data["cell_id"])).fetchone()
 
                 if cell_rule:
                     data["cell_business_rules"]=cell_rule["cell_business_rules"]
-                    data["data_qualifying_rules"]=data_qual["business_rules"]
+                    data["data_qualifying_rules"]=data_qual[0]["business_rules"]
                     result_set.append(data)
 
             return result_set
