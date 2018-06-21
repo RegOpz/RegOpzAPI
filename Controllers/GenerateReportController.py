@@ -352,8 +352,10 @@ class GenerateReportController(Resource):
     def get_fx_rate(self,dfrow,column):
         # print(dfrow)
         fxrate = float(0)
-        if str(dfrow['referece_rate_date']) in self.er.keys():
-            fxrate = float(self.er[str(dfrow['referece_rate_date'])][str(self.reporting_currency)][dfrow[column]])
+        referece_rate_date=str(int(dfrow['referece_rate_date']))
+        if referece_rate_date in self.er.keys():
+            fxrate = float(self.er[referece_rate_date][str(self.reporting_currency)][dfrow[column]])
+            # print('Inside if fxrate... {0} {1}'.format(dfrow[column],fxrate))
         return fxrate
 
     def apply_formula_to_frame(self, df, excel_formula,new_field_name):
@@ -427,6 +429,7 @@ class GenerateReportController(Resource):
             else:
                 self.er.update({str(rate['business_date']): {str(rate['to_currency']):{str(rate['from_currency']): rate['rate']}}})
 
+        # print(self.er)
         report_snapshot=json.loads(report_snapshot)
         report_calc_def_vers=report_snapshot["report_calc_def"]
         srcs=report_calc_def_vers.keys()
@@ -549,7 +552,7 @@ class GenerateReportController(Resource):
 
         #print(formula_set)
         summary_set = tree(formula_set, format_flag=cell_format_yn)
-        print(summary_set)
+        # print(summary_set)
 
         result_set = []
         for cls in comp_agg_cls:
