@@ -563,22 +563,34 @@ class DocumentController(Resource):
             reporting_date = kwargs['reporting_date']
             page = kwargs['page']
             version=kwargs['version']
+            filter=kwargs['filter']
         else:
             print("Please supply parameters: " + str(parameter_list))
             print(kwargs.keys())
 
 
+        filter_maps = {
+            "starts":{"operator": "like", "start_wild_char":"", "end_wild_char":"%"},
+            "notstarts":{"operator": "not like", "start_wild_char":"", "end_wild_char":"%"},
+            "ends":{"operator": "like", "start_wild_char":"%", "end_wild_char":""},
+            "notends":{"operator": "not like", "start_wild_char":"%", "end_wild_char":""},
+            "includes":{"operator": "like", "start_wild_char":"%", "end_wild_char":"%"},
+            "excludes":{"operator": "not like", "start_wild_char":"%", "end_wild_char":"%"},
+            "equals":{"operator": "=", "start_wild_char":"", "end_wild_char":""},
+            "notequals":{"operator": "!=", "start_wild_char":"", "end_wild_char":""},
+        }
+
         src_inf=self.db.query("select * from data_source_information where source_id=" + str(source_id)).fetchone()
 
         key_column = 'id' #util.get_keycolumn(self.db._cursor(), src_inf['source_table_name'])
-        
+
         self.db.transact("create temporary table tmp_rqd_id_list(idlist bigint)")
         self.db.transact("truncate table tmp_rqd_id_list")
         sql = ("select * from report_qualified_data_link " + \
             " where report_id='{0}' and sheet_id='{1}' and cell_id='{2}' and reporting_date='{3}'" + \
             " and cell_calc_ref='{4}' and version={5}") \
             .format(report_id,sheet_id,cell_id,reporting_date,cell_calc_ref,version)
-        
+
         rqdldata = self.db.query(sql).fetchone()
         if rqdldata:
             qd_id_list = [(id,) for id in rqdldata['id_list'].split(',')]
@@ -586,16 +598,40 @@ class DocumentController(Resource):
 
         startPage = int(page) * 100
         data_dict = {}
-        sql = "select a.* from " + src_inf['source_table_name'] + " a, tmp_rqd_id_list b " + \
-             " where a." + key_column + "=b.idlist limit " + str(startPage) + ", 100"
+        filter_sql = ''
+        if filter and filter != 'undefined':
+            filter=json.loads(filter)
+            for col in filter:
+                col_filter_sql =''
+                conditions = col['value'].split(",")
+                for ss in conditions:
+                    if ss != '':
+                        ss = ss.lstrip().split(":")
+                        hint_list = ss[0].split(" ") if len(ss) > 1 else ["and","includes"]
+                        print("hint_list values {}".format(hint_list,))
+                        hint_list = ["and"] + hint_list if len(hint_list)==1 else hint_list
+                        print("hint_list values 2nd list {}".format(hint_list,))
+                        hint_join = hint_list[0]
+                        hint = hint_list[1] if hint_list[1] in filter_maps.keys() else "includes"
+                        c = ss[1] if len(ss) > 1 else ss[0]
+                        fm=filter_maps[hint]
+                        print("fm values {}".format(fm,))
+                        col_filter_sql += ' {0} '.format(hint_join,) if len(col_filter_sql) > 0 else ''
+                        col_filter_sql += (col['id'] + ' {0} \'{1}' + c.replace("'","\'") + '{2}\'') \
+                                      .format(fm["operator"],fm["start_wild_char"],fm["end_wild_char"])
+                filter_sql +="and ({0}) ".format(col_filter_sql)
+
+        limit_sql = ' limit {0},100'.format(startPage)
+        sqlqry = "select {0} from  {1} a, tmp_rqd_id_list b where a.id=b.idlist {2} {3}"
+
+        sql = sqlqry.format( 'a.*', src_inf['source_table_name'] ,filter_sql, limit_sql)
 
         cur = self.db.query(sql)
         data = cur.fetchall()
 
         cols = [i[0] for i in cur.description]
         print(cols)
-        sql = "select count(*) as count from " + src_inf['source_table_name'] + " a, tmp_rqd_id_list b" + \
-             " where a." + key_column + "=b.idlist"
+        sql = sqlqry.format( 'count(*) as count', src_inf['source_table_name'] ,filter_sql, '')
         print(sql)
         count = self.db.query(sql).fetchone()
         # sql = "select a.* from " + src_inf['source_table_name'] + " a, tmp_rqd_id_list b" + \
