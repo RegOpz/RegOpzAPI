@@ -12,6 +12,7 @@ from Helpers.utils import autheticateTenant
 from Helpers.authenticate import *
 import pandas as pd
 from Controllers.DataChangeController import DataChangeController
+from Controllers.DocumentController import DocumentController
 
 class ViewDataController(Resource):
     def __init__(self):
@@ -21,6 +22,7 @@ class ViewDataController(Resource):
             self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
             self.dcc=DataChangeController()
             self.db=DatabaseHelper(self.tenant_info)
+        self.doc = DocumentController()
 
     @authenticate
     def get(self):
@@ -52,8 +54,9 @@ class ViewDataController(Resource):
         if (request.endpoint == 'report_export_csv_ep'):
             table_name = request.args.get("table_name")
             business_ref = request.args.get("business_ref")
+            export_reference = request.args.get("exportReference")
             sql = request.args.get("sql")
-            return self.export_to_csv(table_name,business_ref,sql)
+            return self.export_to_csv(table_name,business_ref,sql,export_reference=export_reference)
 
     def put(self, id=None):
         data = request.get_json(force=True)
@@ -309,6 +312,12 @@ class ViewDataController(Resource):
             data_feeds = self.db.query(sql).fetchall()
 
             #print(data_sources)
+            for idx,src in enumerate(data_feeds):
+                sql = "select business_date, source_id, version, br_version from qualified_data_vers" + \
+                    " where source_id={0} and business_date={1}".format(src["source_id"],src["business_date"])
+                versions = self.db.query(sql).fetchall()
+                data_feeds[idx]['versions']=versions
+
             data_sources['data_sources']=data_feeds
             return (data_sources)
         except Exception as e:
@@ -354,12 +363,18 @@ class ViewDataController(Resource):
             app.logger.error(e)
             return {"msg":e},500
 
-    def export_to_csv(self,table_name,business_ref,sql):
+    def export_to_csv(self,table_name,business_ref,sql,export_reference):
         app.logger.info("Exporting to CSV")
         try:
             app.logger.info("Getting data from table")
-            app.logger.info(sql)
-            cur = self.db.query(sql)
+            if sql and sql !='undefined' and sql !='null':
+                app.logger.info(sql)
+                cur = self.db.query(sql)
+            if export_reference and export_reference != 'undefined' and export_reference != 'null':
+                app.logger.info(export_reference)
+                export_reference = json.loads(export_reference)
+                export_reference['export_to_csv']='Y'
+                cur = self.doc.cell_drill_down_data(**export_reference)
 
             data = cur.fetchall()
             keys = [i[0] for i in cur.description]
