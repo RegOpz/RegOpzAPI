@@ -564,6 +564,10 @@ class DocumentController(Resource):
             page = kwargs['page']
             version=kwargs['version']
             filter=kwargs['filter']
+            if 'export_to_csv' in kwargs.keys():
+                export_to_csv = kwargs['export_to_csv']
+            else:
+                export_to_csv = 'N'
         else:
             print("Please supply parameters: " + str(parameter_list))
             print(kwargs.keys())
@@ -621,12 +625,20 @@ class DocumentController(Resource):
                                       .format(fm["operator"],fm["start_wild_char"],fm["end_wild_char"])
                 filter_sql +="and ({0}) ".format(col_filter_sql)
 
-        limit_sql = ' limit {0},100'.format(startPage)
+        if export_to_csv=='Y':
+            limit_sql = ''
+        else:
+            limit_sql = ' limit {0},100'.format(startPage)
+
         sqlqry = "select {0} from  {1} a, tmp_rqd_id_list b where a.id=b.idlist {2} {3}"
 
         sql = sqlqry.format( 'a.*', src_inf['source_table_name'] ,filter_sql, limit_sql)
+        print(sql)
 
         cur = self.db.query(sql)
+        if export_to_csv=='Y':
+            return cur
+
         data = cur.fetchall()
 
         cols = [i[0] for i in cur.description]
