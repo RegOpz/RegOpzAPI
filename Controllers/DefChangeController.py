@@ -128,7 +128,7 @@ class DefChangeController(Resource):
                     "(select origin_id from def_change_log where id in (" + \
                     (id_list if id_list and id_list!='undefined' else "id") + \
                     ")) AND table_name = '" + table_name + "'"
-            app.logger.info(sql)
+            # app.logger.info(sql)
 
             if table_name=="business_rules":
                 sql += " and id in (select id from business_rules where source_id='{0}')".format(source_id,)

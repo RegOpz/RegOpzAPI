@@ -36,7 +36,8 @@ class ViewDataController(Resource):
             business_date = request.args['business_date']
             page = request.args['page']
             filter = request.args['filter']
-            return self.get_data_source(source_id=source_id,business_date=business_date,page=page,filter=filter)
+            version = request.args.get('version')
+            return self.get_data_source(source_id=source_id,business_date=business_date,page=page,filter=filter,version=version)
         if(request.endpoint == 'table_data_ep'):
             table = request.args['table']
             filter = request.args['filter']
@@ -134,7 +135,7 @@ class ViewDataController(Resource):
             app.logger.error(e)
             return {"msg":e},500
 
-    def get_data_source(self,source_id,business_date,page,filter=None):
+    def get_data_source(self,source_id,business_date,page,filter=None,version=None):
 
         #db = DatabaseHelper()
         app.logger.info("Getting data source")
@@ -158,7 +159,7 @@ class ViewDataController(Resource):
             data_dict = {}
             app.logger.info("Getting data")
             filter_sql = ''
-            if filter and filter != 'undefined':
+            if filter and filter != 'null' and filter != 'undefined':
                 filter=json.loads(filter)
                 for col in filter:
                     col_filter_sql =''
@@ -181,14 +182,37 @@ class ViewDataController(Resource):
                     filter_sql +="and ({0}) ".format(col_filter_sql)
 
             limit_sql = ' limit {0},100'.format(start_page)
-            sqlqry = "select {0} from  {1} where business_date='{2}' {3} {4}"
-            app.logger.info(sqlqry.format( '*', table['source_table_name'] ,business_date, filter_sql, limit_sql))
-            cur = self.db.query(sqlqry.format( '*', table['source_table_name'] ,business_date, filter_sql, limit_sql))
+            if version and version!='null' and version!='undefined':
+                self.db.transact("create temporary table tmp_qd_id_list(idlist bigint)")
+                self.db.transact("create temporary table tmp_data_id_list(idlist bigint)")
+                self.db.transact("truncate table tmp_qd_id_list")
+                sql = ("select * from qualified_data_vers " + \
+                    " where source_id={0} and business_date={1} and version={2}") \
+                    .format(source_id,business_date,version)
+
+                qddata = self.db.query(sql).fetchone()
+                if qddata:
+                    qd_id_list = [(id,) for id in qddata['id_list'].split(',')]
+                    self.db.transactmany("insert into tmp_qd_id_list(idlist) values (%s)",qd_id_list)
+                    self.db.transact("insert into tmp_data_id_list " + \
+                                    " select qd.qualifying_key from qualified_data qd, tmp_qd_id_list v " + \
+                                    " where qd.id=v.idlist " + \
+                                    " and qd.source_id={0} and qd.business_date={1}".format(source_id,business_date)
+                                    )
+                # from_sql = "{0} a, tmp_qd_id_list v ".format(table['source_table_name'],)
+                from_sql = "{0} a, tmp_data_id_list v ".format(table['source_table_name'],)
+                filter_sql += " and a.id=v.idlist "
+            else:
+                from_sql = "{0} a ".format(table['source_table_name'],)
+
+            sqlqry = "select {0} from  {1} where a.business_date='{2}' {3} {4}"
+            app.logger.info(sqlqry.format( 'a.*', from_sql ,business_date, filter_sql, limit_sql))
+            cur = self.db.query(sqlqry.format( 'a.*', from_sql ,business_date, filter_sql, limit_sql))
             data = cur.fetchall()
             cols = [i[0] for i in cur.description]
-            app.logger.info(sqlqry.format( 'count(*)', table['source_table_name'] ,business_date, filter_sql, ''))
-            count = self.db.query(sqlqry.format( 'count(*) as count', table['source_table_name'] ,business_date, filter_sql, '')).fetchone()
-            sql = sqlqry.format( '*', table['source_table_name'] ,business_date, filter_sql, '')
+            app.logger.info(sqlqry.format( 'count(*) as count', from_sql ,business_date, filter_sql, ''))
+            count = self.db.query(sqlqry.format( 'count(*) as count', from_sql ,business_date, filter_sql, '')).fetchone()
+            sql = sqlqry.format( 'a.*', from_sql ,business_date, filter_sql, '')
             data_dict['cols'] = cols
             data_dict['rows'] = data
             data_dict['count'] = count['count']

@@ -38,7 +38,11 @@ class MaintainBusinessRulesController(Resource):
 			source = request.args.get('source_id')
 			rules = request.args.get('rules')
 			page = request.args.get('page')
-			return self.get_business_rules_list_by_source(rules=rules,source=source,page=page)
+			business_date = request.args.get('business_date')
+			qualified_data_version = request.args.get('qualified_data_version')
+			return self.get_business_rules_list_by_source(rules=rules,source=source,page=page
+														,business_date=business_date
+														,qualified_data_version=qualified_data_version)
 		if request.endpoint == 'get_br_source_suggestion_list_ep':
 			source_id = request.args.get('source_id')
 			return self.get_source_suggestion_list(source_id=source_id)
@@ -108,22 +112,33 @@ class MaintainBusinessRulesController(Resource):
 		if data:
 			return data
 		return NO_BUSINESS_RULE_FOUND
-	def get_business_rules_list_by_source(self,rules,source,page):
+	def get_business_rules_list_by_source(self,rules,source,page,business_date,qualified_data_version):
 
 		if page is None:
 			page = 0
 		startPage = int(page) * 100
 		data_dict = {}
 		where_clause = ''
-		sql = 'select * from business_rules where 1 '
+		sql = 'select br.* from business_rules br {} where 1 '
 		if source is not None:
-			where_clause += ' and source_id =' + source
+			where_clause += ' and br.source_id ={}'.format(source,)
 		if rules is not None:
-			where_clause += ' and business_rule in (\''+rules.replace(',','\',\'')+'\')'
+			where_clause += ' and br.business_rule in (\''+rules.replace(',','\',\'')+'\')'
+		if business_date and business_date !='null' and business_date !='undefined':
+			brvsql = "select br_version from qualified_data_vers " + \
+			      " where business_date={0} and source_id={1} and version={2}".format(business_date,source,qualified_data_version)
+			brv = self.db.query(brvsql).fetchone()
+
+			sql = sql.format(", business_rules_vers v")
+			where_clause += " and v.source_id=br.source_id and v.version={}".format(brv['br_version'],) + \
+							" and instr(concat(',',v.id_list,','),concat(',',br.id,','))"
+		else:
+			sql = sql.format("")
+			
 		cur = self.db.query(sql + where_clause + " limit " + str(startPage) + ", 100")
 		data = cur.fetchall()
 		cols = [i[0] for i in cur.description]
-		count = self.db.query(sql.replace('*','count(*) as count ') + where_clause).fetchone()
+		count = self.db.query(sql.replace('br.*','count(*) as count ') + where_clause).fetchone()
 		data_dict['cols'] = cols
 		data_dict['rows'] = data
 		data_dict['count'] = count['count']
