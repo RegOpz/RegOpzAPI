@@ -47,7 +47,8 @@ class DocumentController(Resource):
             report_id = request.args.get('report_id')
             sheet_id = request.args.get('sheet_id')
             cell_id = request.args.get('cell_id')
-            return self.cell_drill_down_rules(report_id=report_id,sheet_id=sheet_id,cell_id=cell_id)
+            report_snapshot = request.args.get('report_snapshot')
+            return self.cell_drill_down_rules(report_id=report_id,sheet_id=sheet_id,cell_id=cell_id,report_snapshot=report_snapshot)
         if request.endpoint == 'drill_down_data_ep':
             drill_kwargs = eval(request.args.get('drill_kwargs'))
             print(drill_kwargs)
@@ -504,12 +505,23 @@ class DocumentController(Resource):
 
         return { "file_name": target_file_name }
 
-    def cell_drill_down_rules(self,report_id,sheet_id,cell_id):
+    def cell_drill_down_rules(self,report_id,sheet_id,cell_id, report_snapshot):
 
         sql="select cell_calc_ref from report_def where report_id=%s and sheet_id=%s and (cell_id=%s or cell_id like %s) and cell_render_def='COMP_AGG_REF'"
         comp_agg_ref=self.db.query(sql,(report_id,sheet_id,cell_id,cell_id+":%")).fetchone()
 
-        sql="select * from report_comp_agg_def where report_id=%s and sheet_id=%s and cell_id=%s and in_use='Y'"
+        if report_snapshot and report_snapshot!='null' and report_snapshot!='undefined':
+            report_snapshot = json.loads(report_snapshot)
+        else:
+            report_snapshot = None
+
+        if report_snapshot:
+            sql ="select cd.* from report_comp_agg_def cd, report_comp_agg_def_vers v " + \
+                " where cd.report_id=%s and cd.sheet_id=%s and cd.cell_id=%s " + \
+                " and v.version = {} and v.report_id=cd.report_id ".format(report_snapshot['report_comp_agg_def'],) + \
+                " and instr(concat(',',v.id_list,','),concat(',',cd.id,','))"
+        else:
+            sql="select * from report_comp_agg_def where report_id=%s and sheet_id=%s and cell_id=%s and in_use='Y'"
 
         cell_calc_ref_list = ''
         comp_agg_rules=self.db.query(sql,(report_id,sheet_id,cell_id)).fetchall()
@@ -520,11 +532,30 @@ class DocumentController(Resource):
 
         agg_rules=[]
 
-        sql = "select  a.* from report_calc_def a,data_source_information b where a.source_id=b.source_id and \
-            report_id=%s and sheet_id=%s and cell_id=%s"
+        if report_snapshot:
+            src_list = '(-999,-999)'
+            for src in report_snapshot['report_calc_def'].keys():
+                src_list+=",({0},{1})".format(src,report_snapshot['report_calc_def'][src])
+
+        if report_snapshot:
+            sql = "select  a.* from report_calc_def a,data_source_information b, report_calc_def_vers v " + \
+                " where a.source_id=b.source_id and a.report_id=%s and a.sheet_id=%s and a.cell_id=%s" + \
+                " and a.report_id=v.report_id and a.source_id=v.source_id " + \
+                " and (v.source_id,v.version) in ({})".format(src_list) + \
+                " and instr(concat(',',v.id_list,','),concat(',',a.id,','))"
+        else:
+            sql = "select  a.* from report_calc_def a,data_source_information b where a.source_id=b.source_id and \
+                report_id=%s and sheet_id=%s and cell_id=%s"
         if cell_calc_ref_list != '':
-            sql += " union select  a.* from report_calc_def a,data_source_information b where a.source_id=b.source_id and \
-                report_id=%s and cell_calc_ref in (%s)"
+            if report_snapshot:
+                sql += " union select  a.* from report_calc_def a,data_source_information b, report_calc_def_vers v " + \
+                    " where a.source_id=b.source_id and a.report_id=%s and a.cell_calc_ref in (%s)" + \
+                    " and a.report_id=v.report_id and a.source_id=v.source_id " + \
+                    " and (v.source_id,v.version) in ({})".format(src_list) + \
+                    " and instr(concat(',',v.id_list,','),concat(',',a.id,','))"
+            else:
+                sql += " union select  a.* from report_calc_def a,data_source_information b where a.source_id=b.source_id and \
+                    report_id=%s and cell_calc_ref in (%s)"
             cell_rules = self.db.query(sql, (report_id, sheet_id, cell_id, report_id, cell_calc_ref_list)).fetchall()
         else:
             cell_rules = self.db.query(sql, (report_id, sheet_id, cell_id)).fetchall()
@@ -546,6 +577,7 @@ class DocumentController(Resource):
         display_dict['comp_agg_rules']=comp_agg_rules
         display_dict['agg_rules']=agg_rules
         display_dict['cell_rules']=cell_rules
+        display_dict['report_snapshot'] = report_snapshot if report_snapshot  else {}
 
         return display_dict
 
