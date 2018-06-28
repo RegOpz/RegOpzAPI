@@ -23,6 +23,7 @@ from Controllers.TenantSubscriptionController import TenantSubscirptionControlle
 from Controllers.SharedDataController import SharedDataController
 from Controllers.ManageMasterBusinessRulesController import ManageMasterBusinessRulesController
 from Controllers.ManageMasterReportController import ManageMasterReportController
+from Controllers.OperationalLogController import OperationalLogController
 from flask_cors import CORS, cross_origin
 
 api.add_resource(Info, apiPath + "/info")
@@ -357,6 +358,10 @@ api.add_resource(ManageMasterReportController,
 api.add_resource(ManageMasterReportController,
     apiPath + "/report-rules-repo/audit-list",
     endpoint = "repository_report_rule_audit_ep"
+)
+
+api.add_resource(OperationalLogController,
+    apiPath + "/fetch-operation-log",
 )
 
 if __name__ == '__main__':
