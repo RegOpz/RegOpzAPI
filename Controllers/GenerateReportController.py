@@ -25,7 +25,7 @@ class GenerateReportController(Resource):
             tenant_info = json.loads(self.domain_info)
             self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
             self.db=DatabaseHelper(self.tenant_info)
-        
+
         self.opsLog = OperationalLogController()
         self.er = {}
         self.log_master_id = None
@@ -39,51 +39,31 @@ class GenerateReportController(Resource):
             return self.get_country_list()
 
     def post(self):
-        if (request.endpoint=='create_report_ep'):
+        report_info=request.get_json(force=True)
+        report_id=report_info['report_id']
+        reporting_date=report_info['reporting_date']
+        as_of_reporting_date=report_info['as_of_reporting_date']
+        report_create_date=report_info['report_create_date']
 
-            report_info=request.get_json(force=True)
-            self.reporting_currency = report_info["reporting_currency"]
-            report_id=report_info['report_id']
-            reporting_date=report_info['reporting_date']
-            as_of_reporting_date=report_info['as_of_reporting_date']
-            report_create_date=report_info['report_create_date']
+        if 'report_create_status' in report_info:
             report_create_status=report_info['report_create_status']
-            report_parameters = "'business_date_from':'" + report_info["business_date_from"] + "'," + \
-                                "'business_date_to':'" + report_info["business_date_to"] + "'," + \
-                                "'reporting_currency':'" + report_info["reporting_currency"] + "'," + \
-                                "'ref_date_rate':'" + report_info["ref_date_rate"] + "'," + \
-                                "'rate_type':'" + report_info["rate_type"] +"'"
-            if(report_info["report_parameters"]):
-                report_parameters=report_parameters+","+report_info["report_parameters"]
+        else :
+            report_create_status = 'CREATE'
 
-            report_kwargs=json.loads("{"+"'report_id':'" + report_id + "',"+ report_parameters + "}")
+        report_parameters = report_info["report_parameters"]
 
-            return self.create_report(report_id, reporting_date, as_of_reporting_date,
-                    report_create_date, report_create_status, report_parameters,
-                    report_kwargs)
+        return self.create_report(report_id, reporting_date, as_of_reporting_date,
+                report_create_date, report_create_status, report_parameters)
 
-
-
-        if(request.endpoint == 'generate_report_ep'):
-            report_info = request.get_json(force=True)
-            report_id = report_info['report_id']
-            report_create_date = report_info['report_create_date']
-            report_parameters = report_info['report_parameters']
-            reporting_date = report_info['reporting_date']
-            as_of_reporting_date = report_info['as_of_reporting_date']
-            report_create_status='CREATE'
-            report_kwargs = eval("{'report_id':'" + report_id + "' ," + report_parameters.replace('"',"'") + "}")
-            self.reporting_currency = report_kwargs["reporting_currency"]
-
-            return self.render_report_generate(report_id, report_create_date, report_parameters, reporting_date,
-                    as_of_reporting_date, report_create_status, report_kwargs)
 
 
     def  create_report(self, report_id, reporting_date, as_of_reporting_date,
                                 report_create_date, report_create_status,
-                                report_parameters, report_kwargs):
+                                report_parameters):
         try:
             app.logger.info("Creating report")
+            report_kwargs = eval("{'report_id':'" + report_id + "' ," + report_parameters.replace('"',"'") + "}")
+            self.reporting_currency = report_kwargs["reporting_currency"]
             report_version_no=self.create_report_catalog(report_id,reporting_date,report_create_date,
                                        report_parameters,report_create_status,as_of_reporting_date)
 
@@ -109,39 +89,15 @@ class GenerateReportController(Resource):
             return {"msg": "Report generated SUCCESSFULLY for ["+str(report_id)+"] Reporting date ["+str(reporting_date)+"]."}, 200
         except Exception as e:
             app.logger.error(str(e))
-            #raise(e)
-            return {'msg': str(e)}, 400
-
-
-    def render_report_generate(self, report_id, report_create_date, report_parameters, reporting_date,
-                as_of_reporting_date, report_create_status, report_kwargs):
-        app.logger.info("Generating report")
-        try:
-            report_version_no=self.create_report_catalog(report_id,reporting_date,report_create_date,
-                                       report_parameters,report_create_status,as_of_reporting_date)
-            app.logger.info("Report catalog created")
-            self.update_report_catalog(status='RUNNING', report_id=report_id, reporting_date=reporting_date,
-                                       report_create_date=report_create_date, version=report_version_no)
-            report_snapshot=self.create_report_detail(report_version_no,**report_kwargs)
-            #print("create_report_summary_by_source")
-            self.create_report_summary_by_source(report_version_no,report_snapshot,**report_kwargs)
-            # print("create_report_summary_final")
-            self.create_report_summary_final(report_version_no,report_snapshot,**report_kwargs)
-            self.update_report_catalog(status='SUCCESS', report_id=report_id, reporting_date=reporting_date,
-                                           report_create_date=report_create_date,report_snapshot=report_snapshot,
-                                           version=report_version_no)
             if self.log_master_id:
                 self.opsLog.write_log_detail(master_id=self.log_master_id
                     , operation_sub_type='End of Create Report'
-                    , operation_status='Complete'
-                    , operation_narration="Report generated SUCCESSFULLY for [{0}] Reporting date [{1}].".format(str(report_id),str(reporting_date))
+                    , operation_status='UnComplete'
+                    , operation_narration="Report not generated  for [{0}] Reporting date [{1}].".format(str(report_id),str(reporting_date))
                     )
-                self.opsLog.update_master_status(id=self.log_master_id,operation_status="SUCCESS")
-            return {"msg": "Report generated SUCCESSFULLY for ["+str(report_id)+"] Reporting date ["+str(reporting_date)+"]."}, 200
+                self.opsLog.update_master_status(id=self.log_master_id,operation_status="ERROR")
+            return {'msg': str(e)}, 400
 
-        except Exception as e:
-            app.logger.error(str(e))
-            return {'msg': str(e)}, 500
 
     def get_report_list(self,country='ALL'):
         try:
@@ -187,6 +143,11 @@ class GenerateReportController(Resource):
             return report_version_no
         except Exception as e:
             app.logger.error(str(e))
+            if self.log_master_id:
+                self.opsLog.write_log_detail(master_id=self.log_master_id
+                    , operation_sub_type='Error in Create catalog'
+                    , operation_status='Interrupted'
+                    , operation_narration='Report creation interrupted with error : {0}'.format(str(e),))
             raise(e)
 
     def update_report_catalog(self,status,report_id,reporting_date,report_parameters=None,report_create_date=None,report_snapshot=None,version=0):
@@ -210,6 +171,11 @@ class GenerateReportController(Resource):
                     , operation_narration='Report catalog updated with : {0}'.format(update_clause,))
         except Exception as e:
             app.logger.error(str(e))
+            if self.log_master_id:
+                self.opsLog.write_log_detail(master_id=self.log_master_id
+                    , operation_sub_type='Error occured while updating report catalog'
+                    , operation_status='Interrupted'
+                    , operation_narration='Report creation interrupted with error : {0}'.format(str(e),))
             raise(e)
 
 
@@ -282,7 +248,7 @@ class GenerateReportController(Resource):
                         , operation_status='Started'
                         , operation_narration="Begining of identifying qualified data for source {}".format(source['source_id'],)
                         )
-                
+
                 resultdf=pd.DataFrame(columns=['report_id','sheet_id' ,'cell_id' ,'cell_calc_ref','source_id','qualifying_key','reporting_date'])
                 source_id=source['source_id']
 
@@ -434,6 +400,11 @@ class GenerateReportController(Resource):
             return report_snapshot
         except Exception as e:
             app.logger.error(str(e))
+            if self.log_master_id:
+                self.opsLog.write_log_detail(master_id=self.log_master_id
+                    , operation_sub_type='Error occured while creating report details'
+                    , operation_status='Interrupted'
+                    , operation_narration='Report creation interrupted with error : {0}'.format(str(e),))
             raise(e)
 
 
@@ -636,6 +607,11 @@ class GenerateReportController(Resource):
                 self.db.commit()
         except Exception as e:
             app.logger.error(str(e))
+            if self.log_master_id:
+                self.opsLog.write_log_detail(master_id=self.log_master_id
+                    , operation_sub_type='Error occured while creating report summary by source'
+                    , operation_status='Interrupted'
+                    , operation_narration='Report creation interrupted with error : {0}'.format(str(e),))
             raise(e)
         #return
 
@@ -705,4 +681,10 @@ class GenerateReportController(Resource):
                 return result_set
         except Exception as e:
             app.logger.error(str(e))
+            if self.log_master_id:
+                self.opsLog.write_log_detail(master_id=self.log_master_id
+                    , operation_sub_type='Error occured while creating final report summary'
+                    , operation_status='Interrupted'
+                    , operation_narration='Report creation interrupted with error : {0}'.format(str(e),))
             raise(e)
+            
