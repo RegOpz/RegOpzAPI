@@ -170,7 +170,7 @@ api.add_resource(ViewDataController,
 )
 api.add_resource(GenerateReportController,
     apiPath+"/view-data/generate-report",
-    endpoint="generate_report_ep"
+    apiPath+"/create-report/generate-report"
 )
 
 api.add_resource(GenerateReportController,
@@ -183,10 +183,6 @@ api.add_resource(GenerateReportController,
     endpoint="get_country_list_ep"
 )
 
-api.add_resource(GenerateReportController,
-    apiPath+"/create-report/generate-report",
-    endpoint="create_report_ep"
-)
 
 api.add_resource(MaintainReportRulesController,
     apiPath+"/report-rule",
