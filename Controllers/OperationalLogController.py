@@ -20,7 +20,7 @@ class OperationalLogController(Resource):
         entity_type =request.args.get('entity_type')
         entity_id=request.args.get('entity_id')
         return self.fetch_log_details(entity_type=entity_type,
-                                                entity_id=entity_id)
+                                      entity_id=entity_id)
 
     def write_log_master(self, operation_type, operation_status, operation_narration, entity_type,
                          entity_name, entity_table_name, entity_id):

@@ -6,6 +6,7 @@ import openpyxl as xls
 from openpyxl.styles import Border, Side, PatternFill, Font, GradientFill, Alignment, Protection
 import Helpers.utils as util
 import time
+from datetime import datetime
 from Controllers.GenerateReportController import GenerateReportController
 import json
 from Helpers.utils import autheticateTenant
@@ -58,8 +59,8 @@ class ViewReportController(Resource):
             agg_format_data = {}
             if reporting_date != '19000101' and reporting_date and report_snapshot != 'null' and report_parameters!='null':
                 app.logger.info("Creating formatted summary set")
-                report_kwargs=eval("{"+"'report_id':'" + self.report_id + "'," + \
-                                    "'populate_summary': False," + report_parameters + "}")
+                report_kwargs=json.loads(report_parameters)
+                report_kwargs["populate_summary"]= False
                 app.logger.info(report_snapshot)
                 summary_set = {}
                 summary_set = self.report.create_report_summary_final(report_version_no=version,
@@ -206,6 +207,11 @@ class ViewReportController(Resource):
                     " order by rc.report_id, rc.as_of_reporting_date, rc.version desc, rc.report_create_date"
 
             reports = self.db.query(sql).fetchall()
+
+            for i,c in enumerate(reports):
+                for k,v in c.items():
+                    if isinstance(v,datetime):
+                        c[k] = c[k].isoformat()
 
             #print(data_sources)
             if reporting_date:
