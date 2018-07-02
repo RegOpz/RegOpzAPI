@@ -134,7 +134,7 @@ class MaintainBusinessRulesController(Resource):
 							" and instr(concat(',',v.id_list,','),concat(',',br.id,','))"
 		else:
 			sql = sql.format("")
-			
+
 		cur = self.db.query(sql + where_clause + " limit " + str(startPage) + ", 100")
 		data = cur.fetchall()
 		cols = [i[0] for i in cur.description]
@@ -294,13 +294,16 @@ class MaintainBusinessRulesController(Resource):
 		data_list = cur.fetchall()
 
 		result_set = []
-		for data in data_list:
-			# print(data['cell_business_rules'])
-			cell_rule_list = data['cell_business_rules'].split(',')
-			# print(type(cell_rule_list))
-			if set(business_rule_list).issubset(set(cell_rule_list)):
-				# print(data)
-				result_set.append(data)
+		if len(business_rule_list)==1 and business_rule_list[0]=='undefined':
+			result_set = data_list
+		else:
+			for data in data_list:
+				# print(data['cell_business_rules'])
+				cell_rule_list = data['cell_business_rules'].split(',')
+				# print(type(cell_rule_list))
+				if set(business_rule_list).issubset(set(cell_rule_list)):
+					# print(data)
+					result_set.append(data)
 
 		return result_set
 

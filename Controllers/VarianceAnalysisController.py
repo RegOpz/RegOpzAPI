@@ -5,6 +5,7 @@ from Helpers.DatabaseHelper import DatabaseHelper
 from Controllers.ViewReportController import ViewReportController as report
 import Helpers.utils as util
 import json
+from datetime import datetime
 from Helpers.utils import autheticateTenant
 from Helpers.authenticate import *
 
@@ -74,6 +75,10 @@ class VarianceAnalysisController(Resource):
             sql="select as_of_reporting_date,reporting_date,report_create_date from report_catalog " +where_clause
 
             date_list=self.db.query(sql).fetchall()
+            for i,c in enumerate(date_list):
+                for k,v in c.items():
+                    if isinstance(v,datetime):
+                        c[k] = c[k].isoformat()
             return date_list
         except Exception as e:
             app.logger.error(e)

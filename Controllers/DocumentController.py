@@ -507,30 +507,19 @@ class DocumentController(Resource):
 
     def cell_drill_down_rules(self,report_id,sheet_id,cell_id, report_snapshot):
 
-        sql="select cell_calc_ref from report_def where report_id=%s and sheet_id=%s and (cell_id=%s or cell_id like %s) and cell_render_def='COMP_AGG_REF'"
-        comp_agg_ref=self.db.query(sql,(report_id,sheet_id,cell_id,cell_id+":%")).fetchone()
+        additional_filter = ''
+        comp_agg_ref = None
+        if sheet_id != 'undefined' and cell_id != 'undefined':
+            additional_filter = " and sheet_id=%s and cell_id=%s "
+            # Now get the comp agg ref to calculate the next sequence number for the cell calc ref
+            sql="select cell_calc_ref from report_def where report_id=%s and sheet_id=%s and (cell_id=%s or cell_id like %s) and cell_render_def='COMP_AGG_REF'"
+            comp_agg_ref=self.db.query(sql,(report_id,sheet_id,cell_id,cell_id+":%")).fetchone()
 
         if report_snapshot and report_snapshot!='null' and report_snapshot!='undefined':
             report_snapshot = json.loads(report_snapshot)
         else:
             report_snapshot = None
 
-        if report_snapshot:
-            sql ="select cd.* from report_comp_agg_def cd, report_comp_agg_def_vers v " + \
-                " where cd.report_id=%s and cd.sheet_id=%s and cd.cell_id=%s " + \
-                " and v.version = {} and v.report_id=cd.report_id ".format(report_snapshot['report_comp_agg_def'],) + \
-                " and instr(concat(',',v.id_list,','),concat(',',cd.id,','))"
-        else:
-            sql="select * from report_comp_agg_def where report_id=%s and sheet_id=%s and cell_id=%s and in_use='Y'"
-
-        cell_calc_ref_list = ''
-        comp_agg_rules=self.db.query(sql,(report_id,sheet_id,cell_id)).fetchall()
-        if comp_agg_rules:
-            formula = comp_agg_rules[0]['comp_agg_rule']
-            variables = list(set([node.id for node in ast.walk(ast.parse(formula)) if isinstance(node, ast.Name)]))
-            cell_calc_ref_list = ','.join(variables)
-
-        agg_rules=[]
 
         if report_snapshot:
             src_list = '(-999,-999)'
@@ -538,44 +527,75 @@ class DocumentController(Resource):
                 src_list+=",({0},{1})".format(src,report_snapshot['report_calc_def'][src])
 
         if report_snapshot:
-            sql = "select  a.* from report_calc_def a,data_source_information b, report_calc_def_vers v " + \
-                " where a.source_id=b.source_id and a.report_id=%s and a.sheet_id=%s and a.cell_id=%s" + \
+            calc_sql = "select  a.* from report_calc_def a,data_source_information b, report_calc_def_vers v " + \
+                " where a.source_id=b.source_id and a.report_id=%s " + additional_filter + \
                 " and a.report_id=v.report_id and a.source_id=v.source_id " + \
                 " and (v.source_id,v.version) in ({})".format(src_list) + \
                 " and instr(concat(',',v.id_list,','),concat(',',a.id,','))"
         else:
-            sql = "select  a.* from report_calc_def a,data_source_information b where a.source_id=b.source_id and \
-                report_id=%s and sheet_id=%s and cell_id=%s"
+            calc_sql = "select  a.* from report_calc_def a,data_source_information b " + \
+                " where a.source_id=b.source_id and report_id=%s" + additional_filter
+
+        # Get the comp agg defs first
+        if report_snapshot:
+            agg_sql ="select cd.* from report_comp_agg_def cd, report_comp_agg_def_vers v " + \
+                " where cd.report_id=%s " + additional_filter + \
+                " and v.version = {} and v.report_id=cd.report_id ".format(report_snapshot['report_comp_agg_def'],) + \
+                " and instr(concat(',',v.id_list,','),concat(',',cd.id,','))"
+        else:
+            agg_sql="select * from report_comp_agg_def where report_id=%s and in_use='Y'" + additional_filter
+
+        if additional_filter =='':
+            parameters=(report_id,)
+        else:
+            parameters=(report_id,sheet_id,cell_id)
+
+        comp_agg_rules=self.db.query(agg_sql,parameters).fetchall()
+
+        cell_calc_ref_list = ''
+        if comp_agg_rules and sheet_id !='undefined' and cell_id !='undefined':
+            formula = comp_agg_rules[0]['comp_agg_rule']
+            variables = list(set([node.id for node in ast.walk(ast.parse(formula)) if isinstance(node, ast.Name)]))
+            cell_calc_ref_list = ','.join(variables)
+
         if cell_calc_ref_list != '':
             if report_snapshot:
-                sql += " union select  a.* from report_calc_def a,data_source_information b, report_calc_def_vers v " + \
+                calc_sql += " union select  a.* from report_calc_def a,data_source_information b, report_calc_def_vers v " + \
                     " where a.source_id=b.source_id and a.report_id=%s and a.cell_calc_ref in (%s)" + \
                     " and a.report_id=v.report_id and a.source_id=v.source_id " + \
                     " and (v.source_id,v.version) in ({})".format(src_list) + \
                     " and instr(concat(',',v.id_list,','),concat(',',a.id,','))"
             else:
-                sql += " union select  a.* from report_calc_def a,data_source_information b where a.source_id=b.source_id and \
-                    report_id=%s and cell_calc_ref in (%s)"
-            cell_rules = self.db.query(sql, (report_id, sheet_id, cell_id, report_id, cell_calc_ref_list)).fetchall()
+                calc_sql += " union select  a.* from report_calc_def a,data_source_information b " + \
+                    " where a.source_id=b.source_id and report_id=%s and cell_calc_ref in (%s)"
+            if additional_filter=='':
+                parameters=(report_id, report_id, cell_calc_ref_list)
+            else:
+                parameters=(report_id, sheet_id, cell_id, report_id, cell_calc_ref_list)
+            cell_rules = self.db.query(calc_sql, parameters).fetchall()
         else:
-            cell_rules = self.db.query(sql, (report_id, sheet_id, cell_id)).fetchall()
+            if additional_filter=='':
+                parameters=(report_id,)
+            else:
+                parameters=(report_id, sheet_id, cell_id)
+            cell_rules = self.db.query(calc_sql, parameters).fetchall()
 
 
-        #print(sql)
+            #print(sql)
 
 
-        for i,c in enumerate(cell_rules):
-            print('Processing index ',i)
-            for k,v in c.items():
-                if isinstance(v,datetime):
-                    c[k] = c[k].isoformat()
-                    #print(c[k], type(c[k]))
+            for i,c in enumerate(cell_rules):
+                # print('Processing index ',i)
+                for k,v in c.items():
+                    if isinstance(v,datetime):
+                        c[k] = c[k].isoformat()
+                        #print(c[k], type(c[k]))
 
         display_dict={}
 
         display_dict['comp_agg_ref']=comp_agg_ref['cell_calc_ref'] if comp_agg_ref else ''
         display_dict['comp_agg_rules']=comp_agg_rules
-        display_dict['agg_rules']=agg_rules
+        display_dict['agg_rules']=[]
         display_dict['cell_rules']=cell_rules
         display_dict['report_snapshot'] = report_snapshot if report_snapshot  else {}
 

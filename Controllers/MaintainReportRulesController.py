@@ -85,7 +85,7 @@ class MaintainReportRulesController(Resource):
 	def update_report_parameters(self,data,report):
 		app.logger.info("Updating Report Parameters in Report Def Catalog {}".format(data,))
 		sql = "update report_def_catalog set report_parameters='{0}' where report_id='{1}'"
-		sql = sql.format(data['report_parameters'],report)
+		sql = sql.format(json.dumps(data),report)
 		try:
 			self.db.transact(sql)
 			self.db.commit()

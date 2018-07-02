@@ -3,6 +3,7 @@ import time
 from multiprocessing import Pool,cpu_count
 from functools import partial
 import re
+from datetime import datetime
 from app import *
 import Helpers.utils as util
 from collections import defaultdict
@@ -25,6 +26,7 @@ class GenerateReportController(Resource):
             tenant_info = json.loads(self.domain_info)
             self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
             self.db=DatabaseHelper(self.tenant_info)
+            self.user_id=Token().authenticate()
 
         self.opsLog = OperationalLogController()
         self.er = {}
@@ -39,45 +41,36 @@ class GenerateReportController(Resource):
             return self.get_country_list()
 
     def post(self):
-        report_info=request.get_json(force=True)
-        report_id=report_info['report_id']
-        reporting_date=report_info['reporting_date']
-        as_of_reporting_date=report_info['as_of_reporting_date']
-        report_create_date=report_info['report_create_date']
-
-        if 'report_create_status' in report_info:
-            report_create_status=report_info['report_create_status']
-        else :
-            report_create_status = 'CREATE'
-
-        report_parameters = report_info["report_parameters"]
-
-        return self.create_report(report_id, reporting_date, as_of_reporting_date,
-                report_create_date, report_create_status, report_parameters)
+        report_parameters=request.get_json(force=True)
+        return self.create_report(report_parameters)
 
 
 
-    def  create_report(self, report_id, reporting_date, as_of_reporting_date,
-                                report_create_date, report_create_status,
-                                report_parameters):
+    def  create_report(self, report_parameters):
         try:
             app.logger.info("Creating report")
-            report_kwargs = eval("{'report_id':'" + report_id + "' ," + report_parameters.replace('"',"'") + "}")
-            self.reporting_currency = report_kwargs["reporting_currency"]
-            report_version_no=self.create_report_catalog(report_id,reporting_date,report_create_date,
-                                       report_parameters,report_create_status,as_of_reporting_date)
+            report_id = report_parameters["report_id"]
+            reporting_date = report_parameters["reporting_date"]
+            self.reporting_currency = report_parameters["reporting_currency"]
+            report_version_no=self.create_report_catalog(report_parameters)
 
-            self.update_report_catalog(status='RUNNING', report_id=report_id, reporting_date=reporting_date,
-                                       report_create_date=report_create_date, version=report_version_no)
-            report_snapshot=self.create_report_detail(report_version_no,**report_kwargs)
+            self.update_report_catalog(status='RUNNING'
+                                        , report_parameters=report_parameters
+                                        , version=report_version_no)
+            report_snapshot=self.create_report_detail(report_version_no,**report_parameters)
+            self.update_report_catalog(status='SNAPSHOTCREATED'
+                                        , report_parameters=report_parameters
+                                        , report_snapshot=report_snapshot
+                                        , version=report_version_no)
             #print("create_report_summary_by_source")
-            self.create_report_summary_by_source(report_version_no,report_snapshot,**report_kwargs)
+            self.create_report_summary_by_source(report_version_no,report_snapshot,**report_parameters)
             # print("create_report_summary_final")
-            self.create_report_summary_final(report_version_no,report_snapshot,**report_kwargs)
+            self.create_report_summary_final(report_version_no,report_snapshot,**report_parameters)
             # self.db.commit()
-            self.update_report_catalog(status='SUCCESS', report_id=report_id, reporting_date=reporting_date,
-                                       report_create_date=report_create_date,report_snapshot=report_snapshot,
-                                       version=report_version_no)
+            self.update_report_catalog(status='SUCCESS'
+                                        , report_parameters=report_parameters
+                                        , report_snapshot=report_snapshot
+                                        , version=report_version_no)
             if self.log_master_id:
                 self.opsLog.write_log_detail(master_id=self.log_master_id
                     , operation_sub_type='End of Create Report'
@@ -86,13 +79,13 @@ class GenerateReportController(Resource):
                     )
                 self.opsLog.update_master_status(id=self.log_master_id,operation_status="SUCCESS")
 
-            return {"msg": "Report generated SUCCESSFULLY for ["+str(report_id)+"] Reporting date ["+str(reporting_date)+"]."}, 200
+            return {"msg": "Report generated SUCCESSFULLY for [{0}] Reporting date [{1}].".format(str(report_id),str(reporting_date))}, 200
         except Exception as e:
             app.logger.error(str(e))
             if self.log_master_id:
                 self.opsLog.write_log_detail(master_id=self.log_master_id
-                    , operation_sub_type='End of Create Report'
-                    , operation_status='UnComplete'
+                    , operation_sub_type='Error occured while creating report'
+                    , operation_status='Failed'
                     , operation_narration="Report not generated  for [{0}] Reporting date [{1}].".format(str(report_id),str(reporting_date))
                     )
                 self.opsLog.update_master_status(id=self.log_master_id,operation_status="ERROR")
@@ -115,17 +108,24 @@ class GenerateReportController(Resource):
             app.loger.error(str(e))
             return {'msg': str(e)}, 500
 
-    def create_report_catalog(self,report_id,reporting_date,report_create_date,
-                              report_parameters,report_create_status,as_of_reporting_date):
+    def create_report_catalog(self,report_parameters):
         try:
+            report_id = report_parameters["report_id"]
+            reporting_date = report_parameters["reporting_date"]
+            report_parameters_str=json.dumps(report_parameters)
+            report_create_status = 'CREATE'
+            report_create_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            as_of_reporting_date = report_parameters["as_of_reporting_date"]
+
             report_version=self.db.query("select max(version) version from report_catalog where report_id=%s and reporting_date=%s",
                                          (report_id,reporting_date)).fetchone()
             report_version_no=1 if not report_version['version'] else  report_version['version']+1
 
-            sql="insert into report_catalog(report_id,reporting_date,report_create_date,\
-                report_parameters,report_create_status,as_of_reporting_date,version) values(%s,%s,%s,%s,%s,%s,%s)"
-            catalog_id = self.db.transact(sql,(report_id,reporting_date,report_create_date,report_parameters,report_create_status,
-            as_of_reporting_date,report_version_no))
+            sql="insert into report_catalog(report_id,reporting_date,report_create_date," + \
+                "report_parameters,report_create_status,as_of_reporting_date,version,report_created_by)" + \
+                " values(%s,%s,%s,%s,%s,%s,%s,%s)"
+            catalog_id = self.db.transact(sql,(report_id,reporting_date,report_create_date,report_parameters_str,report_create_status,
+            as_of_reporting_date,report_version_no,self.user_id))
             self.log_master_id = self.opsLog.write_log_master(operation_type='Create Report'
                 , operation_status = 'RUNNING'
                 , operation_narration = 'Create report {0} for {1} as on {2}'.format(report_id,reporting_date,as_of_reporting_date)
@@ -139,26 +139,24 @@ class GenerateReportController(Resource):
                 self.opsLog.write_log_detail(master_id=self.log_master_id
                     , operation_sub_type='Create catalog entry'
                     , operation_status='Complete'
-                    , operation_narration='Report creation started with the parameters : {0}'.format(report_parameters,))
+                    , operation_narration='Report creation started with the parameters : {0}'.format(report_parameters_str,))
             return report_version_no
         except Exception as e:
             app.logger.error(str(e))
             if self.log_master_id:
                 self.opsLog.write_log_detail(master_id=self.log_master_id
-                    , operation_sub_type='Error in Create catalog'
-                    , operation_status='Interrupted'
-                    , operation_narration='Report creation interrupted with error : {0}'.format(str(e),))
+                    , operation_sub_type='Error occured while creating catalog'
+                    , operation_status='Failed'
+                    , operation_narration='Report creation Failed with error : {0}'.format(str(e),))
             raise(e)
 
-    def update_report_catalog(self,status,report_id,reporting_date,report_parameters=None,report_create_date=None,report_snapshot=None,version=0):
+    def update_report_catalog(self,status,report_parameters,report_snapshot=None,version=0):
         try:
+            report_id = report_parameters["report_id"]
+            reporting_date = report_parameters["reporting_date"]
+
             update_clause = "report_create_status='{0}'".format(status,)
-            if report_parameters != None:
-                # Replace all singlequotes(') with double quote(") as update sql requires all enclosed in ''
-                update_clause += ", report_parameters='{0}'".format(report_parameters.replace("'",'"'),)
-            if report_create_date != None:
-                # Replace all singlequotes(') with double quote(") as update sql requires all enclosed in ''
-                update_clause += ", report_create_date='{0}'".format(report_create_date.replace("'",'"'),)
+            update_clause += ", report_create_date='{0}'".format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'),)
             if report_snapshot !=None:
                 update_clause +=", report_snapshot='{0}'".format(report_snapshot)
             sql = "update report_catalog set {0} where report_id='{1}' and reporting_date='{2}' and version={3}".format(update_clause,report_id,reporting_date,version)
@@ -174,8 +172,8 @@ class GenerateReportController(Resource):
             if self.log_master_id:
                 self.opsLog.write_log_detail(master_id=self.log_master_id
                     , operation_sub_type='Error occured while updating report catalog'
-                    , operation_status='Interrupted'
-                    , operation_narration='Report creation interrupted with error : {0}'.format(str(e),))
+                    , operation_status='Failed'
+                    , operation_narration='Report creation Failed with error : {0}'.format(str(e),))
             raise(e)
 
 
@@ -211,7 +209,7 @@ class GenerateReportController(Resource):
                 ref_date_rate=kwargs["ref_date_rate"]
                 rate_type=kwargs["rate_type"]
             else:
-                print("Please supply parameters: "+str(parameter_list))
+                app.logger.info("Please supply parameters: "+str(parameter_list))
 
             all_sources=self.db.query('select distinct source_id \
                         from report_calc_def where report_id=%s and in_use=\'Y\' and source_id !=0',(report_id,)).fetchall()
@@ -284,7 +282,7 @@ class GenerateReportController(Resource):
                     if k.startswith('_'):
                         report_parameter[k]=v
 
-                print('Time taken for converting to dictionary all_business_rules ' + str((time.time() - start) * 1000))
+                app.logger.info('Time taken for converting to dictionary all_business_rules ' + str((time.time() - start) * 1000))
 
                 dbqd=DatabaseHelper(self.tenant_info)
                 qdvers=dbqd.query("select a.business_date,a.source_id,a.version,a.id_list,a.br_version from qualified_data_vers a,\
@@ -300,7 +298,7 @@ class GenerateReportController(Resource):
                     qd_id_list = [(id,) for id in vers['id_list'].split(',')]
                     dbqd.transact("truncate table tmp_qd_id_list")
                     dbqd.transactmany("insert into tmp_qd_id_list(idlist) values (%s)",qd_id_list)
-                    print('Time taken for populating tmp_qd_id_list ' + str((time.time() - start) * 1000))
+                    app.logger.info('Time taken for populating tmp_qd_id_list ' + str((time.time() - start) * 1000))
                     curdata =dbqd.query("select q.source_id,q.qualifying_key,q.business_rules,q.buy_currency,\
                                 q.sell_currency,q.mtm_currency,\
                                 %s as reporting_currency,q.business_date,%s as reporting_date,%s as business_date_to, \
@@ -312,14 +310,20 @@ class GenerateReportController(Resource):
                     while True:
                         start=time.time()
                         all_qualified_trade=curdata.fetchmany(50000)
-                        print('Time taken for fetching next 50000 qualfied trades '+str((time.time() - start)*1000))
                         if not all_qualified_trade:
                             break
+                        app.logger.info('Time taken for fetching next 50000 qualfied trades '+str((time.time() - start)*1000))
+                        if self.log_master_id:
+                            self.opsLog.write_log_detail(master_id=self.log_master_id
+                                , operation_sub_type='Processing next set of data'
+                                , operation_status='Processing'
+                                , operation_narration="Processing another {0} records for identification of qualified data for source {1}".format(str(len(all_qualified_trade)),source['source_id'],)
+                                )
 
-                        print('Before converting to dictionary')
+                        app.logger.info('Before converting to dictionary')
                         start = time.time()
                         all_qual_trd_dict_split = util.split(all_qualified_trade, 1000)
-                        print('Time taken for converting to dictionary and spliting all_qual_trd '+str((time.time() - start)*1000))
+                        app.logger.info('Time taken for converting to dictionary and spliting all_qual_trd '+str((time.time() - start)*1000))
 
                         #print(exch_rt_dict)
                         start=time.time()
@@ -327,17 +331,17 @@ class GenerateReportController(Resource):
                         # mp=partial(map_data_to_cells,all_bus_rl_dict,exch_rt_dict,reporting_currency)
                         mp = partial(self.map_data_to_cells, all_business_rules)
 
-                        print('CPU Count: ' + str(cpu_count()))
+                        app.logger.info('CPU Count: ' + str(cpu_count()))
                         if cpu_count()>1 :
                             pool=Pool(cpu_count()-1)
                         else:
-                            print('No of CPU is only 1, ... Inside else....')
+                            app.logger.info('No of CPU is only 1, ... Inside else....')
                             pool=Pool(1)
                         result_set=pool.map(mp,all_qual_trd_dict_split)
                         pool.close()
                         pool.join()
 
-                        print('Time taken by pool processes '+str((time.time() - start)*1000))
+                        app.logger.info('Time taken by pool processes '+str((time.time() - start)*1000))
 
                         start=time.time()
                         result_set_flat=util.flatten(result_set)
@@ -346,7 +350,7 @@ class GenerateReportController(Resource):
 
                         resultdf=resultdf.append(pd.DataFrame(data=result_set_flat,columns=['report_id','sheet_id' ,'cell_id' ,'cell_calc_ref','source_id','qualifying_key','reporting_date']))
 
-                        print('Time taken by resultdf.append processes '+str((time.time() - start)*1000))
+                        app.logger.info('Time taken by resultdf.append processes '+str((time.time() - start)*1000))
 
                     qualified_data_version[str(source_id)][vers['business_date']]= vers['version']
 
@@ -365,7 +369,7 @@ class GenerateReportController(Resource):
                     id_list_df=id_list_df.append({'report_id':grp_report_id,'sheet_id':grp_sheet_id ,'cell_id':grp_cell_id,
                     'cell_calc_ref':grp_cell_calc_ref,'source_id':grp_source_id,'reporting_date':grp_reporting_date,
                      'id_list_no':id_list},ignore_index=True)
-                print('Time taken by resultdf.groupby loop for source processes '+str((time.time() - start)*1000))
+                app.logger.info('Time taken by resultdf.groupby loop for source processes '+str((time.time() - start)*1000))
 
                 id_list_df['version']=report_version_no
                 id_list_df[['source_id','reporting_date','version']]=id_list_df[['source_id','reporting_date','version']].astype(dtype='int64',errors='ignore')
@@ -377,17 +381,17 @@ class GenerateReportController(Resource):
                 id_list_rec=list(id_list_df.itertuples(index=False, name=None))
 
                 self.db.transactmany("insert into report_qualified_data_link ({0}) values({1})".format(columns,placeholders),id_list_rec)
-                print('Time taken by database inserts '+ str((time.time() - start) * 1000))
+                app.logger.info('Time taken by database inserts '+ str((time.time() - start) * 1000))
                 self.db.commit()
 
-                print('Time taken by complete loop of qualified data '+ str((time.time() - startcur) * 1000))
+                app.logger.info('Time taken by complete loop of qualified data '+ str((time.time() - startcur) * 1000))
                 if self.log_master_id:
                     self.opsLog.write_log_detail(master_id=self.log_master_id
                         , operation_sub_type='Finised Processing source {}'.format(source['source_id'])
                         , operation_status='Complete'
                         , operation_narration="Finished identification of qualified data for source {}".format(source['source_id'],)
                         )
-            print('Time taken by complete loop of all sources '+ str((time.time() - startsource) * 1000))
+            app.logger.info('Time taken by complete loop of all sources '+ str((time.time() - startsource) * 1000))
             report_snapshot=json.dumps({"report_calc_def":report_rule_version,"report_comp_agg_def":comp_agg_rule_version,
                                         "qualified_data":qualified_data_version})
             #print(report_snapshot)
@@ -403,8 +407,8 @@ class GenerateReportController(Resource):
             if self.log_master_id:
                 self.opsLog.write_log_detail(master_id=self.log_master_id
                     , operation_sub_type='Error occured while creating report details'
-                    , operation_status='Interrupted'
-                    , operation_narration='Report creation interrupted with error : {0}'.format(str(e),))
+                    , operation_status='Failed'
+                    , operation_narration='Report creation Failed with error : {0}'.format(str(e),))
             raise(e)
 
 
@@ -459,7 +463,7 @@ class GenerateReportController(Resource):
 
             #Iftable col list is blank, that means we have to select all the columns of the table
             table_col_list=(table_col_list,'1 as const')[table_col_list=='']
-            print(table_col_list)
+            app.logger.info(table_col_list)
             return table_col_list
         except Exception as e:
             app.logger.error(str(e))
@@ -480,9 +484,10 @@ class GenerateReportController(Resource):
                 reporting_currency = kwargs['reporting_currency']
                 ref_date_rate=kwargs["ref_date_rate"]
                 rate_type=kwargs["rate_type"]
+                as_of_reporting_date = kwargs["as_of_reporting_date"]
 
             else:
-                print("Please supply parameters: " + str(parameter_list))
+                app.logger.info("Please supply parameters: " + str(parameter_list))
 
             self.db.transact("create temporary table tmp_qd_id_list(idlist bigint)")
             if ref_date_rate=='B':
@@ -492,7 +497,7 @@ class GenerateReportController(Resource):
             else:
                 sql = 'select business_date,from_currency,to_currency,rate from exchange_rate ' \
                         ' where business_date={0} ' \
-                        ' and rate_type=\'{1}\' and in_use=\'Y\''.format(business_date_to,rate_type)
+                        ' and rate_type=\'{1}\' and in_use=\'Y\''.format(as_of_reporting_date,rate_type)
 
             ercur=self.db.query(sql).fetchall()
             for rate in ercur:
@@ -532,6 +537,12 @@ class GenerateReportController(Resource):
 
             for src in srcs:
                 app.logger.info("Processing source {}".format(src,report_calc_def_vers[src]))
+                if self.log_master_id:
+                    self.opsLog.write_log_detail(master_id=self.log_master_id
+                        , operation_sub_type='Aggregation for source {0}'.format(src)
+                        , operation_status='Aggregation'
+                        , operation_narration="Processing aggegation summary by source for source {0}".format(src,)
+                        )
                 sql = "select a.sheet_id,a.cell_id,a.aggregation_ref,a.cell_calc_ref,a.aggregation_func from report_calc_def a,\
                       (select id_list from report_calc_def_vers where report_id='{0}' and source_id={1} and version={2}) c \
                       where a.report_id='{0}' and a.source_id={1} and instr(concat(',',c.id_list,','),concat(',',a.id,','))".format(report_id,src,
@@ -552,7 +563,7 @@ class GenerateReportController(Resource):
                 if ref_date_rate=='B':
                     col_list += ',business_date as referece_rate_date '
                 else:
-                    col_list += ',' + str(business_date_to) + ' as referece_rate_date '
+                    col_list += ',' + str(as_of_reporting_date) + ' as referece_rate_date '
 
                 report_qualified_data_link=self.db.query("select sheet_id,cell_id,cell_calc_ref,id_list from report_qualified_data_link \
                                            a where report_id=%s and reporting_date=%s and version=%s\
@@ -572,11 +583,11 @@ class GenerateReportController(Resource):
                     while True:
                         start=time.time()
                         all_qualified_trade=curdata.fetchmany(50000)
-                        print('Time taken for fetching next 50000 report qualfied data link '+str((time.time() - start)*1000))
+                        app.logger.info('Time taken for fetching next 50000 report qualfied data link '+str((time.time() - start)*1000))
                         if not all_qualified_trade:
                             break
                         source_data=source_data.append(pd.DataFrame(all_qualified_trade))
-                    print('Time taken for fetching source data .. ' + str((time.time() - startcur) * 1000))
+                    app.logger.info('Time taken for fetching source data .. ' + str((time.time() - startcur) * 1000))
                     source_data.fillna(0.0,inplace=True)
                     for col in list(source_data.columns):
                         source_data[col]=source_data[col].astype(dtype='float64',errors='ignore')
@@ -590,7 +601,7 @@ class GenerateReportController(Resource):
                     source_data_trans['reporting_value']=source_data_trans['reporting_value'].astype(dtype='float64',errors='ignore')
                     summary = eval("source_data_trans['reporting_value']." + agg_func + "()")
                     summary=0 if math.isnan(float(summary)) else float(summary)
-                    print("Summary by source for ...{0} {1}".format(row['sheet_id'],row['cell_id'],))
+                    app.logger.info("Summary by source for ...{0} {1}".format(row['sheet_id'],row['cell_id'],))
 
                     result_set.append({'source_id':src,'report_id':report_id,'sheet_id':row['sheet_id'],'cell_id':row['cell_id'],
                                        'cell_calc_ref':row['cell_calc_ref'],'reporting_date':reporting_date,'cell_summary':summary,'version':report_version_no})
@@ -610,15 +621,20 @@ class GenerateReportController(Resource):
             if self.log_master_id:
                 self.opsLog.write_log_detail(master_id=self.log_master_id
                     , operation_sub_type='Error occured while creating report summary by source'
-                    , operation_status='Interrupted'
-                    , operation_narration='Report creation interrupted with error : {0}'.format(str(e),))
+                    , operation_status='Failed'
+                    , operation_narration='Report creation Failed with error : {0}'.format(str(e),))
             raise(e)
         #return
 
     def create_report_summary_final(self,report_version_no,report_snapshot,populate_summary = True,cell_format_yn = 'N',**kwargs):
-
-        app.logger.info("Creating final Report-summary")
         try:
+            app.logger.info("Creating final Report-summary")
+            if self.log_master_id:
+                self.opsLog.write_log_detail(master_id=self.log_master_id
+                    , operation_sub_type='Final Aggregation for report'
+                    , operation_status='Aggregation'
+                    , operation_narration="Processing aggegation summary for the entire report"
+                    )
             parameter_list = ['report_id', 'business_date_from', 'business_date_to']
 
             if set(parameter_list).issubset(set(kwargs.keys())):
@@ -627,7 +643,7 @@ class GenerateReportController(Resource):
                 business_date_to = kwargs["business_date_to"]
                 reporting_date = business_date_from + business_date_to
             else:
-                print("Please supply parameters: " + str(parameter_list))
+                app.logger.info("Please supply parameters: " + str(parameter_list))
 
             report_snapshot=json.loads(report_snapshot)
             comp_agg_rule_version=report_snapshot['report_comp_agg_def']
@@ -676,7 +692,8 @@ class GenerateReportController(Resource):
                         return rowId
                 except Exception as e:
                     self.db.rollback()
-                    print("Transaction Failed:", e)
+                    app.logger.info("Transaction Failed:", e)
+                    raise(e)
             else:
                 return result_set
         except Exception as e:
@@ -684,7 +701,6 @@ class GenerateReportController(Resource):
             if self.log_master_id:
                 self.opsLog.write_log_detail(master_id=self.log_master_id
                     , operation_sub_type='Error occured while creating final report summary'
-                    , operation_status='Interrupted'
-                    , operation_narration='Report creation interrupted with error : {0}'.format(str(e),))
+                    , operation_status='Failed'
+                    , operation_narration='Report creation Failed with error : {0}'.format(str(e),))
             raise(e)
-            

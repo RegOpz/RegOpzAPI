@@ -88,7 +88,7 @@ class ManageMasterBusinessRulesController(Resource):
         try:
             business_rules=pd.DataFrame(business_rules_list)
             business_rules['rule_string']="'" + business_rules['business_rule'] + "'"
-            sql = "select business_rule,in_use, id,logical_condition from business_rules " + \
+            sql = "select business_rule,in_use, id,logical_condition,rule_description from business_rules " + \
                   "where source_id={0} and business_rule in ({1})" \
                   .format(source_id,",".join(business_rules["rule_string"].tolist()))
             existing_rules=self.tenant_db.query(sql).fetchall()
