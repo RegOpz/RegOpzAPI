@@ -261,6 +261,7 @@ class DefChangeController(Resource):
             res = self.db.transact(sql, (id, id, id, audit_info['table_name'], audit_info['change_type'], \
                     audit_info['comment'],'PENDING', audit_info['change_reference'], datetime.now(), \
                     audit_info['maker'],audit_info['maker_tenant_id'],audit_info['group_id']))
+            self.db.commit()
 
         except Exception as e:
             app.logger.error(str(e))
