@@ -157,7 +157,7 @@ class ManageMasterReportController(Resource):
                                "change_reference":change_ref, "maker": maker,
                                "maker_tenant_id":tenant_id, "group_id": target_group_id}}
             self.dcc_tenant.audit_insert(data, def_id)
-
+            app.logger.info("Copy completed")
             self.tenant_db.commit()
 
             # if template_present and overwrite:
