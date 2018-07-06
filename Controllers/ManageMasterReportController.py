@@ -45,7 +45,18 @@ class ManageMasterReportController(Resource):
 
     def post(self):
         data = request.get_json(force=True)
-        return self.dcc_master.insert_data(data)
+        country = data["country"]
+        report_description = data["report_description"]
+        report_type = data["report_type"]
+        ref_report_id = data["ref_report_id"]
+        target_report_id = data["target_report_id"]
+        ref_domain = data["ref_domain"]
+        target_domain = data["target_domain"]
+        target_group_id = data["target_groupId"]
+        return self.copy_template_to_tenant(country=country, report_type=report_type, ref_report_id=ref_report_id,
+                                            target_report_id=target_report_id, ref_domain=ref_domain,
+                                            target_domain=target_domain,
+                                            target_group_id=target_group_id, report_description=report_description)
 
     def put(self):
         data = request.get_json(force=True)
@@ -54,19 +65,100 @@ class ManageMasterReportController(Resource):
             return BUSINESS_RULE_EMPTY
         return self.dcc_master.update_or_delete_data(data, id)
 
-    def copy_template_to_tenant(self,country,report_id,comment,overwrite=False):
+    def copy_template_to_tenant(self, country, target_report_id, ref_report_id, report_type, target_group_id,
+                                ref_domain, target_domain, report_description):
 
         try:
             app.logger.info("Checking if report template already present in tenant space.")
-            existing_record=self.tenant_db.query("select * from report_def_catalog where report_id=%s",(report_id,)).fetchone()
+            existing_record = self.tenant_db.query("select * from report_def_catalog where report_id=%s and country=%s",
+                                                   (target_report_id, country)).fetchone()
             if existing_record:
-                components=existing_record['report_components'].split(',')
-                template_present=('TEMPLATE'in components)
-                if template_present and not overwrite:
-                    return {"msg":"Template for report {} alreday exists.".format(report_id)},500
+                return {"msg": "Target report id name already exists create a new report id"}
+            app.logger.info("OK new entry for copy")
 
-            app.logger.info("Fetching report template from master space.")
-            report_template=self.master_db.query("select * from report_def_master where country=%s and report_id=%s",(country,report_id)).fetchall()
+            # copy entry of report_def_catalog_master to report_def_catalog
+            report_master = self.master_db.query(
+                "select id,report_parameters from report_def_catalog_master where report_id=%s",
+                (ref_report_id,)).fetchone()
+            report_parameters = report_master["report_parameters"]
+            ret = self.tenant_db.transact("insert into report_def_catalog(report_id,country,report_description,report_parameters,\
+                                        last_updated_by,date_of_change,report_type) values(%s,%s,%s,%s,%s,%s,%s)",
+                                          (target_report_id, country, report_description, report_parameters, None, None,
+                                           report_type))
+            def_id = ret
+            app.logger.info("Copied report_def_catalog_master")
+            # print('id to be inserted is: ',id)
+            # copy entry of report_def_master to report_def
+            report_master = self.master_db.query("select report_id,sheet_id,cell_id,cell_render_def,\
+                cell_calc_ref,last_updated_by from report_def_master where report_id=%s", (ref_report_id,)).fetchall()
+            # type of report_master is list of dictionaries
+            params = []
+            for x in report_master:
+                values = (target_report_id, x["sheet_id"], x["cell_id"], x["cell_render_def"],
+                          x["cell_calc_ref"], x["last_updated_by"])
+                params.append(values)
+            # print(params)
+
+            ret = self.tenant_db.transactmany("insert into report_def(report_id,sheet_id,\
+                cell_id,cell_render_def,cell_calc_ref,last_updated_by)\
+                                            values(%s,%s,%s,%s,%s,%s)", params)
+
+            app.logger.info("Copied report_def_master")
+            # copy entry of report_calc_def_master to report_calc_def
+            report_master = self.master_db.query(
+                "select report_id, sheet_id, cell_id, cell_calc_decsription, cell_calc_ref, "
+                "cell_calc_extern_ref, cell_business_rules, valid_from, valid_to, last_updated_by, dml_allowed, in_use from report_calc_def_master where report_id=%s",
+                (ref_report_id,)).fetchall()
+            # type of report_master is list of dictionaries
+            params = []
+            for x in report_master:
+                values = (target_report_id, x["sheet_id"], x["cell_id"], x["cell_calc_decsription"], x["cell_calc_ref"]
+                          , x["cell_calc_extern_ref"], x["cell_business_rules"], x["valid_from"], x["valid_to"],
+                          x["last_updated_by"], x["dml_allowed"], x["in_use"])
+                params.append(values)
+            # print(params)
+
+            ret = self.tenant_db.transactmany("insert into report_calc_def(report_id, sheet_id, cell_id, cell_calc_decsription, cell_calc_ref,\
+                cell_calc_extern_ref, cell_business_rules, valid_from, valid_to, last_updated_by, dml_allowed, in_use)\
+                                                        values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%S)", params)
+
+            app.logger.info("Copied report_calc_def_master")
+            # copy entry of report_comp_agg_def_master to report_comp_agg_def
+            report_master = self.master_db.query(
+                "select report_id, sheet_id, cell_id, comp_agg_ref, cell_agg_decsription, comp_agg_extern_ref, reporting_scale, rounding_option, valid_from, valid_to, \
+                last_updated_by, dml_allowed, in_use, comp_agg_rule from report_comp_agg_def_master where report_id=%s",
+                (ref_report_id,)).fetchall()
+            # type of report_master is list of dictionaries
+            params = []
+            if report_master:
+                for x in report_master:
+                    values = (
+                    target_report_id, x["sheet_id"], x["cell_id"], x["comp_agg_ref"], x["cell_agg_decsription"],
+                    x["comp_agg_extern_ref"], x["reporting_scale"], x["rounding_option"], x["valid_from"],
+                    x["valid_to"], x["last_updated_by"], x["dml_allowed"], x["in_use"], x["comp_agg_rule"])
+                    params.append(values)
+                # print(params)
+
+                ret = self.tenant_db.transactmany("insert into report_comp_agg_def(report_id, sheet_id, cell_id, \
+                    comp_agg_ref, cell_agg_decsription, comp_agg_extern_ref, \
+                    reporting_scale, rounding_option, valid_from, valid_to, \
+                    last_updated_by, dml_allowed, in_use, comp_agg_rule)\
+                    values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", params)
+                app.logger.info("Copied report_comp_agg_def_master")
+
+            # post a notification in ManageDef Change Controller
+            tenant_id=str(json.loads(self.domain_info)["tenant_id"])
+            #print(tenant_id)
+            maker=target_group_id.split(tenant_id)[0]
+            #print(maker)
+            change_ref="Copy of report-id:{} to target-report-id:{}".format(ref_report_id,target_report_id)
+            data = {
+                "audit_info": {"table_name": "report_def_catalog", "change_type": "COPY", "comment": report_description,
+                               "change_reference":change_ref, "maker": maker,
+                               "maker_tenant_id":tenant_id, "group_id": target_group_id}}
+            self.dcc_tenant.audit_insert(data, def_id)
+
+            self.tenant_db.commit()
 
             # if template_present and overwrite:
             #    app.logger.info("Erasing existing report template.")
@@ -91,12 +183,12 @@ class ManageMasterReportController(Resource):
             #     self.dcc_tenant.audit_insert({"audit_info": audit_info}, id)
             #     self.tenant_db.commit()
 
-            return {"msg":"Template successfully copied into tenant space."},200
+            # return {"msg":"Template successfully copied into tenant space."}
 
         except Exception as e:
             self.tenant_db.rollback()
             app.logger.error(str(e))
-            return {"msg":str(e)},500
+            return {"msg": str(e)}, 500
 
 
     def report_template_catalog_list(self,country='ALL'):
