@@ -344,6 +344,7 @@ api.add_resource(ManageMasterReportController,
     apiPath + "/report-rules-repo/<string:country>",
     apiPath + "/report-rules-repo/report/<string:report_id>",
     apiPath + "/report-rules-repo/report/report-rule",
+    apiPath + "/report-rules-repo/copy-report-template"
 )
 
 api.add_resource(ManageMasterReportController,
