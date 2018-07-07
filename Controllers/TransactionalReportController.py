@@ -40,22 +40,22 @@ class TransactionalReportController(Resource):
         if report_id and reporting_date:
             self.report_id=report_id
             return self.render_trans_view_report_json(reporting_date)
+
         if report_id and not reporting_date:
             self.report_id = report_id
             # print("Report id",self.report_id)
             return self.render_trans_report_json()
-            # return self.render_trans_view_report_json(2018010120180131)
+
         if cell_id:
             self.cell_id = cell_id
             self.report_id = request.args.get('report_id')
             self.sheet_id = request.args.get('sheet_id')
-            # self.country = request.args.get('country').upper()
             return self.get_trans_report_sec()
+
         if rule_cell_id:
             self.cell_id = rule_cell_id
             self.report_id = request.args.get('report_id')
             self.sheet_id = request.args.get('sheet_id')
-            # self.country = request.args.get('country').upper()
             return self.get_trans_report_rules()
 
     def put(self,calc_ref=None):
@@ -112,81 +112,97 @@ class TransactionalReportController(Resource):
             return self.insert_section_calc_rule(params)
 
          if report_id:
-            try:
-                self.report_id = report_id
-                report_info=request.get_json(force=True)
+            self.report_id = report_id
+            report_info=request.get_json(force=True)
+            return self.create_report(report_info)
 
-                if 'report_event' not in report_info.keys():
-                    report_id = report_info['report_id']
-                    report_create_date=report_info['report_create_date']
-                    report_parameters = report_info['report_parameters']
-                    reporting_date = report_info['reporting_date']
-                    report_kwargs = eval("{'report_id':'" + report_id + "' ," + report_parameters.replace('"',"'") + "}")
-                    #report_kwargs = {'report_id': 'MAS1003', 'business_date_from': '20160930', 'reporting_currency': 'SGD', 'ref_date_rate': 'B', 'business_date_to': '20160930', 'rate_type': 'MAS'}
-                    #try:
-                    business_date_from=report_kwargs['business_date_from']
-                    business_date_to=report_kwargs['business_date_to']
-                    self.update_report_catalog(status='RUNNING',report_id=report_id,reporting_date=reporting_date,report_parameters=report_parameters,report_create_date=report_create_date)
+    def create_report(self, report_info):
+        try:
+            print(report_info)
+            if 'report_event'  in report_info.keys():
+                report_id = report_info['report_id']
+                report_create_date=report_info['report_create_date']
+                #report_parameters = report_info['report_parameters']
+                reporting_date = report_info['reporting_date']
+                report_kwargs = eval("{'report_id':'" + report_id + "' ," + report_parameters.replace('"',"'") + "}")
 
-                else:
-                    business_date_from=report_info['business_date_from']
-                    business_date_to=report_info['business_date_to']
+                business_date_from=report_kwargs['business_date_from']
+                business_date_to=report_kwargs['business_date_to']
+                self.update_report_catalog(status='RUNNING',report_id=report_id,reporting_date=reporting_date,report_parameters=report_info,report_create_date=report_create_date)
 
-                    report_id=report_info['report_id']
-                    reporting_date=report_info['reporting_date']
-                    as_of_reporting_date=report_info['as_of_reporting_date']
-                    report_create_date=report_info['report_create_date']
-                    report_create_status=report_info['report_create_status']
+            else:
+                # business_date_from=report_info['business_date_from']
+                # business_date_to=report_info['business_date_to']
+                #
+                # report_id=report_info['report_id']
+                # reporting_date=report_info['reporting_date']
+                # as_of_reporting_date=report_info['as_of_reporting_date']
+                # report_create_date=report_info['report_create_date']
+                # report_create_status=report_info['report_create_status']
+                #
+                # report_parameters = "'business_date_from':'" + report_info["business_date_from"] + "'," + \
+                #                     "'business_date_to':'" + report_info["business_date_to"] + "'," + \
+                #                     "'reporting_currency':'" + report_info["reporting_currency"] + "'," + \
+                #                     "'ref_date_rate':'" + report_info["ref_date_rate"] + "'," + \
+                #                     "'rate_type':'" + report_info["rate_type"] +"'"
+                #
+                # report_kwargs=eval("{"+"'report_id':'" + report_id + "',"+ report_parameters + "}")
+                # print("report_kwarg: " + report_kwargs.__str__())
+                # report_create_date = report_create_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                self.create_report_catalog(report_info)
+                self.update_report_catalog(report_info, status='RUNNING')
 
-                    report_parameters = "'business_date_from':'" + report_info["business_date_from"] + "'," + \
-                                        "'business_date_to':'" + report_info["business_date_to"] + "'," + \
-                                        "'reporting_currency':'" + report_info["reporting_currency"] + "'," + \
-                                        "'ref_date_rate':'" + report_info["ref_date_rate"] + "'," + \
-                                        "'rate_type':'" + report_info["rate_type"] +"'"
-                    if(report_info["report_parameters"]):
-                        report_parameters=report_parameters+","+report_info["report_parameters"]
-                    print(report_parameters)
-                    report_kwargs=eval("{"+"'report_id':'" + report_id + "',"+ report_parameters + "}")
-                    print(report_kwargs)
+            self.create_report_detail(report_info)
 
-                    self.create_report_catalog(report_id,reporting_date,report_create_date,
-                                               report_parameters,report_create_status,as_of_reporting_date)
-                    self.update_report_catalog(status='RUNNING', report_id=report_id, reporting_date=reporting_date,report_create_date=report_create_date)
-
-                self.create_report_detail(self.report_id,business_date_from,business_date_to)
-
-                self.update_report_catalog(status='SUCCESS', report_id=report_id, reporting_date=reporting_date,report_create_date=report_create_date)
-
-                return {"msg": "Report generated SUCCESSFULLY for ["+str(report_id)+"] Reporting date ["+str(reporting_date)+"]."}, 200
-            except Exception as e:
-                self.db.rollback()
-                app.logger.error(str(e))
-                return {"msg":str(e)},500
-                # raise e
+            self.update_report_catalog(report_info, status='SUCCESS' )
+            report_id = report_info["report_id"]
+            reporting_date = report_info["reporting_date"]
+            return {"msg": "Report generated SUCCESSFULLY for ["+str(report_id)+"] Reporting date ["+str(reporting_date)+"]."}, 200
+        except Exception as e:
+            self.db.rollback()
+            app.logger.error(str(e))
+            return {"msg":str(e)},500
+            #raise e
 
 
 
-    def create_report_catalog(self,report_id,reporting_date,report_create_date,
-                              report_parameters,report_create_status,as_of_reporting_date):
-        db=self.db
-        sql="insert into report_catalog(report_id,reporting_date,report_create_date,\
-            report_parameters,report_create_status,as_of_reporting_date) values(%s,%s,%s,%s,%s,%s)"
-        db.transact(sql,(report_id,reporting_date,report_create_date,report_parameters,report_create_status,as_of_reporting_date))
-        db.commit()
+    def create_report_catalog(self,report_info):
+        try:
+            db=self.db
+            report_id = report_info["report_id"]
+            reporting_date = report_info["reporting_date"]
+            report_create_date = report_create_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            report_create_status=report_info['report_create_status']
+            as_of_reporting_date=report_info['as_of_reporting_date']
 
-    def update_report_catalog(self,status,report_id,reporting_date,report_parameters=None,report_create_date=None):
-        db=self.db
-        update_clause = "report_create_status='{0}'".format(status,)
-        if report_parameters != None:
-            # Replace all singlequotes(') with double quote(") as update sql requires all enclosed in ''
-            update_clause += ", report_parameters='{0}'".format(report_parameters.replace("'",'"'),)
-        if report_create_date != None:
-            # Replace all singlequotes(') with double quote(") as update sql requires all enclosed in ''
-            update_clause += ", report_create_date='{0}'".format(report_create_date.replace("'",'"'),)
-        sql = "update report_catalog set {0} where report_id='{1}' and reporting_date='{2}'".format(update_clause,report_id,reporting_date,)
-        db.transact(sql)
-        db.commit()
+            sql="insert into report_catalog(report_id,reporting_date,report_create_date,\
+                report_parameters,report_create_status,as_of_reporting_date,version) values(%s,%s,%s,%s,%s,%s,1.0)"
+            print(sql)
+            db.transact(sql,(report_id,reporting_date,report_create_date,report_info.__str__(),report_create_status,as_of_reporting_date))
+            db.commit()
+        except Exception as e:
+            app.logger.error(e.__str__())
+            raise (e)
 
+    def update_report_catalog(self, report_info = None, status = None):
+        try:
+            db=self.db
+            report_id = report_info["report_id"]
+            reporting_date = report_info["reporting_date"]
+            report_create_date = report_create_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            update_clause = "report_create_status='{0}'".format(status,)
+            if report_info != None:
+                # Replace all singlequotes(') with double quote(") as update sql requires all enclosed in ''
+                update_clause += ", report_parameters='{0}'".format(str(report_info).replace("'",'"'),)
+            if report_create_date != None:
+                # Replace all singlequotes(') with double quote(") as update sql requires all enclosed in ''
+                update_clause += ", report_create_date='{0}'".format(report_create_date.replace("'",'"'),)
+            sql = "update report_catalog set {0} where report_id='{1}' and reporting_date='{2}'".format(update_clause,report_id,reporting_date,)
+            db.transact(sql)
+            db.commit()
+        except Exception as e:
+            app.logger.error(e.__str__())
+            raise(e)
 
 
     def allowed_file(self,filename):
@@ -471,27 +487,6 @@ class TransactionalReportController(Resource):
                         app.logger.info("Inside CELL_STYLE for cell {}".format(start_cell,))
                         cell_style[start_cell] = eval(row['cell_calc_ref'])
 
-                # if reporting_date == '19000101' or not reporting_date:
-                #     comp_agg_def = self.db.query("select cell_id,cell_render_def,cell_calc_ref from report_def where \
-                #     report_id=%s and sheet_id=%s and cell_render_def='COMP_AGG_REF'",
-                #                                  (self.report_id, sheet["sheet_id"])).fetchall()
-                #
-                #     for row in comp_agg_def:
-                #         cell_d = {}
-                #         if ':' in row['cell_id']:
-                #             start_cell, end_cell = row['cell_id'].split(':')
-                #         else:
-                #             start_cell=row['cell_id']
-                #
-                #         current_cell_exists=next((item for item in matrix_list if item['cell']==start_cell),False)
-                #         if not current_cell_exists:
-                #             cell_d['cell'] = start_cell
-                #             cell_d['value'] = '' #row['cell_calc_ref']
-                #             cell_d['origin'] = "TEMPLATE"
-                #             #print(cell_d)
-                #             matrix_list.append(cell_d)
-
-
                 sheet_d = {}
                 sheet_d['sheet'] = sheet['sheet_id']
                 # print(sheet_d['sheet'])
@@ -535,7 +530,14 @@ class TransactionalReportController(Resource):
                     "from report_dyn_trans_calc_def \
                     where report_id=%s and sheet_id=%s and section_id=%s", \
                     (self.report_id,self.sheet_id, str(section_id['section_id']))).fetchall()
-            return {"section": section_id['section_id'], "secRules": section_rules, "secColumns": section_col}
+            order_rules = self.db.query("select * " + \
+                    "from report_dyn_trans_agg_def \
+                    where report_id=%s and sheet_id=%s and section_id=%s", \
+                    (self.report_id,self.sheet_id, str(section_id['section_id']))).fetchall()
+            return {"section": section_id['section_id'],
+                    "secRules": section_rules,
+                    "secOrders": order_rules, 
+                    "secColumns": section_col}
         except Exception as e:
             app.logger.error(str(e))
             return {"msg": str(e)}, 500
@@ -570,8 +572,12 @@ class TransactionalReportController(Resource):
             return {"msg": str(e)}, 500
 
 
-    def create_report_detail(self,report_id,business_date_from,business_date_to):
+    def create_report_detail(self, report_info):
         try:
+            report_id = report_info['report_id']
+            business_date_from=report_info['business_date_from']
+            business_date_to=report_info['business_date_to']
+
             reporting_date=business_date_from+business_date_to
             app.logger.info("Cleaning table report_dyn_trans_qualified_data_link and report_summary" )
             util.clean_table(self.db._cursor(), 'report_dyn_trans_qualified_data_link', '', reporting_date,'report_id=\'' + report_id + '\'')
@@ -579,110 +585,111 @@ class TransactionalReportController(Resource):
             app.logger.info("Getting list of sections for report {}".format(report_id))
             sheets = self.db.query("select distinct sheet_id,section_id from report_dyn_trans_def where report_id=%s and section_type='DYNDATA' ",
                                (report_id,)).fetchall()
+            print(sheets)
             for sheet in sheets:
                 sheet_id = sheet['sheet_id']
                 section_id=sheet['section_id']
                 trans_calc_def=self.get_dyn_trans_calc_def_details(report_id,sheet_id,section_id)
-                trans_calc_def=pd.DataFrame(trans_calc_def)
-                app.logger.info("trans_calc_def post pd dataframe.. {}".format(trans_calc_def))
+                if trans_calc_def:
+                    trans_calc_def=pd.DataFrame(trans_calc_def)
+                    app.logger.info("trans_calc_def post pd dataframe.. {}".format(trans_calc_def))
 
-                qualified_filtered_data=pd.DataFrame()
-                for source in trans_calc_def['source_id'].unique():
-                    link_data_records = []
-                    source_data=self.get_qualified_source_data(source,business_date_from,business_date_to)
-                    df_source_data=pd.DataFrame(source_data)
-                        # for index,row in qd_source_data.iterrows():
-                        #     tcd_source=trans_calc_def.loc[trans_calc_def['source_id']==source]
-                        #     for idx,rw in tcd_source.iterrows():
-                        #         cell_calc_render_ref=eval(rw['cell_calc_render_ref'])
-                        #         cell_calc_rule=cell_calc_render_ref['rule']
-                        #         if set(cell_calc_rule.split(',')).issubset(set(row['business_rules'].split(','))):
-                        #             cell_calc_columns=cell_calc_render_ref['calc']
-                        #             data_dict={}
-                        #             for col in cell_calc_columns.keys():
-                        #                 # app.logger.info("Column value [{0}]".format(col))
-                        #                 if cell_calc_columns[col]['column'] is not None and cell_calc_columns[col]['column'] !='':
-                        #                     data_dict[col]=row[cell_calc_columns[col]['column']]
-                        #
-                        #             # app.logger.info("data_dict ...{}".format(data_dict))
-                        #             qualified_filtered_data=qualified_filtered_data.append(data_dict,ignore_index=True)
-                        #             link_data_records.append((source,report_id,sheet_id,section_id,rw['cell_calc_ref'],row['business_date'],reporting_date))
-                        #             break
+                    qualified_filtered_data=pd.DataFrame()
+                    qpdf = pd.DataFrame()
+                    for source in trans_calc_def['source_id'].unique():
+                        link_data_records = []
+                        source_data=self.get_qualified_source_data(source,business_date_from,business_date_to)
 
+                        df_source_data=pd.DataFrame(source_data)
+                        print(df_source_data.columns)
+                        if not df_source_data.empty:
 
-                    if not df_source_data.empty:
-                        # Create dummy columns (with truth values) on qualified business rules
-                        qdr=df_source_data['business_rules'].str.get_dummies(sep=',')
-                        # merge both the data frames into one to facilitate the filter
-                        qd_source_data=pd.concat([df_source_data,qdr],axis=1)
-                        app.logger.info("Before start of the qualified data loop...")
-
-                        # for index,row in qd_source_data.iterrows():
-                        #     tcd_source=trans_calc_def.loc[trans_calc_def['source_id']==source]
-                        #     for idx,rw in tcd_source.iterrows():
-                        #         cell_calc_render_ref=eval(rw['cell_calc_render_ref'])
-                        #         cell_calc_rule=cell_calc_render_ref['rule']
-                        #         if set(cell_calc_rule.split(',')).issubset(set(row['business_rules'].split(','))):
-                        #             cell_calc_columns=cell_calc_render_ref['calc']
-                        #             data_dict={}
-                        #             for col in cell_calc_columns.keys():
-                        #                 # app.logger.info("Column value [{0}]".format(col))
-                        #                 if cell_calc_columns[col]['column'] is not None and cell_calc_columns[col]['column'] !='':
-                        #                     data_dict[col]=row[cell_calc_columns[col]['column']]
-                        #
-                        #             # app.logger.info("data_dict ...{}".format(data_dict))
-                        #             qualified_filtered_data=qualified_filtered_data.append(data_dict,ignore_index=True)
-                        #             link_data_records.append((source,report_id,sheet_id,section_id,rw['cell_calc_ref'],row['business_date'],reporting_date))
-                        #             break
-
-                        tcd_source=trans_calc_def.loc[trans_calc_def['source_id']==source]
-                        for idx,rw in tcd_source.iterrows():
-                            cell_calc_render_ref=eval(rw['cell_calc_render_ref'])
-                            cell_calc_rule=cell_calc_render_ref['rule']
-                            expr_str=""
-                            for r in cell_calc_rule.split(','):
-                                if r is not None and r !='':
-                                    expr_str= "(qd_source_data['{0}']==1)".format(r,) if expr_str=="" else expr_str + " & (qd_source_data['{0}']==1)".format(r,)
-                            expr_str = "qd_source_data[" + expr_str + "]"
-                            dfr=pd.DataFrame()
-                            app.logger.info("Before dfr filter ...{0}".format(expr_str,))
-                            dfr=eval(expr_str)
-                            # app.logger.info("After dfr filter ...{0}".format(dfr,))
-                            if not dfr.empty:
-                                cell_calc_columns=cell_calc_render_ref['calc']
-                                data_dict={}
-                                col_list=[]
+                            # Create dummy columns (with truth values) on qualified business rules
+                            qdr=df_source_data['business_rules'].str.get_dummies(sep=',')
+                            # merge both the data frames into one to facilitate the filter
+                            qd_source_data=pd.concat([df_source_data,qdr],axis=1)
+                            app.logger.info("Before start of the qualified data loop...")
+                            tcd_source=trans_calc_def.loc[trans_calc_def['source_id']==source]
+                            for idx,rw in tcd_source.iterrows():
+                                cell_calc_render_ref=eval(rw['cell_calc_render_ref'])
+                                cell_calc_rule=cell_calc_render_ref['rule']
                                 expr_str=""
-                                for col in cell_calc_columns.keys():
-                                    # app.logger.info("Column value [{0}]".format(col))
-                                    if cell_calc_columns[col]['column'] is not None and cell_calc_columns[col]['column'] !='':
-                                        col_list.append(col)
-                                        expr_str = "\""+cell_calc_columns[col]['column']+"\":\""+col+"\"" if expr_str=="" else expr_str + ",\""+cell_calc_columns[col]['column']+"\":\""+col+"\""
-                                expr_str="dfr.rename(columns={" + expr_str + "},inplace=True)"
-                                app.logger.info("Before dfr column rename  ...{0}".format(expr_str,))
-                                eval(expr_str)
-                                app.logger.info("after dfr eval expr_str {}".format(dfr,))
+                                for r in cell_calc_rule.split(','):
+                                    if r is not None and r !='':
+                                        expr_str= "(qd_source_data['{0}']==1)".format(r,) if expr_str=="" else expr_str + " & (qd_source_data['{0}']==1)".format(r,)
+                                expr_str = "qd_source_data[" + expr_str + "]"
+                                app.logger.info("Before dfr filter ...{0}".format(expr_str,))
+                                dfr=eval(expr_str)
+                                #print("evaluated string : " , dfr)
+                                qpdf_temp=dfr[['qualifying_key','business_date']]
+                                qpdf_temp['source_id']=source
+                                qpdf_temp['report_id'] = report_id
+                                qpdf_temp['sheet_id'] = sheet_id
+                                qpdf_temp['section_id'] = section_id
+                                qpdf_temp['cell_calc_ref'] = rw['cell_calc_ref']
+                                qpdf_temp['reporting_date'] = reporting_date
+                                # app.logger.info("After dfr filter ...{0}".format(dfr,))
+                                if not dfr.empty:
+                                    data_dict={}
+                                    cell_calc_columns=cell_calc_render_ref['calc']
+                                    col_list=[]
+                                    expr_str=""
+                                    if cell_calc_columns:
+                                        for col in cell_calc_columns.keys():
+                                            # app.logger.info("Column value [{0}]".format(col))
+                                            if cell_calc_columns[col]['column'] is not None and cell_calc_columns[col]['column'] !='':
+                                                col_list.append(col)
+                                                expr_str = "\""+cell_calc_columns[col]['column']+"\":\""+col+"\"" if expr_str=="" else expr_str + ",\""+cell_calc_columns[col]['column']+"\":\""+col+"\""
+                                    expr_str="dfr.rename(columns={" + expr_str + "},inplace=True)"
+                                    #app.logger.info("Before dfr column rename  ...{0}".format(expr_str,))
+                                    eval(expr_str)
 
-                                # app.logger.info("data_dict ...{}".format(data_dict))
-                                qualified_filtered_data=qualified_filtered_data.append(dfr[col_list],ignore_index=True)
-                                # link_data_records.append((source,report_id,sheet_id,section_id,rw['cell_calc_ref'],row['business_date'],reporting_date))
+                                    qualified_filtered_data=qualified_filtered_data.append(dfr[col_list],ignore_index=True)
+                                    qpdf=qpdf.append(qpdf_temp,ignore_index=True)
+                                    # link_data_records.append((source,report_id,sheet_id,section_id,rw['cell_calc_ref'],row['business_date'],reporting_date))
 
-                    app.logger.info("At the end of the qualified data loop...")
-                    # row_id=self.db.transactmany("insert into report_dyn_trans_qualified_data_link(source_id,report_id,\
-                    #                                  sheet_id,section_id,cell_calc_ref,business_date,reporting_date) values\
-                    #                                 (%s,%s,%s,%s,%s,%s,%s)",link_data_records)
+                        app.logger.info("At the end of the qualified data loop...")
 
-                qualified_filtered_data.fillna('',inplace=True)
-                record_json=qualified_filtered_data.to_dict(orient='records')
-                # app.logger.info("qualified_filtered_data ...{}".format(qualified_filtered_data))
-                summary_records=[]
-                row_seq=0
-                for rec in record_json:
-                    row_seq+=1
-                    summary_records.append((report_id,sheet_id,section_id,row_seq,str(rec),reporting_date))
 
-                row_id=self.db.transactmany("insert into report_dyn_trans_summary(report_id,sheet_id,section_id,row_id,row_summary,reporting_date)\
-                                            values(%s,%s,%s,%s,%s,%s)",summary_records)
+                    qualified_filtered_data.fillna('',inplace=True)
+                    sql = "select cell_agg_render_ref from report_dyn_trans_agg_def where report_id = %s \
+                            and sheet_id = %s and section_id = %s"
+                    data = self.db.query(sql,(report_id, sheet_id, section_id)).fetchone()
+                    print("Data",data)
+                    if data:
+                        data = eval(data['cell_agg_render_ref'])
+                        print("Here in if")
+                        if "sort" in data.keys():
+                            cols = []
+                            order = []
+                            for key in data['sort']:
+                                cols.append(key)
+                                if data['sort'][key] == 'asc':
+                                    order.append(1)
+                                else:
+                                    order.append(0)
+                            qualified_filtered_data.sort_values(cols, inplace = True , ascending = order)
+                            if "top" in data.keys():
+                                print("Inside top")
+                                qualified_filtered_data = qualified_filtered_data.head(data['top'])
+                    print("Qualified Data", qualified_filtered_data)
+                    record_json=qualified_filtered_data.to_dict(orient='records')
+                    # app.logger.info("qualified_filtered_data ...{}".format(qualified_filtered_data))
+                    summary_records=[]
+                    row_seq=0
+                    for rec in record_json:
+                        row_seq+=1
+                        summary_records.append((report_id,sheet_id,section_id,row_seq,str(rec),reporting_date))
+
+                    row_id=self.db.transactmany("insert into report_dyn_trans_summary(report_id,sheet_id,section_id,row_id,row_summary,reporting_date)\
+                                                values(%s,%s,%s,%s,%s,%s)",summary_records)
+
+                    columns = ",".join(qpdf.columns)
+                    placeholders = ",".join(['%s'] * len(qpdf.columns))
+                    data = list(qpdf.itertuples(index=False, name=None))
+                    row_id=self.db.transactmany("insert into report_dyn_trans_qualified_data_link ({0}) \
+                                                values ({1})".format(columns, placeholders),data)
+
 
                 self.db.commit()
 
@@ -843,27 +850,6 @@ class TransactionalReportController(Resource):
                             cell_style[start_cell] = eval(row['cell_calc_ref'])
                         else:
                             pass
-
-
-                # if reporting_date == '19000101' or not reporting_date:
-                #     comp_agg_def = self.db.query("select cell_id,cell_render_def,cell_calc_ref from report_def where \
-                #     report_id=%s and sheet_id=%s and cell_render_def='COMP_AGG_REF'",
-                #                                  (self.report_id, sheet["sheet_id"])).fetchall()
-                #
-                #     for row in comp_agg_def:
-                #         cell_d = {}
-                #         if ':' in row['cell_id']:
-                #             start_cell, end_cell = row['cell_id'].split(':')
-                #         else:
-                #             start_cell=row['cell_id']
-                #
-                #         current_cell_exists=next((item for item in matrix_list if item['cell']==start_cell),False)
-                #         if not current_cell_exists:
-                #             cell_d['cell'] = start_cell
-                #             cell_d['value'] = '' #row['cell_calc_ref']
-                #             cell_d['origin'] = "TEMPLATE"
-                #             #print(cell_d)
-                #             matrix_list.append(cell_d)
 
 
                 sheet_d = {}
