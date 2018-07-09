@@ -35,7 +35,14 @@ class ReportTemplateController(Resource):
             self.db=DatabaseHelper(self.tenant_info)
 
     @authenticate
-    def get(self):
+    def get(self,doc_id=None):
+
+        if doc_id:
+            report = doc_id
+            country = request.args.get('country')
+            domain_type = request.args.get('domain_type')
+            app.logger.info("Report ID {}".format(report))
+            return self.report_template_check(report_id=report,country=country, domain_type=domain_type)
 
         if request.endpoint == 'get_report_template_suggestion_list_ep':
             reports = request.args.get('reports')
@@ -320,6 +327,27 @@ class ReportTemplateController(Resource):
                 return {"msg":"No report matched found"},404
             else:
                 return data_dict['country']
+        except Exception as e:
+            app.logger.error(e)
+            return {"msg": e}, 500
+
+    def report_template_check(self,report_id,country=None, domain_type=""):
+        try:
+            app.logger.info("Report ID inside the check function {}".format(report_id,))
+            if domain_type and domain_type != 'undefined' and domain_type=="master":
+                domain_type = "_" + domain_type
+            else:
+                domain_type = ""
+            sql = "select report_id from report_def_catalog{} where report_id='{}'".format(domain_type,report_id)
+            if country and country != 'undefined' and country != 'null':
+                sql += " and country = '{}'".format(country)
+            report = self.db.query(sql).fetchall()
+
+            if report:
+                return { "msg": "Report ID already exists.", "donotUseMiddleWare": True },200
+            else:
+                return {}, 200
+
         except Exception as e:
             app.logger.error(e)
             return {"msg": e}, 500

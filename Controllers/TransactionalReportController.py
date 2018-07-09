@@ -536,7 +536,7 @@ class TransactionalReportController(Resource):
                     (self.report_id,self.sheet_id, str(section_id['section_id']))).fetchall()
             return {"section": section_id['section_id'],
                     "secRules": section_rules,
-                    "secOrders": order_rules, 
+                    "secOrders": order_rules,
                     "secColumns": section_col}
         except Exception as e:
             app.logger.error(str(e))

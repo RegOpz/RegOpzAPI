@@ -14,10 +14,11 @@ class UserController(Resource):
 	@authenticate
 	def get(self, userId = None):
 		userCheck = request.args.get('userCheck')
+		labellist = request.args.get('labelList')
 		if not userCheck and TokenKey in request.environ:
-			auth = request.environ[TokenKey]
+			# auth = request.environ[TokenKey]
 			# authenticate
-			return self.regopzUser.get(userId)
+			return self.regopzUser.get(userId,labellist)
 		return self.regopzUser.getUserList(userId)
 
 	def post(self):

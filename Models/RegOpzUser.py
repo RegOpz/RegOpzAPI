@@ -1,7 +1,7 @@
 from Helpers.DatabaseHelper import DatabaseHelper
 from flask import url_for, request
 from Models.Token import Token
-# import bcrypt
+from bcrypt import hashpw, gensalt
 from Constants.Status import *
 import json
 from Helpers.authenticate import *
@@ -35,6 +35,7 @@ class RegOpzUser(object):
             self.id = True
             self.name = user['name']
             self.password = user['password']
+            self.hashedpassword = hashpw(self.password.encode('utf-8'), gensalt())
             self.role = user['role'] if 'role' in user else "Default"
             self.status = user['status'] if 'status' in user else "Unspecified"
             self.first_name = user['first_name']
@@ -47,7 +48,7 @@ class RegOpzUser(object):
     def save(self):
         queryString = "INSERT INTO regopzuser (name,password,role_id,status,first_name,last_name,\
             contact_number,email,ip,image) VALUES (%s,%s,(SELECT id from roles where role=%s),%s,%s,%s,%s,%s,%s,%s)"
-        queryParams = (self.name, self.password, self.role, self.status, self.first_name,
+        queryParams = (self.name, self.hashedpassword, self.role, self.status, self.first_name,
             self.last_name, self.contact_number, self.email, self.ip, self.image,)
         try:
             rowid = self.dbhelper.transact(queryString, queryParams)
@@ -58,7 +59,7 @@ class RegOpzUser(object):
             print(e)
             return { "msg": "Cannot add this user, please review the details" },400
 
-    def get(self, userId = None, update = False):
+    def get(self, userId = None, labellist = False):
         queryString = "SELECT name, role, first_name, last_name, email, contact_number, image, status FROM regopzuser\
             JOIN (roles) ON (regopzuser.role_id = roles.id) WHERE status != 'Deleted'"
         queryParams = ()
@@ -68,7 +69,7 @@ class RegOpzUser(object):
         cur = self.dbhelper.query(queryString, queryParams)
         data = cur.fetchall()
         if data:
-            if update:
+            if labellist:
                 return data
             userList = []
             for user in data:
@@ -95,14 +96,25 @@ class RegOpzUser(object):
             for key in form:
                 label = labelList[key]
                 data[label] = form[key]
+        else:
+            data = form
+
+        if data:
             queryString = "UPDATE regopzuser SET role_id=(SELECT id from roles WHERE role=%s), first_name=%s, last_name=%s, email=%s,\
-                contact_number=%s, status=%s WHERE name=%s"
+                contact_number=%s, status=%s"
             queryParams = (data['role'], data['first_name'], data['last_name'], data['email'], \
-                data['contact_number'], data['status'], data['name'])
+                data['contact_number'], data['status'])
+            if 'password' in data.keys() and data['password'] and data['password']==data['passwordConfirm']:
+                queryString += ",password=%s"
+                queryParams = queryParams + (hashpw(data['password'].encode('utf-8'), gensalt()),)
+
+            queryString += " WHERE name=%s"
+            queryParams = queryParams + (data['name'],)
+
             try:
                 rowId = self.dbhelper.transact(queryString, queryParams)
                 self.dbhelper.commit()
-                return { "msg": "Successfully updated details." },200
+                return { "msg": "Successfully updated user details." },200
             except Exception as e:
                 print(e)
                 return { "msg": "Cannot update this user, please review the details" },400
@@ -138,12 +150,21 @@ class RegOpzUser(object):
             return { "msg": "Invalid credentials recieved." },301
 
     def login(self, username, password):
-        # This process cannot distinguish between Invalid password and Invalid username
-        # hashpass = bcrypt.hashpw(base64.b64encode(hashlib.sha256(password).digest()), username)
-        queryString = "SELECT r.role, u.* FROM regopzuser u JOIN (roles r) ON (u.role_id = r.id)\
-            WHERE name=%s AND password=%s AND status='Active'"
-        cur = self.dbhelper.query(queryString, (username, password, ))
-        data = cur.fetchone()
-        if data:
-            return Token().create(data)
-        return {"msg": "Login failed", "donotUseMiddleWare": True },403
+        try:
+            # This process cannot distinguish between Invalid password and Invalid username
+            # hashpass = bcrypt.hashpw(base64.b64encode(hashlib.sha256(password).digest()), username)
+            queryString = "SELECT r.role, u.* FROM regopzuser u JOIN (roles r) ON (u.role_id = r.id)\
+                WHERE name=%s AND status='Active'"
+            cur = self.dbhelper.query(queryString, (username, ))
+            data = cur.fetchone()
+            if data:
+                # If user data exist then check the hashed password value
+                password_entered = password.encode('utf-8')
+                # print("hashpw {}".format(hashpw(password.encode('utf-8'), gensalt())))
+                hashedpassword = data['password'].encode('utf-8')
+                if hashpw(password_entered,hashedpassword)==hashedpassword:
+                    return Token().create(data)
+            return {"msg": "Login failed", "donotUseMiddleWare": True },403
+        except Exception as e:
+            print(str(e))
+            return {"msg": "Login failed", "donotUseMiddleWare": True },403
