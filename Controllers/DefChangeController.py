@@ -250,7 +250,7 @@ class DefChangeController(Resource):
             self.db.rollback()
             return {"msg": str(e)},500
 
-    def audit_insert(self, data, id):
+    def audit_insert(self, data, id,db_conn=None):
         try:
             app.logger.info("Meta Data Change controller audit info insert")
             audit_info = data['audit_info']
@@ -258,10 +258,14 @@ class DefChangeController(Resource):
             "(id,prev_id,origin_id,table_name,change_type,maker_comment,status,change_reference," + \
             "date_of_change,maker,maker_tenant_id,group_id)" + \
             " values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
-            res = self.db.transact(sql, (id, id, id, audit_info['table_name'], audit_info['change_type'], \
-                    audit_info['comment'],'PENDING', audit_info['change_reference'], datetime.now(), \
-                    audit_info['maker'],audit_info['maker_tenant_id'],audit_info['group_id']))
-            self.db.commit()
+            if (db_conn==None):
+                res = self.db.transact(sql, (id, id, id, audit_info['table_name'], audit_info['change_type'], \
+                        audit_info['comment'],'PENDING', audit_info['change_reference'], datetime.now(), \
+                        audit_info['maker'],audit_info['maker_tenant_id'],audit_info['group_id']))
+            else:
+                res = self.db.transact(sql, (id, id, id, audit_info['table_name'], audit_info['change_type'], \
+                audit_info['comment'], 'PENDING', audit_info['change_reference'],datetime.now(), \
+                audit_info['maker'], audit_info['maker_tenant_id'],audit_info['group_id']))
 
         except Exception as e:
             app.logger.error(str(e))
