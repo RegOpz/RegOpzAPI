@@ -44,7 +44,7 @@ class ManageMasterReportController(Resource):
         if request.endpoint == 'fetch-report-id':
             self.report_id=request.args.get("report_id")
             country=request.args.get("country")
-            return check_report_id(report_id=self.report_id,country=country)
+            return self.check_report_id(report_id=self.report_id, country=country)
 
         return self.report_template_catalog_list(country)
 
@@ -125,7 +125,7 @@ class ManageMasterReportController(Resource):
                 params.append(values)
             # print(params)
 
-            ret = self.tenant_db.transactmany("insert into report_calc_def(source_id, report_id, sheet_id, cell_id, \
+            ret = self.tenant_db.transactmany("insert into report_calc_def(report_id, sheet_id, cell_id, \
             cell_calc_ref, cell_business_rules, last_updated_by, dml_allowed, in_use,aggregation_ref, aggregation_func,source_id)\
                                                         values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", params)
 
