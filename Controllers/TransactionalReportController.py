@@ -37,6 +37,8 @@ class TransactionalReportController(Resource):
             tenant_info = json.loads(self.domain_info)
             self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
             self.db=DatabaseHelper(self.tenant_info)
+            self.user_id = Token().authenticate()
+            self.dcc_tenant = DefChangeController(tenant_info=self.tenant_info)
 
             self.opsLog = OperationalLogController()
             self.er = {}
@@ -124,6 +126,46 @@ class TransactionalReportController(Resource):
             self.report_id = report_id
             report_info=request.get_json(force=True)
             return self.create_report(report_info)
+         if request.endpoint == 'insert-into-dyn-tables':
+            params=request.get_json(force=True)
+            return self.insert_def_log(params)
+
+    def insert_def_log(self,params):
+        app.logger.info("Inserting into table and def_change")
+        try:
+            tenant_id = str(json.loads(self.domain_info)["tenant_id"])
+            table_name = params["table_name"]
+            report_id = params["report_id"]
+            sheet_id = params["sheet_id"]
+            section_id = params["section_id"]
+            change_type = params["change_type"]
+            comment = params["comment"]
+            change_reference = params["change_reference"]
+            if table_name =="report_dyn_trans_agg_def":
+                cell_agg_ref = params["cell_agg_ref"]
+                cell_agg_render_ref = params["cell_agg_render_ref"]
+                update_info={"report_id":report_id,"sheet_id":sheet_id,"section_id":section_id,
+                        "cell_agg_ref":cell_agg_ref,"cell_agg_render_ref":cell_agg_render_ref}
+
+            if table_name == "report_dyn_trans_calc_def":
+                source_id=params["source_id"]
+                cell_calc_ref=params["cell_calc_ref"]
+                cell_calc_render_ref=params["cell_calc_render_ref"]
+                last_updated_by=params["last_updated_by"]
+                update_info = {"report_id": report_id, "sheet_id": sheet_id, "section_id": section_id,
+                               "source_id": source_id, "cell_calc_ref": cell_calc_ref,"cell_calc_render_ref":cell_calc_render_ref,"last_updated_by":last_updated_by}
+
+            audit_info = {"audit_info": {"table_name": table_name, "change_type": change_type, "comment": comment,
+                                         "change_reference": change_reference, "maker": self.user_id,
+                                         "maker_tenant_id": tenant_id, "group_id": self.user_id + tenant_id}}
+            data = {"table_name": table_name, "change_type": change_type, "update_info": update_info,
+                    "audit_info": audit_info}
+
+            self.dcc_tenant.insert_data(data)
+            return {"msg":"Insertion into def_log done"},200
+        except Exception as e:
+            app.logger.info("ERROR: ",e)
+            return {"msg":str(e)},500
 
     def create_report(self, report_info):
         try:
