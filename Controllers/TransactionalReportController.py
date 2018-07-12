@@ -126,42 +126,30 @@ class TransactionalReportController(Resource):
             self.report_id = report_id
             report_info=request.get_json(force=True)
             return self.create_report(report_info)
-         if request.endpoint == 'insert-into-dyn-tables':
+         if request.endpoint == 'operate-on-dyn-tables':
             params=request.get_json(force=True)
             return self.insert_def_log(params)
 
     def insert_def_log(self,params):
-        app.logger.info("Inserting into table and def_change")
+        app.logger.info("Performing sql operationd on dyn_tans_tables and def_change")
         try:
             tenant_id = str(json.loads(self.domain_info)["tenant_id"])
-            table_name = params["table_name"]
-            report_id = params["report_id"]
-            sheet_id = params["sheet_id"]
-            section_id = params["section_id"]
-            change_type = params["change_type"]
-            comment = params["comment"]
+            audit_info = params["audit_info"]
+            update_info = params["update_info"]
+            report_id=update_info["report_id"]
+            id=audit_info["id"]
+            sheet_id=update_info["sheet_id"]
+            section_id=update_info["section_id"]
+            audit_info["change_reference"]="Aggregation rule for sorting of report_id: {0},sheet_id: {1}, section_id: {2}".format(report_id,sheet_id,section_id)
+            table_name = audit_info["table_name"]
+            change_type = audit_info["change_type"]
             change_reference = params["change_reference"]
-            if table_name =="report_dyn_trans_agg_def":
-                cell_agg_ref = params["cell_agg_ref"]
-                cell_agg_render_ref = params["cell_agg_render_ref"]
-                update_info={"report_id":report_id,"sheet_id":sheet_id,"section_id":section_id,
-                        "cell_agg_ref":cell_agg_ref,"cell_agg_render_ref":cell_agg_render_ref}
-
-            if table_name == "report_dyn_trans_calc_def":
-                source_id=params["source_id"]
-                cell_calc_ref=params["cell_calc_ref"]
-                cell_calc_render_ref=params["cell_calc_render_ref"]
-                last_updated_by=params["last_updated_by"]
-                update_info = {"report_id": report_id, "sheet_id": sheet_id, "section_id": section_id,
-                               "source_id": source_id, "cell_calc_ref": cell_calc_ref,"cell_calc_render_ref":cell_calc_render_ref,"last_updated_by":last_updated_by}
-
-            audit_info = {"audit_info": {"table_name": table_name, "change_type": change_type, "comment": comment,
-                                         "change_reference": change_reference, "maker": self.user_id,
-                                         "maker_tenant_id": tenant_id, "group_id": self.user_id + tenant_id}}
             data = {"table_name": table_name, "change_type": change_type, "update_info": update_info,
                     "audit_info": audit_info}
-
-            self.dcc_tenant.insert_data(data)
+            if change_type == 'UPDATE' or change_type == 'DELETE':
+                self.dcc_tenant.update_or_delete_data(data,id)
+            if change_type == 'INSERT':
+                self.dcc_tenant.insert_data(data)
             return {"msg":"Insertion into def_log done"},200
         except Exception as e:
             app.logger.info("ERROR: ",e)
