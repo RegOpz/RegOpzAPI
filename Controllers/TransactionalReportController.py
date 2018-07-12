@@ -18,6 +18,7 @@ import json
 import ast
 from operator import itemgetter
 from datetime import datetime
+from Controllers.DefChangeController import DefChangeController
 import time
 import math
 import re
@@ -136,14 +137,16 @@ class TransactionalReportController(Resource):
             tenant_id = str(json.loads(self.domain_info)["tenant_id"])
             audit_info = params["audit_info"]
             update_info = params["update_info"]
+            update_info["cell_agg_render_ref"] = json.dumps(update_info["cell_agg_render_ref"])
             report_id=update_info["report_id"]
             id=audit_info["id"]
+            audit_info["comment"]=audit_info["maker_comment"]
+            audit_info.pop('maker_comment',None)
             sheet_id=update_info["sheet_id"]
             section_id=update_info["section_id"]
             audit_info["change_reference"]="Aggregation rule for sorting of report_id: {0},sheet_id: {1}, section_id: {2}".format(report_id,sheet_id,section_id)
             table_name = audit_info["table_name"]
             change_type = audit_info["change_type"]
-            change_reference = params["change_reference"]
             data = {"table_name": table_name, "change_type": change_type, "update_info": update_info,
                     "audit_info": audit_info}
             if change_type == 'UPDATE' or change_type == 'DELETE':
