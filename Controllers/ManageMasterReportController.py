@@ -298,12 +298,19 @@ class ManageMasterReportController(Resource):
                     sql += " AND sheet_id='{}'".format(sheet_id,)
                 if cell_id:
                     sql += " AND cell_id='{}'".format(cell_id)
+                app.logger.info("SQL for check {}".format(sql.format('report_calc_def_master',)))
                 calc_id_list = self.master_db.query(sql.format('report_calc_def_master',)).fetchall()
-                calc_id_list = ",".join(map(str,[id['id'] for id in calc_id_list]))
+                if calc_id_list:
+                    calc_id_list = ",".join(map(str,[id['id'] for id in calc_id_list]))
+                else:
+                    calc_id_list = "-99999999"
                 audit_list+=self.dcc_master.get_audit_history(id_list=calc_id_list,table_name='report_calc_def_master')
 
                 agg_id_list = self.master_db.query(sql.format('report_comp_agg_def_master',)).fetchall()
-                agg_id_list = ",".join(map(str,[id['id'] for id in agg_id_list]))
+                if agg_id_list:
+                    agg_id_list = ",".join(map(str,[id['id'] for id in agg_id_list]))
+                else:
+                    agg_id_list = "-99999999"
                 audit_list+=self.dcc_master.get_audit_history(id_list=agg_id_list,table_name='report_comp_agg_def_master')
                 return audit_list
         except Exception as e:
