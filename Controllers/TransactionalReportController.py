@@ -117,7 +117,7 @@ class TransactionalReportController(Resource):
             self.report_id = report_id
             report_info=request.get_json(force=True)
             return self.create_report(report_info)
-         if request.endpoint == 'operate-on-dyn-tables':
+         if request.endpoint == 'insert-into-dyn-tables':
             params=request.get_json(force=True)
             return self.insert_def_log(params)
 
