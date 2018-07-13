@@ -157,6 +157,9 @@ class GenerateReportController(Resource):
 
             update_clause = "report_create_status='{0}'".format(status,)
             update_clause += ", report_create_date='{0}'".format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'),)
+            if report_parameters != None:
+                report_parameters_str=json.dumps(report_parameters)
+                update_clause += ", report_parameters='{0}'".format(report_parameters_str,)
             if report_snapshot !=None:
                 update_clause +=", report_snapshot='{0}'".format(report_snapshot)
             sql = "update report_catalog set {0} where report_id='{1}' and reporting_date='{2}' and version={3}".format(update_clause,report_id,reporting_date,version)

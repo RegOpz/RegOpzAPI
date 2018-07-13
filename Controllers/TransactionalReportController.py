@@ -8,6 +8,7 @@ from Constants.Status import *
 from Helpers.DatabaseHelper import DatabaseHelper
 from Models.Document import Document
 import datetime
+from collections import defaultdict
 import openpyxl as xls
 import Helpers.utils as util
 from openpyxl.styles import Border, Side, PatternFill, Font, GradientFill, Alignment, Protection
@@ -21,8 +22,10 @@ import time
 import math
 import re
 import pandas as pd
+from Models.Token import Token
 from Helpers.utils import autheticateTenant
 from Helpers.authenticate import *
+from Controllers.OperationalLogController import OperationalLogController
 
 UPLOAD_FOLDER = './uploads/templates'
 ALLOWED_EXTENSIONS = set(['xls', 'xlsx'])
@@ -35,11 +38,17 @@ class TransactionalReportController(Resource):
             self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
             self.db=DatabaseHelper(self.tenant_info)
 
+            self.opsLog = OperationalLogController()
+            self.er = {}
+            self.log_master_id = None
+            self.user_id = Token().authenticate()
+
     @authenticate
     def get(self,report_id=None,cell_id=None, rule_cell_id=None,reporting_date=None):
         if report_id and reporting_date:
             self.report_id=report_id
-            return self.render_trans_view_report_json(reporting_date)
+            version = 1 # needs to be amanded to check for request args
+            return self.render_trans_view_report_json(reporting_date = reporting_date, version = version)
 
         if report_id and not reporting_date:
             self.report_id = report_id
@@ -128,43 +137,45 @@ class TransactionalReportController(Resource):
 
                 business_date_from=report_kwargs['business_date_from']
                 business_date_to=report_kwargs['business_date_to']
-                self.update_report_catalog(status='RUNNING',report_id=report_id,reporting_date=reporting_date,report_parameters=report_info,report_create_date=report_create_date)
+                self.update_report_catalog(status='RUNNING',report_id=report_id,reporting_date=reporting_date,report_info=report_info,report_create_date=report_create_date)
 
             else:
-                # business_date_from=report_info['business_date_from']
-                # business_date_to=report_info['business_date_to']
-                #
-                # report_id=report_info['report_id']
-                # reporting_date=report_info['reporting_date']
-                # as_of_reporting_date=report_info['as_of_reporting_date']
-                # report_create_date=report_info['report_create_date']
-                # report_create_status=report_info['report_create_status']
-                #
-                # report_parameters = "'business_date_from':'" + report_info["business_date_from"] + "'," + \
-                #                     "'business_date_to':'" + report_info["business_date_to"] + "'," + \
-                #                     "'reporting_currency':'" + report_info["reporting_currency"] + "'," + \
-                #                     "'ref_date_rate':'" + report_info["ref_date_rate"] + "'," + \
-                #                     "'rate_type':'" + report_info["rate_type"] +"'"
-                #
-                # report_kwargs=eval("{"+"'report_id':'" + report_id + "',"+ report_parameters + "}")
-                # print("report_kwarg: " + report_kwargs.__str__())
-                # report_create_date = report_create_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                self.create_report_catalog(report_info)
-                self.update_report_catalog(report_info, status='RUNNING')
 
-            self.create_report_detail(report_info)
+                report_version_no = self.create_report_catalog(report_info)
+                self.update_report_catalog(report_info = report_info
+                                          , status='RUNNING'
+                                          , version = report_version_no)
 
-            self.update_report_catalog(report_info, status='SUCCESS' )
+            report_snapshot = self.create_report_detail(report_version_no, report_info)
+
+            self.update_report_catalog(report_info = report_info
+                                       , status='SUCCESS'
+                                       , report_snapshot=report_snapshot
+                                       , version=report_version_no )
+
             report_id = report_info["report_id"]
             reporting_date = report_info["reporting_date"]
+            if self.log_master_id:
+                self.opsLog.write_log_detail(master_id=self.log_master_id
+                    , operation_sub_type='End of Create Report'
+                    , operation_status='Complete'
+                    , operation_narration="Report generated SUCCESSFULLY for [{0}] Reporting date [{1}].".format(str(report_id),str(reporting_date))
+                    )
+                self.opsLog.update_master_status(id=self.log_master_id,operation_status="SUCCESS")
+
             return {"msg": "Report generated SUCCESSFULLY for ["+str(report_id)+"] Reporting date ["+str(reporting_date)+"]."}, 200
         except Exception as e:
             self.db.rollback()
             app.logger.error(str(e))
+            if self.log_master_id:
+                self.opsLog.write_log_detail(master_id=self.log_master_id
+                    , operation_sub_type='Error occured while creating report'
+                    , operation_status='Failed'
+                    , operation_narration="Report not generated  for [{0}] Reporting date [{1}].".format(str(report_info['report_id']),str(report_info['reporting_date']))
+                    )
+                self.opsLog.update_master_status(id=self.log_master_id,operation_status="ERROR")
             return {"msg":str(e)},500
             #raise e
-
-
 
     def create_report_catalog(self,report_info):
         try:
@@ -175,16 +186,40 @@ class TransactionalReportController(Resource):
             report_create_status=report_info['report_create_status']
             as_of_reporting_date=report_info['as_of_reporting_date']
 
+            report_version=self.db.query("select max(version) version from report_catalog where report_id=%s and reporting_date=%s",
+                                         (report_id,reporting_date)).fetchone()
+            report_version_no=1 if not report_version['version'] else  report_version['version']+1
+
             sql="insert into report_catalog(report_id,reporting_date,report_create_date,\
-                report_parameters,report_create_status,as_of_reporting_date,version) values(%s,%s,%s,%s,%s,%s,1.0)"
+                report_parameters,report_create_status,as_of_reporting_date,version,report_created_by) values(%s,%s,%s,%s,%s,%s,%s,%s)"
             print(sql)
-            db.transact(sql,(report_id,reporting_date,report_create_date,report_info.__str__(),report_create_status,as_of_reporting_date))
+            catalog_id =         db.transact(sql,(report_id,reporting_date,report_create_date,report_info.__str__(),report_create_status,as_of_reporting_date,          report_version_no,self.user_id))
+            self.log_master_id = self.opsLog.write_log_master(operation_type='Create Report'
+                , operation_status = 'RUNNING'
+                , operation_narration = 'Create report {0} for {1} as on {2}'.format(report_id,reporting_date,as_of_reporting_date)
+                , entity_type = 'Report'
+                , entity_name = report_id
+                , entity_table_name = 'report_catalog'
+                , entity_id = catalog_id
+                )
+
             db.commit()
+            return report_version_no
+            if self.log_master_id:
+                self.opsLog.write_log_detail(master_id=self.log_master_id
+                    , operation_sub_type='Create catalog entry'
+                    , operation_status='Complete'
+                    , operation_narration='Report creation started with the parameters : {0}'.format(report_info,))
         except Exception as e:
             app.logger.error(e.__str__())
+            if self.log_master_id:
+                self.opsLog.write_log_detail(master_id=self.log_master_id
+                    , operation_sub_type='Error occured while creating catalog'
+                    , operation_status='Failed'
+                    , operation_narration='Report creation Failed with error : {0}'.format(str(e),))
             raise (e)
 
-    def update_report_catalog(self, report_info = None, status = None):
+    def update_report_catalog(self, report_info = None,  status = None, report_snapshot=None, version = 0):
         try:
             db=self.db
             report_id = report_info["report_id"]
@@ -193,15 +228,30 @@ class TransactionalReportController(Resource):
             update_clause = "report_create_status='{0}'".format(status,)
             if report_info != None:
                 # Replace all singlequotes(') with double quote(") as update sql requires all enclosed in ''
-                update_clause += ", report_parameters='{0}'".format(str(report_info).replace("'",'"'),)
+                report_info_str = json.dumps(report_info)
+                update_clause += ", report_parameters='{0}'".format(report_info_str,)
             if report_create_date != None:
                 # Replace all singlequotes(') with double quote(") as update sql requires all enclosed in ''
                 update_clause += ", report_create_date='{0}'".format(report_create_date.replace("'",'"'),)
-            sql = "update report_catalog set {0} where report_id='{1}' and reporting_date='{2}'".format(update_clause,report_id,reporting_date,)
+            if report_snapshot !=None:
+                update_clause +=", report_snapshot='{0}'".format(report_snapshot)
+            sql = "update report_catalog set {0} where report_id='{1}' and reporting_date='{2}'and \
+                    version={3}".format(update_clause,report_id,reporting_date, version)
             db.transact(sql)
             db.commit()
+            if self.log_master_id:
+                self.opsLog.write_log_detail(master_id=self.log_master_id
+                    , operation_sub_type='Updated report catalog'
+                    , operation_status='Complete'
+                    , operation_narration='Report catalog updated with : {0}'.format(update_clause,))
+
         except Exception as e:
             app.logger.error(e.__str__())
+            if self.log_master_id:
+                self.opsLog.write_log_detail(master_id=self.log_master_id
+                    , operation_sub_type='Error occured while updating report catalog'
+                    , operation_status='Failed'
+                    , operation_narration='Report creation Failed with error : {0}'.format(str(e),))
             raise(e)
 
 
@@ -296,9 +346,7 @@ class TransactionalReportController(Resource):
                     self.db.transact('insert into report_dyn_trans_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref,col_id,row_id)\
                                 values(%s,%s,%s,%s,%s,%s,%s)',
                                 (self.report_id, sheet.title, rng, 'MERGED_CELL', sheet[startcell].value,colrow[0],str(colrow[1])))
-                    # self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
-                    #             values(%s,%s,%s,%s,%s)',
-                    #             (self.report_id, sheet.title, rng, 'COMP_AGG_REF', agg_ref))
+
                     self.db.transact('insert into report_dyn_trans_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref,col_id,row_id)\
                                 values(%s,%s,%s,%s,%s,%s,%s)',
                                 (self.report_id, sheet.title, rng, 'CELL_STYLE', str(cell_style),colrow[0],str(colrow[1])))
@@ -335,8 +383,7 @@ class TransactionalReportController(Resource):
                                 self.db.transact('insert into report_dyn_trans_def(report_id,sheet_id ,cell_id ,cell_render_def ,cell_calc_ref,col_id,row_id)\
                                           values(%s,%s,%s,%s,%s,%s,%s)',
                                             (self.report_id, sheet.title, cell_ref, cell_render_ref, cell_obj_value.strip(),cell_obj.column,str(cell_obj.row)))
-                                # self.db.transact('insert into report_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
-                                #                  values(%s,%s,%s,%s,%s)',(self.report_id, sheet.title, cell_ref, 'COMP_AGG_REF', agg_ref))
+
                                 self.db.transact('insert into report_dyn_trans_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref,col_id,row_id)\
                                                  values(%s,%s,%s,%s,%s,%s,%s)',
                                                  (self.report_id, sheet.title, cell_ref, 'CELL_STYLE', str(cell_style),cell_obj.column,str(cell_obj.row)))
@@ -536,7 +583,7 @@ class TransactionalReportController(Resource):
                     (self.report_id,self.sheet_id, str(section_id['section_id']))).fetchall()
             return {"section": section_id['section_id'],
                     "secRules": section_rules,
-                    "secOrders": order_rules, 
+                    "secOrders": order_rules,
                     "secColumns": section_col}
         except Exception as e:
             app.logger.error(str(e))
@@ -572,20 +619,66 @@ class TransactionalReportController(Resource):
             return {"msg": str(e)}, 500
 
 
-    def create_report_detail(self, report_info):
+    def create_report_detail(self, report_version_no, report_info):
         try:
+
             report_id = report_info['report_id']
             business_date_from=report_info['business_date_from']
             business_date_to=report_info['business_date_to']
 
             reporting_date=business_date_from+business_date_to
-            app.logger.info("Cleaning table report_dyn_trans_qualified_data_link and report_summary" )
-            util.clean_table(self.db._cursor(), 'report_dyn_trans_qualified_data_link', '', reporting_date,'report_id=\'' + report_id + '\'')
-            util.clean_table(self.db._cursor(), 'report_dyn_trans_summary', '', reporting_date, 'report_id=\'' + report_id + '\'')
             app.logger.info("Getting list of sections for report {}".format(report_id))
             sheets = self.db.query("select distinct sheet_id,section_id from report_dyn_trans_def where report_id=%s and section_type='DYNDATA' ",
                                (report_id,)).fetchall()
-            print(sheets)
+            cardf = pd.DataFrame(self.db.query("select id, report_id, sheet_id , section_id from report_dyn_trans_agg_def where \
+                                    report_id = %s and in_use = 'Y'",(report_id,)).fetchall())
+            car_max_vers =  self.db.query("select report_id, version, id_list from report_dyn_trans_agg_def_vers where report_id = %s\
+                                 and version = (select max(version) from report_dyn_trans_agg_def_vers where report_id = %s)",(report_id, report_id)).fetchone()
+            if not cardf.empty:
+                cardf['id']=cardf['id'].astype(dtype='int64',errors='ignore')
+                car_id_list=list(map(int,cardf['id'].tolist()))
+                car_id_list.sort()
+                car_id_list_str=",".join(map(str,car_id_list))
+
+                if not car_max_vers:
+                    car_version_no = 1
+                else:
+                    old_id_list = list(map(int, car_max_vers['id_list'].split(',')))
+                    car_version_no = car_max_vers['version'] + 1 if set(car_id_list) != set(old_id_list) else car_max_vers['version']
+
+                if not car_max_vers or car_version_no != car_max_vers['version']:
+                    self.db.transact("insert into report_dyn_trans_agg_def_vers (report_id, id_list, version) VALUES(%s, %s, %s)",
+                                    (report_id, car_id_list_str, car_version_no))
+                    self.db.commit()
+                comp_agg_rule_version = car_version_no
+            else:
+                comp_agg_rule_version = car_max_vers['version']
+
+            #print(sheets)
+            all_calc_def = pd.DataFrame(self.db.query("select id, report_id, sheet_id, section_id, source_id from\
+                             report_dyn_trans_calc_def where report_id = %s and in_use = 'Y'",(report_id,)).fetchall())
+            calc_def_vers = self.db.query("select version, id_list from report_dyn_trans_calc_def_vers where report_id = %s\
+                            and version = (select max(version) from report_dyn_trans_calc_def_vers where \
+                            report_id = %s)",(report_id, report_id)).fetchone()
+
+            all_calc_def['id'] = all_calc_def['id'].astype(dtype='int64', errors='ignore')
+            rr_id_list = list(map(int, all_calc_def['id'].tolist()))
+            rr_id_list.sort()
+            rr_id_list_str=",".join(map(str,rr_id_list))
+
+            if not calc_def_vers:
+                calc_def_vers_no = 1
+            else:
+                calc_def_old_list = list(map(int, calc_def_vers['id_list'].split(',')))
+                calc_def_vers_no = calc_def_vers['version'] + 1 if set(rr_id_list) != set(calc_def_old_list) else                calc_def_vers['version']
+            print("Calc_def: " , calc_def_vers_no,calc_def_vers['version'])
+            if not calc_def_vers or calc_def_vers_no != calc_def_vers['version']:
+                self.db.transact("insert into report_dyn_trans_calc_def_vers(report_id,version,id_list) values(%s,%s,%s)",(report_id, calc_def_vers_no, rr_id_list_str))
+                self.db.commit()
+            report_rule_version = calc_def_vers_no
+
+
+            qualified_data_version=defaultdict(dict)
             for sheet in sheets:
                 sheet_id = sheet['sheet_id']
                 section_id=sheet['section_id']
@@ -597,11 +690,20 @@ class TransactionalReportController(Resource):
                     qualified_filtered_data=pd.DataFrame()
                     qpdf = pd.DataFrame()
                     for source in trans_calc_def['source_id'].unique():
+                        #source_id = source['source_id']
+
+
                         link_data_records = []
-                        source_data=self.get_qualified_source_data(source,business_date_from,business_date_to)
+                        source_data, source_snapshot =self.get_qualified_source_data(source ,business_date_from,business_date_to)
+                        qualified_data_version[str(source)] = source_snapshot
 
                         df_source_data=pd.DataFrame(source_data)
-                        print(df_source_data.columns)
+                        #print(df_source_data.columns)
+                        if self.log_master_id:
+                            self.opsLog.write_log_detail(master_id=self.log_master_id
+                                , operation_sub_type='Processing Qualified data'
+                                , operation_status='Started'
+                                , operation_narration='Processing of qualified data started for source  : {0}'.format(source,))
                         if not df_source_data.empty:
 
                             # Create dummy columns (with truth values) on qualified business rules
@@ -621,13 +723,14 @@ class TransactionalReportController(Resource):
                                 app.logger.info("Before dfr filter ...{0}".format(expr_str,))
                                 dfr=eval(expr_str)
                                 #print("evaluated string : " , dfr)
-                                qpdf_temp=dfr[['qualifying_key','business_date']]
-                                qpdf_temp['source_id']=source
-                                qpdf_temp['report_id'] = report_id
-                                qpdf_temp['sheet_id'] = sheet_id
-                                qpdf_temp['section_id'] = section_id
-                                qpdf_temp['cell_calc_ref'] = rw['cell_calc_ref']
-                                qpdf_temp['reporting_date'] = reporting_date
+                                #qpdf_temp=dfr[['qualifying_key','business_date']]
+                                dfr['source_id']=source
+                                dfr['report_id'] = report_id
+                                dfr['sheet_id'] = sheet_id
+                                dfr['section_id'] = section_id
+                                dfr['cell_calc_ref'] = rw['cell_calc_ref']
+                                dfr['reporting_date'] = reporting_date
+                                dfr['version'] = report_version_no
                                 # app.logger.info("After dfr filter ...{0}".format(dfr,))
                                 if not dfr.empty:
                                     data_dict={}
@@ -644,11 +747,16 @@ class TransactionalReportController(Resource):
                                     #app.logger.info("Before dfr column rename  ...{0}".format(expr_str,))
                                     eval(expr_str)
 
-                                    qualified_filtered_data=qualified_filtered_data.append(dfr[col_list],ignore_index=True)
-                                    qpdf=qpdf.append(qpdf_temp,ignore_index=True)
+                                    qualified_filtered_data=qualified_filtered_data.append(dfr,ignore_index=True)
+                                    #qpdf=qpdf.append(qpdf_temp,ignore_index=True)
                                     # link_data_records.append((source,report_id,sheet_id,section_id,rw['cell_calc_ref'],row['business_date'],reporting_date))
 
                         app.logger.info("At the end of the qualified data loop...")
+                        if self.log_master_id:
+                            self.opsLog.write_log_detail(master_id=self.log_master_id
+                                , operation_sub_type='Processing Qualified data'
+                                , operation_status='Complete'
+                                , operation_narration='Processing of qualified data completed for source  : {0}'.format(source,))
 
 
                     qualified_filtered_data.fillna('',inplace=True)
@@ -658,44 +766,70 @@ class TransactionalReportController(Resource):
                     print("Data",data)
                     if data:
                         data = eval(data['cell_agg_render_ref'])
-                        print("Here in if")
-                        if "sort" in data.keys():
+                        if "sort_order" in data.keys():
                             cols = []
                             order = []
-                            for key in data['sort']:
+                            val = data["sort_order"]
+                            for element in val:
+                                key = list(element.keys())[0]
                                 cols.append(key)
-                                if data['sort'][key] == 'asc':
+                                if element[key] == 'ASC':
                                     order.append(1)
                                 else:
                                     order.append(0)
                             qualified_filtered_data.sort_values(cols, inplace = True , ascending = order)
-                            if "top" in data.keys():
-                                print("Inside top")
-                                qualified_filtered_data = qualified_filtered_data.head(data['top'])
-                    print("Qualified Data", qualified_filtered_data)
-                    record_json=qualified_filtered_data.to_dict(orient='records')
+                            if 'ranktype' in data.keys():
+                                num = int(data['rank_value'])
+                                if data['ranktype'] == 'TOP':
+                                    #print("top")
+                                    qualified_filtered_data = qualified_filtered_data.head(num)
+                                else :
+                                    qualified_filtered_data = qualified_filtered_data.tail(num)
+                    #print("Qualified Data", qualified_filtered_data)
+                    qualified_filtered_data = qualified_filtered_data.reset_index()
+                    row_id_list=[idx + 1 for idx,row in qualified_filtered_data.iterrows()]
+                    qualified_filtered_data['row_id']=row_id_list
                     # app.logger.info("qualified_filtered_data ...{}".format(qualified_filtered_data))
-                    summary_records=[]
-                    row_seq=0
-                    for rec in record_json:
-                        row_seq+=1
-                        summary_records.append((report_id,sheet_id,section_id,row_seq,str(rec),reporting_date))
-
-                    row_id=self.db.transactmany("insert into report_dyn_trans_summary(report_id,sheet_id,section_id,row_id,row_summary,reporting_date)\
-                                                values(%s,%s,%s,%s,%s,%s)",summary_records)
-
+                    qpdf=qualified_filtered_data[['source_id','report_id','sheet_id','section_id','cell_calc_ref','reporting_date','business_date','qualifying_key','row_id','version']]
                     columns = ",".join(qpdf.columns)
                     placeholders = ",".join(['%s'] * len(qpdf.columns))
                     data = list(qpdf.itertuples(index=False, name=None))
+                    print(qpdf)
                     row_id=self.db.transactmany("insert into report_dyn_trans_qualified_data_link ({0}) \
                                                 values ({1})".format(columns, placeholders),data)
 
+                    col_list.append('row_id')
+                    sum_recs=qualified_filtered_data[col_list].to_dict(orient='records')
+                    summary_records=[]
+
+                    for rec in sum_recs:
+                        #rec = dict(rec)
+                        row_seq=rec['row_id']
+                        rec.pop('row_id')
+                        print(str(rec))
+                        summary_records.append((report_id,sheet_id,section_id,row_seq,str(rec),reporting_date, report_version_no))
+
+
+                    row_id=self.db.transactmany("insert into report_dyn_trans_summary(report_id,sheet_id,section_id,row_id,row_summary,reporting_date, version)\
+                                                values(%s,%s,%s,%s,%s,%s,%s)",summary_records)
 
                 self.db.commit()
+                report_snapshot=json.dumps({"report_calc_def":report_rule_version,"report_comp_agg_def":comp_agg_rule_version,
+                                            "qualified_data":qualified_data_version})
+                if self.log_master_id:
+                    self.opsLog.write_log_detail(master_id=self.log_master_id
+                        , operation_sub_type='Report Creation Completed'
+                        , operation_status='Complete'
+                        , operation_narration='Report creation completed for  report_id  : {0}'.format(report_info['report_id'],))
+                return report_snapshot
 
         except Exception as e:
             self.db.rollback()
             app.logger.error(str(e))
+            self.opsLog.write_log_detail(master_id=self.log_master_id
+                , operation_sub_type='Error occured while creating report'
+                , operation_status='Failed'
+                , operation_narration='Report creation Failed with error : {0}'.format(str(e),))
             #return {"msg":str(e)},500
             raise e
 
@@ -718,19 +852,27 @@ class TransactionalReportController(Resource):
             source_table_name = self.db.query("select source_table_name from data_source_information where source_id=%s",
                                           (source_id,)).fetchone()['source_table_name']
             key_column = util.get_keycolumn(self.db._cursor(), source_table_name)
+            source_data = self.db.query("select src.*, qd.* from {0} src,qualified_data qd,(select a.business_date,a.source_id,a.version,a.id_list,\
+                        a.br_version from qualified_data_vers a,(select business_date,source_id,max(version) version from qualified_data_vers\
+                        where business_date between %s and %s and source_id=%s group by business_date,source_id) b\
+                        where a.business_date=b.business_date and a.source_id=b.source_id and a.version=b.version) qdv\
+                        where qd.business_date=qdv.business_date and instr(concat(',',qdv.id_list,','),concat(',',qd.id,',')) and qd.qualifying_key=src.{1}\
+                        and src.business_date=qd.business_date".format(source_table_name,key_column), (business_date_from,business_date_to,source_id)).fetchall()
 
-            sql = "select a.*,b.* from {0} a,qualified_data b where  a.{1} = b.qualifying_key \
-                                     and a.business_date=b.business_date and a.business_date between %s and %s \
-                                     and b.source_id=%s and a.in_use='Y' ".format(source_table_name, key_column)
-            source_data = self.db.query(sql, (business_date_from, business_date_to, source_id)).fetchall()
+            max_vers=self.db.query("select a.business_date,a.source_id,a.version,a.id_list,\
+                    a.br_version from qualified_data_vers a,(select business_date,source_id,max(version) version from qualified_data_vers\
+                    where business_date between %s and %s and source_id=%s group by business_date,source_id) b\
+                    where a.business_date=b.business_date and a.source_id=b.source_id and a.version=b.version",(business_date_from,business_date_to,source_id))
 
-            return source_data
-
+            source_snapshot={}
+            for ver in max_vers:
+                source_snapshot[ver['business_date']]=ver['version']
+            return source_data,source_snapshot
         except Exception as e:
             app.logger.error(e)
             raise e
 
-    def render_trans_view_report_json(self,reporting_date='2010010120100101'):
+    def render_trans_view_report_json(self,reporting_date='2010010120100101', version = 1):
 
         app.logger.info("Rendering Transactional report Template")
 
@@ -777,8 +919,8 @@ class TransactionalReportController(Resource):
                             # Since one increment already have been given for ROW HEIGHT and STYLE
                             processing_row = processing_row - 1
                             if processing_dyn_sec != row['section_id']:
-                                sql="select * from report_dyn_trans_summary where report_id=%s and sheet_id=%s and section_id=%s and reporting_date=%s"
-                                dyn_summary_data=self.db.query(sql,(self.report_id, sheet["sheet_id"],row['section_id'],reporting_date)).fetchall()
+                                sql="select * from report_dyn_trans_summary where report_id=%s and sheet_id=%s and section_id=%s and reporting_date=%s and version = %s"
+                                dyn_summary_data=self.db.query(sql,(self.report_id, sheet["sheet_id"],row['section_id'],reporting_date, version)).fetchall()
                                 for data in dyn_summary_data:
                                     app.logger.info("Processing row...{0}".format(processing_row));
                                     processing_row = (processing_row+1)
@@ -846,7 +988,7 @@ class TransactionalReportController(Resource):
                             else:
                                 start_cell=row['cell_id']
 
-                            app.logger.info("Inside CELL_STYLE for cell {}".format(start_cell,))
+                            #app.logger.info("Inside CELL_STYLE for cell {}".format(start_cell,))
                             cell_style[start_cell] = eval(row['cell_calc_ref'])
                         else:
                             pass

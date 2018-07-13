@@ -111,10 +111,7 @@ class MaintainReportRulesController(Resource):
 			source = self.db.query(sql + where_clause).fetchall()
 			data_dict['source_suggestion'] = source
 
-			if not data_dict['source_suggestion']:
-				return {"msg":"No matched sources found"},404
-			else:
-				return data_dict
+			return data_dict
 		except Exception as e:
 			app.logger.error(e)
 			return {"msg": e}, 500
