@@ -115,7 +115,7 @@ class ManageMasterReportController(Resource):
             # copy entry of report_calc_def_master to report_calc_def
             report_master = self.master_db.query(
                 "select report_id, sheet_id, cell_id,cell_calc_ref, cell_business_rules, last_updated_by, \
-                dml_allowed, in_use from report_calc_def_master where report_id=%s",
+                'Y' as dml_allowed, 'N' as in_use from report_calc_def_master where report_id=%s and in_use='Y'",
                 (ref_report_id,)).fetchall()
             # type of report_master is list of dictionaries
             params = []
@@ -134,7 +134,8 @@ class ManageMasterReportController(Resource):
             report_master = self.master_db.query(
                 "select report_id, sheet_id, cell_id, comp_agg_ref, \
                 reporting_scale, rounding_option, \
-                last_updated_by, dml_allowed, in_use, comp_agg_rule from report_comp_agg_def_master where report_id=%s",
+                last_updated_by, 'Y' as dml_allowed, 'N' as in_use, comp_agg_rule \
+                from report_comp_agg_def_master where report_id=%s and in_use='Y'",
                 (ref_report_id,)).fetchall()
             # type of report_master is list of dictionaries
             params = []
