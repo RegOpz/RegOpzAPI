@@ -299,12 +299,12 @@ api.add_resource(TransactionalReportController,
     apiPath+"/transactionalReport/<string:report_id>/<string:reporting_date>",
     apiPath+"/transactionalReport/getSection/<string:cell_id>",
     apiPath+"/transactionalReport/getRules/<string:rule_cell_id>",
-    apiPath+"/transactionalReport/defineCalcRule/<string:calc_ref>",
     apiPath+"/transactionalReport/createTransReport/<string:report_id>",
 )
 api.add_resource(TransactionalReportController,
-    apiPath + "/transactionalReport/insert-into-dyn-tables/",
-    endpoint="insert-into-dyn-tables"
+    apiPath + "/transactionalReport/trans-report-rule",
+    apiPath + "/transactionalReport/trans-report-rule/<int:id>",
+    endpoint="trans_report_rule"
 )
 api.add_resource(TransactionalReportController,
     apiPath+"/transactionalReport/captureTemplate",

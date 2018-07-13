@@ -70,12 +70,16 @@ class TransactionalReportController(Resource):
             self.sheet_id = request.args.get('sheet_id')
             return self.get_trans_report_rules()
 
-    def put(self,calc_ref=None):
-        self.calc_ref = calc_ref;
-        params=request.get_json(force=True)
-        self.report_id=params['report_id']
-        self.sheet_id=params['sheet_id']
-        return self.update_section_calc_rule(params)
+    def put(self,id=None,report=None):
+        if id == None and report == None:
+            return BUSINESS_RULE_EMPTY
+        data = request.get_json(force=True)
+        if request.endpoint == "trans_report_rule":
+            res = self.dcc_tenant.update_or_delete_data(data, id)
+            return res
+        if request.endpoint == "report_parameter_ep":
+            pass
+            # return self.update_report_parameters(data, report)
 
     def post(self, calc_ref=None, report_id=None):
 
@@ -116,47 +120,15 @@ class TransactionalReportController(Resource):
             section_id=params['section_id']
             section_type=params['section_type']
             return self.update_section_ref(cell_group,section_id,section_type)
-         if calc_ref:
-            self.calc_ref = calc_ref;
-            params=request.get_json(force=True)
-            self.report_id=params['report_id']
-            self.sheet_id=params['sheet_id']
-            return self.insert_section_calc_rule(params)
 
          if report_id:
             self.report_id = report_id
             report_info=request.get_json(force=True)
             return self.create_report(report_info)
-         if request.endpoint == 'insert-into-dyn-tables':
-            params=request.get_json(force=True)
-            return self.insert_def_log(params)
-
-    def insert_def_log(self,params):
-        app.logger.info("Performing sql operationd on dyn_tans_tables and def_change")
-        try:
-            tenant_id = str(json.loads(self.domain_info)["tenant_id"])
-            audit_info = params["audit_info"]
-            update_info = params["update_info"]
-            update_info["cell_agg_render_ref"] = json.dumps(update_info["cell_agg_render_ref"])
-            report_id=update_info["report_id"]
-            id=audit_info["id"]
-            audit_info["comment"]=audit_info["maker_comment"]
-            audit_info.pop('maker_comment',None)
-            sheet_id=update_info["sheet_id"]
-            section_id=update_info["section_id"]
-            audit_info["change_reference"]="Aggregation rule for sorting of report_id: {0},sheet_id: {1}, section_id: {2}".format(report_id,sheet_id,section_id)
-            table_name = audit_info["table_name"]
-            change_type = audit_info["change_type"]
-            data = {"table_name": table_name, "change_type": change_type, "update_info": update_info,
-                    "audit_info": audit_info}
-            if change_type == 'UPDATE' or change_type == 'DELETE':
-                self.dcc_tenant.update_or_delete_data(data,id)
-            if change_type == 'INSERT':
-                self.dcc_tenant.insert_data(data)
-            return {"msg":"Insertion into def_log done"},200
-        except Exception as e:
-            app.logger.info("ERROR: ",e)
-            return {"msg":str(e)},500
+         if request.endpoint == 'trans_report_rule':
+             data = request.get_json(force=True)
+             res = self.dcc_tenant.insert_data(data)
+             return res
 
     def create_report(self, report_info):
         try:
