@@ -819,7 +819,7 @@ class TransactionalReportController(Resource):
                                                 values(%s,%s,%s,%s,%s,%s,%s)",summary_records)
 
                 self.db.commit()
-                report_snapshot=json.dumps({"report_calc_def":report_rule_version,"report_comp_agg_def":comp_agg_rule_version,
+                report_snapshot=json.dumps({"report_dyn_trans_calc_def":report_rule_version,"report_dyn_trans_agg_def":comp_agg_rule_version,
                                             "qualified_data":qualified_data_version})
                 if self.log_master_id:
                     self.opsLog.write_log_detail(master_id=self.log_master_id
