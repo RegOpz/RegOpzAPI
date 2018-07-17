@@ -77,14 +77,16 @@ class TransactionalReportController(Resource):
         if request.endpoint == "trans_report_rule":
             res = self.dcc_tenant.update_or_delete_data(data, id)
             return res
-        if request.endpoint == "trans_bulk_process":
-            res=self.delete_trans_report(data)
-            return res
         if request.endpoint == "report_parameter_ep":
             pass
             # return self.update_report_parameters(data, report)
 
     def post(self, calc_ref=None, report_id=None):
+
+         data = request.get_json(force=True)
+         if request.endpoint == "trans_bulk_process":
+            res = self.delete_trans_report(data)
+            return res
 
          if request.endpoint == 'load_trans_report_template_ep':
             if 'file' not in request.files:
@@ -1026,10 +1028,8 @@ class TransactionalReportController(Resource):
             for i in data_list:
                 id=i['id']
                 res=self.dcc_tenant.update_or_delete_data(i,id)
-            self.dcc_tenant.commit()
-            return {"msg": "SUCCESS", "donotUseMiddleWare": True}, 200
+            return {"msg": "SUCCESS"},200
         except Exception as e:
-            self.dcc_tenant.rollback()
             app.logger.info(str(e))
-            return {"msg":"ERROR"+str(e),"donotUseMiddleWare": True },500
+            return {"msg":"ERROR"+str(e)},500
         return None
