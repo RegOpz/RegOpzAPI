@@ -307,6 +307,10 @@ api.add_resource(TransactionalReportController,
     endpoint="trans_report_rule"
 )
 api.add_resource(TransactionalReportController,
+    apiPath + "/transactionalReport/trans-report-rule/bulk-process",
+    endpoint = "trans_bulk_process"
+)
+api.add_resource(TransactionalReportController,
     apiPath+"/transactionalReport/captureTemplate",
     endpoint="load_trans_report_template_ep"
 )

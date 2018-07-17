@@ -77,6 +77,9 @@ class TransactionalReportController(Resource):
         if request.endpoint == "trans_report_rule":
             res = self.dcc_tenant.update_or_delete_data(data, id)
             return res
+        if request.endpoint == "trans_bulk_process":
+            res=self.delete_trans_report(data)
+            return res
         if request.endpoint == "report_parameter_ep":
             pass
             # return self.update_report_parameters(data, report)
@@ -1015,3 +1018,18 @@ class TransactionalReportController(Resource):
         except Exception as e:
             app.logger.error(str(e))
             return {"msg": str(e)}, 500
+
+    def delete_trans_report(self, data):
+        app.logger.info("Deleting trans calc and agg rules")
+        try:
+            data_list=data['data']
+            for i in data_list:
+                id=i['id']
+                res=self.dcc_tenant.update_or_delete_data(i,id)
+            self.dcc_tenant.commit()
+            return {"msg": "SUCCESS", "donotUseMiddleWare": True}, 200
+        except Exception as e:
+            self.dcc_tenant.rollback()
+            app.logger.info(str(e))
+            return {"msg":"ERROR"+str(e),"donotUseMiddleWare": True },500
+        return None

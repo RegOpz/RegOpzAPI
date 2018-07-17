@@ -401,7 +401,7 @@ class DefChangeController(Resource):
             if data["change_type"]=="INSERT":
                 self.update_approval_status(table_name=data["table_name"],id=data["id"],dml_allowed='Y',in_use='Y')
             elif data["change_type"]=="DELETE":
-                self.update_approval_status(table_name=data["table_name"], id=data["id"], dml_allowed='N',in_use='N')
+                self.update_approval_status(table_name=data["table_name"], id=data["id"], dml_allowed='X',in_use='X')
             elif data["change_type"] == "UPDATE":
                 self.update_approval_status(table_name=data["table_name"], id=data["prev_id"], dml_allowed='X',in_use='X')
                 self.update_approval_status(table_name=data["table_name"], id=data["id"], dml_allowed='Y',in_use='Y')
