@@ -27,6 +27,8 @@ from Models.Token import Token
 from Helpers.utils import autheticateTenant
 from Helpers.authenticate import *
 from Controllers.OperationalLogController import OperationalLogController
+import Parser.FormulaTranslator as fm_trns
+from Parser.PandasLib import *
 
 UPLOAD_FOLDER = './uploads/templates'
 ALLOWED_EXTENSIONS = set(['xls', 'xlsx'])
@@ -190,8 +192,8 @@ class TransactionalReportController(Resource):
                     , operation_narration="Report not generated  for [{0}] Reporting date [{1}].".format(str(report_info['report_id']),str(report_info['reporting_date']))
                     )
                 self.opsLog.update_master_status(id=self.log_master_id,operation_status="ERROR")
-            return {"msg":str(e)},500
-            #raise e
+            #return {"msg":str(e)},500
+            raise e
 
     def create_report_catalog(self,report_info):
         try:
@@ -687,7 +689,7 @@ class TransactionalReportController(Resource):
             else:
                 calc_def_old_list = list(map(int, calc_def_vers['id_list'].split(',')))
                 calc_def_vers_no = calc_def_vers['version'] + 1 if set(rr_id_list) != set(calc_def_old_list) else                calc_def_vers['version']
-            print("Calc_def: " , calc_def_vers_no,calc_def_vers['version'])
+            #print("Calc_def: " , calc_def_vers_no,calc_def_vers['version'])
             if not calc_def_vers or calc_def_vers_no != calc_def_vers['version']:
                 self.db.transact("insert into report_dyn_trans_calc_def_vers(report_id,version,id_list) values(%s,%s,%s)",(report_id, calc_def_vers_no, rr_id_list_str))
                 self.db.commit()
@@ -704,7 +706,6 @@ class TransactionalReportController(Resource):
                     app.logger.info("trans_calc_def post pd dataframe.. {}".format(trans_calc_def))
 
                     qualified_filtered_data=pd.DataFrame()
-                    qpdf = pd.DataFrame()
                     for source in trans_calc_def['source_id'].unique():
                         #source_id = source['source_id']
 
@@ -758,12 +759,14 @@ class TransactionalReportController(Resource):
                                             # app.logger.info("Column value [{0}]".format(col))
                                             if cell_calc_columns[col]['column'] is not None and cell_calc_columns[col]['column'] !='':
                                                 col_list.append(col)
-                                                expr_str = "\""+cell_calc_columns[col]['column']+"\":\""+col+"\"" if expr_str=="" else expr_str + ",\""+cell_calc_columns[col]['column']+"\":\""+col+"\""
-                                    expr_str="dfr.rename(columns={" + expr_str + "},inplace=True)"
+                                                dfr=self.apply_formula_to_frame(dfr,cell_calc_columns[col]['column'],col)
+                                                #expr_str = "\""+cell_calc_columns[col]['column']+"\":\""+col+"\"" if expr_str=="" else expr_str + ",\""+cell_calc_columns[col]['column']+"\":\""+col+"\""
+                                    #expr_str="dfr.rename(columns={" + expr_str + "},inplace=True)"
                                     #app.logger.info("Before dfr column rename  ...{0}".format(expr_str,))
-                                    eval(expr_str)
+                                    #eval(expr_str)
 
                                     qualified_filtered_data=qualified_filtered_data.append(dfr,ignore_index=True)
+                                    print(qualified_filtered_data)
                                     #qpdf=qpdf.append(qpdf_temp,ignore_index=True)
                                     # link_data_records.append((source,report_id,sheet_id,section_id,rw['cell_calc_ref'],row['business_date'],reporting_date))
 
@@ -775,61 +778,62 @@ class TransactionalReportController(Resource):
                                 , operation_narration='Processing of qualified data completed for source  : {0}'.format(source,))
 
 
-                    qualified_filtered_data.fillna('',inplace=True)
-                    sql = "select cell_agg_render_ref from report_dyn_trans_agg_def where report_id = %s \
-                            and sheet_id = %s and section_id = %s"
-                    data = self.db.query(sql,(report_id, sheet_id, section_id)).fetchone()
-                    print("Data",data)
-                    if data:
-                        data = eval(data['cell_agg_render_ref'])
-                        if "sort_order" in data.keys():
-                            cols = []
-                            order = []
-                            val = data["sort_order"]
-                            for element in val:
-                                key = list(element.keys())[0]
-                                cols.append(key)
-                                if element[key] == 'ASC':
-                                    order.append(1)
-                                else:
-                                    order.append(0)
-                            qualified_filtered_data.sort_values(cols, inplace = True , ascending = order)
-                            if 'ranktype' in data.keys():
-                                num = int(data['rank_value'])
-                                if data['ranktype'] == 'TOP':
-                                    #print("top")
-                                    qualified_filtered_data = qualified_filtered_data.head(num)
-                                else :
-                                    qualified_filtered_data = qualified_filtered_data.tail(num)
-                    #print("Qualified Data", qualified_filtered_data)
-                    qualified_filtered_data = qualified_filtered_data.reset_index()
-                    row_id_list=[idx + 1 for idx,row in qualified_filtered_data.iterrows()]
-                    qualified_filtered_data['row_id']=row_id_list
-                    # app.logger.info("qualified_filtered_data ...{}".format(qualified_filtered_data))
-                    qpdf=qualified_filtered_data[['source_id','report_id','sheet_id','section_id','cell_calc_ref','reporting_date','business_date','qualifying_key','row_id','version']]
-                    columns = ",".join(qpdf.columns)
-                    placeholders = ",".join(['%s'] * len(qpdf.columns))
-                    data = list(qpdf.itertuples(index=False, name=None))
-                    print(qpdf)
-                    row_id=self.db.transactmany("insert into report_dyn_trans_qualified_data_link ({0}) \
-                                                values ({1})".format(columns, placeholders),data)
+                    if not qualified_filtered_data.empty:
+                        qualified_filtered_data.fillna('',inplace=True)
+                        sql = "select cell_agg_render_ref from report_dyn_trans_agg_def where report_id = %s \
+                                and sheet_id = %s and section_id = %s"
+                        data = self.db.query(sql,(report_id, sheet_id, section_id)).fetchone()
+                        print("Data",data)
+                        if data:
+                            data = eval(data['cell_agg_render_ref'])
+                            if "sort_order" in data.keys():
+                                cols = []
+                                order = []
+                                val = data["sort_order"]
+                                for element in val:
+                                    key = list(element.keys())[0]
+                                    cols.append(key)
+                                    if element[key] == 'ASC':
+                                        order.append(1)
+                                    else:
+                                        order.append(0)
+                                qualified_filtered_data.sort_values(cols, inplace = True , ascending = order)
+                                if 'ranktype' in data.keys():
+                                    num = int(data['rank_value'])
+                                    if data['ranktype'] == 'TOP':
+                                        #print("top")
+                                        qualified_filtered_data = qualified_filtered_data.head(num)
+                                    else :
+                                        qualified_filtered_data = qualified_filtered_data.tail(num)
+                        #print("Qualified Data", qualified_filtered_data)
+                        qualified_filtered_data = qualified_filtered_data.reset_index()
+                        row_id_list=[idx + 1 for idx,row in qualified_filtered_data.iterrows()]
+                        qualified_filtered_data['row_id']=row_id_list
+                        # app.logger.info("qualified_filtered_data ...{}".format(qualified_filtered_data))
+                        qpdf=qualified_filtered_data[['source_id','report_id','sheet_id','section_id','cell_calc_ref','reporting_date','business_date','qualifying_key','row_id','version']]
+                        columns = ",".join(qpdf.columns)
+                        placeholders = ",".join(['%s'] * len(qpdf.columns))
+                        data = list(qpdf.itertuples(index=False, name=None))
+                        print(qpdf)
+                        row_id=self.db.transactmany("insert into report_dyn_trans_qualified_data_link ({0}) \
+                                                    values ({1})".format(columns, placeholders),data)
 
-                    col_list.append('row_id')
-                    sum_recs=qualified_filtered_data[col_list].to_dict(orient='records')
-                    summary_records=[]
+                        col_list.append('row_id')
+                        sum_recs=qualified_filtered_data[col_list].to_dict(orient='records')
+                        summary_records=[]
 
-                    for rec in sum_recs:
-                        #rec = dict(rec)
-                        row_seq=rec['row_id']
-                        rec.pop('row_id')
-                        print(str(rec))
-                        summary_records.append((report_id,sheet_id,section_id,row_seq,str(rec),reporting_date, report_version_no))
+                        for rec in sum_recs:
+                            #rec = dict(rec)
+                            row_seq=rec['row_id']
+                            rec.pop('row_id')
+                            print(str(rec))
+                            summary_records.append((report_id,sheet_id,section_id,row_seq,str(rec),reporting_date, report_version_no))
 
 
-                    row_id=self.db.transactmany("insert into report_dyn_trans_summary(report_id,sheet_id,section_id,row_id,row_summary,reporting_date, version)\
-                                                values(%s,%s,%s,%s,%s,%s,%s)",summary_records)
+                        row_id=self.db.transactmany("insert into report_dyn_trans_summary(report_id,sheet_id,section_id,row_id,row_summary,reporting_date, version)\
+                                                    values(%s,%s,%s,%s,%s,%s,%s)",summary_records)
 
-                self.db.commit()
+                    self.db.commit()
                 report_snapshot=json.dumps({"report_dyn_trans_calc_def":report_rule_version,"report_dyn_trans_agg_def":comp_agg_rule_version,
                                             "qualified_data":qualified_data_version})
                 if self.log_master_id:
@@ -848,6 +852,21 @@ class TransactionalReportController(Resource):
                 , operation_narration='Report creation Failed with error : {0}'.format(str(e),))
             #return {"msg":str(e)},500
             raise e
+
+    def apply_formula_to_frame(self, df, excel_formula,new_field_name):
+        try:
+            context=fm_trns.Context('df')
+            rpn_expr=fm_trns.shunting_yard(excel_formula)
+            G,root=fm_trns.build_ast(rpn_expr)
+            df_expr=root.emit(G,context=context)
+            for col in list(df.columns):
+                if 'date' not in col:
+                    df[col]=df[col].astype(dtype='float64',errors='ignore')
+            df[new_field_name]=eval(df_expr)
+            return df
+        except Exception as e:
+            app.loger.error(str(e))
+            raise(e)
 
     def get_dyn_trans_calc_def_details(self, report_id, sheet_id,section_id):
         try:
