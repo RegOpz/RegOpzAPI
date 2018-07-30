@@ -57,12 +57,12 @@ class DataChangeController(Resource):
                     " and cell_calc_ref='{4}' and version={5}") \
                     .format(cell['report_id'],cell['sheet_id'],cell['cell_id'],
                         cell['reporting_date'],cell['cell_calc_ref'],cell['version'])
-                
+
                 rqdldata = self.db.query(sqlrqdl).fetchone()
                 if rqdldata:
                     qd_id_list = [(id,) for id in rqdldata['id_list'].split(',')]
                     self.db.transactmany("insert into tmp_rqd_id_list(idlist) values (%s)",qd_id_list)
-                
+
                 sql += " and (origin_id,business_date) in (" + \
                             "select origin_id,business_date from data_change_log,tmp_rqd_id_list " + \
                             "where id=idlist)"
@@ -272,7 +272,7 @@ class DataChangeController(Resource):
             table_name = data['table_name']
 
             # Now get the origin id for the record if there is any existing entry in data change log
-            sql="select origin_id from data_change_log where table_name='{0}' and id={1}".format(table_name,prev_id)
+            sql="select distinct origin_id from data_change_log where table_name='{0}' and id={1}".format(table_name,prev_id)
             origin_id=self.db.query(sql).fetchone()
             # If no previous entry found, that means the record is updated for the very first time, so
             # use the prev (present) id as origin_id to be casted for subsequent changes
@@ -308,7 +308,7 @@ class DataChangeController(Resource):
             table_name = data['table_name']
             audit_info = data['audit_info']
             # Now get the origin id for the record if there is any existing entry in data change log
-            sql="select origin_id from data_change_log where table_name='{0}' and id={1}".format(table_name,prev_id)
+            sql="select distinct origin_id from data_change_log where table_name='{0}' and id={1}".format(table_name,prev_id)
             origin_id=self.db.query(sql).fetchone()
             # If no previous entry found, that means the record is updated for the very first time, so
             # use the prev (present) id as origin_id to be casted for subsequent changes

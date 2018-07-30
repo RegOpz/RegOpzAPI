@@ -48,6 +48,12 @@ class TransactionalReportController(Resource):
 
     @authenticate
     def get(self,report_id=None,cell_id=None, rule_cell_id=None,reporting_date=None):
+        if request.endpoint == "trans_report_rule_audit_ep":
+            report_id = request.args.get('report_id')
+            sheet_id = request.args.get('sheet_id')
+            section_id = request.args.get('section_id')
+            return self.get_trans_report_audit_list(report_id=report_id, sheet_id=sheet_id, section_id=section_id)
+
         if report_id and reporting_date:
             self.report_id=report_id
             version = 1 # needs to be amanded to check for request args
@@ -1025,11 +1031,46 @@ class TransactionalReportController(Resource):
         app.logger.info("Deleting trans calc and agg rules")
         try:
             data_list=data['data']
+            sec_rule_count = 0
+            sec_order_count = 0
             for i in data_list:
                 id=i['id']
+                if "calc_def" in i['table_name']:
+                    sec_rule_count += 1
+                if "agg_def" in i['table_name']:
+                    sec_order_count += 1
                 res=self.dcc_tenant.update_or_delete_data(i,id)
-            return {"msg": "SUCCESS"},200
+            return {"msg": "Marked {0} sec column rules, {1} sec order rules successfully for deletion review.".format(sec_rule_count,sec_order_count)},200
         except Exception as e:
             app.logger.info(str(e))
             return {"msg":"ERROR"+str(e)},500
         return None
+
+    def get_trans_report_audit_list(self, report_id=None, sheet_id=None, section_id=None):
+        app.logger.info("Getting report audit list")
+        try:
+            audit_list=[]
+            sql = "SELECT id FROM {0} WHERE 1 "
+            if report_id:
+                sql += " AND report_id='{}' ".format(report_id,)
+                if sheet_id:
+                    sql += " AND sheet_id='{}'".format(sheet_id,)
+                if section_id:
+                    sql += " AND section_id='{}'".format(section_id)
+                calc_id_list = self.db.query(sql.format('report_dyn_trans_calc_def',)).fetchall()
+                if calc_id_list:
+                    calc_id_list = ",".join(map(str,[id['id'] for id in calc_id_list]))
+                else:
+                    calc_id_list = "-99999999"
+                audit_list+=self.dcc_tenant.get_audit_history(id_list=calc_id_list,table_name='report_dyn_trans_calc_def')
+
+                agg_id_list = self.db.query(sql.format('report_dyn_trans_agg_def',)).fetchall()
+                if agg_id_list:
+                    agg_id_list = ",".join(map(str,[id['id'] for id in agg_id_list]))
+                else:
+                    agg_id_list = "-99999999"
+                audit_list+=self.dcc_tenant.get_audit_history(id_list=agg_id_list,table_name='report_dyn_trans_agg_def')
+                return audit_list
+        except Exception as e:
+            app.logger.error(e)
+            return {"msg": e}, 500

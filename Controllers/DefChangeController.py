@@ -279,7 +279,7 @@ class DefChangeController(Resource):
             table_name = data['table_name']
 
             # Now get the origin id for the record if there is any existing entry in data change log
-            sql="select origin_id from def_change_log where table_name='{0}' and id={1}".format(table_name,prev_id)
+            sql="select distinct origin_id from def_change_log where table_name='{0}' and id={1}".format(table_name,prev_id)
             origin_id=self.db.query(sql).fetchone()
             # If no previous entry found, that means the record is updated for the very first time, so
             # use the prev (present) id as origin_id to be casted for subsequent changes
@@ -315,7 +315,7 @@ class DefChangeController(Resource):
             table_name = data['table_name']
             audit_info = data['audit_info']
             # Now get the origin id for the record if there is any existing entry in data change log
-            sql="select origin_id from def_change_log where table_name='{0}' and id={1}".format(table_name,prev_id)
+            sql="select distinct origin_id from def_change_log where table_name='{0}' and id={1}".format(table_name,prev_id)
             origin_id=self.db.query(sql).fetchone()
             # If no previous entry found, that means the record is updated for the very first time, so
             # use the prev (present) id as origin_id to be casted for subsequent changes
