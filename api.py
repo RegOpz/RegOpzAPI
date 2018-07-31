@@ -24,6 +24,7 @@ from Controllers.SharedDataController import SharedDataController
 from Controllers.ManageMasterBusinessRulesController import ManageMasterBusinessRulesController
 from Controllers.ManageMasterReportController import ManageMasterReportController
 from Controllers.OperationalLogController import OperationalLogController
+from Controllers.PasswordRecoveryController import PasswordRecoveryController
 from flask_cors import CORS, cross_origin
 
 api.add_resource(Info, apiPath + "/info")
@@ -354,6 +355,8 @@ api.add_resource(ManageMasterReportController,
     apiPath + "/report-rules-repo/drilldown",
     endpoint = "repository_drill_down_rule_ep"
 )
+
+
 api.add_resource(ManageMasterReportController,
     apiPath + "/report-rules-repo/fetch-report-id",
     endpoint = "fetch-report-id"

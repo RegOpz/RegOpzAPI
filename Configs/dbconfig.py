@@ -1,7 +1,7 @@
 DATABASE = {
     'host': 'localhost',
     'user': 'root',
-    'password': 'harry123',
+    'password': '1234',
     'db': 'master',
     'type': 'mysql',
     'port':"3306"

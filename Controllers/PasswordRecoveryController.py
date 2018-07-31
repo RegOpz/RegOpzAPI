@@ -11,6 +11,7 @@ import random
 from Helpers.utils import autheticateTenant
 from Helpers.authenticate import *
 from Controllers.OperationalLogController import OperationalLogController
+from flask_mail import Mail, Message
 
 
 class PasswordRecoveryController(Resource):
@@ -42,6 +43,21 @@ class PasswordRecoveryController(Resource):
         if request.endpoint == 'get_security_questions_ep':
             return self.get_questions()
 
+    def change_pwd(self, req_data):
+        try:
+            user_id                 = req_data['username']
+            password                = req_data['password']
+            password_cnfrmation     = req_data['passwordConfirm']
+            if password_cnfrmation == password:
+                hash = hashpw(password.encode('utf-8'), gensalt())
+                sql = "update regopzuser set password = '{0}' where name = '{1}'".format(hash, user_id)
+                self.db.transact()
+                self.db.commit()
+        except Exception as e:
+             app.logger.error(e.__str__())
+             return (e.__str__())
+
+
 
     def reset_password_que(self, req_data):
         try:
@@ -59,6 +75,40 @@ class PasswordRecoveryController(Resource):
                     return {'status': 'error', 'message' : 'Security Answers not matched, Please try again'}, 200
 
             return {'status': 'SUCCESS', 'message': 'Security Answers matched'}, 200
+        except Exception as e:
+            app.logger.error(e.__str__())
+            return (e.__str__())
+
+    def send_otp(self, req_data):
+        try:
+            user_name = req_data['username']
+            sql = "select email from regopzuser where name = '{}'".format(username)
+            email = self.db.transact(sql).fetchone()
+            self.otp = str((uuid.uuid4()).int)[0:5]
+
+            app.config.update(
+            	DEBUG = True,
+            	MAIL_SERVER = 'smtp.gmail.com',
+            	MAIL_PORT = 465,
+            	MAIL_USE_SSL = True,
+            	MAIL_USERNAME = 'satyamvats5@gmail.com',
+            	MAIL_PASSWORD = ''
+            )
+            msg = Message('Sending mail from my applcation!',
+            sender =  'xyz@xyz.com',
+            recipients = [email])
+            msg.body = "Enter The following OTP to reset your password '{}'".format(otp)
+            mail = Mail(app)
+            mail.send(msg)
+            app.logger.info('OTP Sent')
+            return {'Status': 'SUCCESS', 'message': 'OTP SENT'}
+        except Exception as e:
+            app.logger.error(e.__str__())
+            return (e.__str__())
+
+    def reset_password_otp(self, req_data):
+        try:
+            print('WIll do it later')
         except Exception as e:
             app.logger.error(e.__str__())
             return (e.__str__())
@@ -162,13 +212,16 @@ class PasswordRecoveryController(Resource):
             id_lst = json.loads(id_str)
             random.shuffle(id_lst)
             id_lst = id_lst[0:num]
+            id_lst = tuple(a)
             sql = "select questions from security_questions where id in id_lst"
+            data = self.db.query(sql).fetchall()
+            return data
             # sql = "select Q1, Q2, Q3, Q4, Q5, num_qs from password_policy where tenant_id = '{}'".format(id)
             # data = self.dbs.query(sql).fetchone()
             # num = data['no_qs']
             # del data[num_qs]
             # keys = random.sample(list(d), num)
-            return data
+            #return data
         except Exception as e:
             app.logger.error(e.__str__())
             return (e.__str__())
