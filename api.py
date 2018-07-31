@@ -356,7 +356,6 @@ api.add_resource(ManageMasterReportController,
     endpoint = "repository_drill_down_rule_ep"
 )
 
-
 api.add_resource(ManageMasterReportController,
     apiPath + "/report-rules-repo/fetch-report-id",
     endpoint = "fetch-report-id"
