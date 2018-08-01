@@ -40,7 +40,8 @@ class MaintainReportRulesController(Resource):
 
 		if request.endpoint == 'get_agg_function_column_suggestion_list_ep':
 			table_name = request.args.get('table_name')
-			return self.get_agg_function_column_suggestion_list(table_name=table_name)
+			source_id = request.args.get('source_id')
+			return self.get_agg_function_column_suggestion_list(table_name=table_name,source_id=source_id)
 
 		if request.endpoint == "report_rule_audit_ep":
 			report_id = request.args.get('report_id')
@@ -145,17 +146,24 @@ class MaintainReportRulesController(Resource):
 			app.logger.error(e)
 			return {"msg": e}, 500
 
-	def get_agg_function_column_suggestion_list(self,table_name):
+	def get_agg_function_column_suggestion_list(self,table_name=None,source_id=None):
 		app.logger.info("Getting column suggestion list for agrregate function")
 		try:
+			if source_id and source_id !='null' and source_id != 'undefined':
+				source = self.db.query("select * from data_source_information where source_id = %s",(source_id,)).fetchone()
+				if source:
+					table_name = source['source_table_name']
 
-			app.logger.info("Retrieving column list for report_qualified_data_link")
-			data_dict_report_link = self.db.query("describe report_qualified_data_link").fetchall()
-			app.logger.info("Retrieving column list for table {}".format(table_name))
-			data_dict = self.db.query("describe " + table_name).fetchall()
+			# app.logger.info("Retrieving column list for report_qualified_data_link")
+			# data_dict_report_link = self.db.query("describe report_qualified_data_link").fetchall()
+			data_dict={}
+			if table_name:
+				app.logger.info("Retrieving column list for table {}".format(table_name))
+				data_dict = self.db.query("describe " + table_name).fetchall()
 
 			#Now build the agg column list
-			return data_dict + data_dict_report_link
+			# return data_dict + data_dict_report_link
+			return data_dict
 		except Exception as e:
 			app.logger.error(e)
 			return {"msg": e}, 500
