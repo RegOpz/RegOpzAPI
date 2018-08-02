@@ -91,8 +91,8 @@ class TransactionalReportController(Resource):
 
     def post(self, calc_ref=None, report_id=None):
 
-         data = request.get_json(force=True)
          if request.endpoint == "trans_bulk_process":
+            data = request.get_json(force=True)
             res = self.delete_trans_report(data)
             return res
 
