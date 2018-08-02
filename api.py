@@ -43,6 +43,57 @@ api.add_resource(ViewReportController,
     apiPath + "/view-report/get-report-list",
     endpoint = "report_list_ep"
 )
+
+api.add_resource(PasswordRecoveryController,
+    apiPath + "/validate_user/<string:id>",
+    endpoint = "validate_user_ep"
+)
+
+api.add_resource(PasswordRecoveryController,
+    apiPath + "/get_all_security_questions",
+    endpoint = "get_all_security_questions_ep"
+)
+
+api.add_resource(PasswordRecoveryController,
+    apiPath + "/get_users_security_questions/<string:id>",
+    endpoint = "get_users_security_questions_ep"
+)
+
+api.add_resource(PasswordRecoveryController,
+    apiPath + "/change_pwd",
+    endpoint = "change_pwd_ep"
+)
+
+api.add_resource(PasswordRecoveryController,
+    apiPath + "/edit_password_policy",
+    endpoint = "edit_password_policy_ep"
+)
+
+api.add_resource(PasswordRecoveryController,
+    apiPath + "/validate_otp",
+    endpoint = "validate_otp_ep"
+)
+
+api.add_resource(PasswordRecoveryController,
+    apiPath + "/capture_security_answers",
+    endpoint = "capture_security_answers_ep"
+)
+
+api.add_resource(PasswordRecoveryController,
+    apiPath + "/check_answers",
+    endpoint = "check_answers_ep"
+)
+
+api.add_resource(PasswordRecoveryController,
+    apiPath + "/capture_password_policy",
+    endpoint = "capture_password_policy_ep"
+)
+
+api.add_resource(PasswordRecoveryController,
+    apiPath + "/send_otp_pwd_recovery/<string:id>",
+    endpoint = "send_otp_ep"
+)
+
 api.add_resource(DocumentController,
     apiPath + "/document/drill-down",
     endpoint = "drill_down_ep"

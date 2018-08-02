@@ -29,6 +29,7 @@ class PasswordRecoveryController(Resource):
 
     def post(self):
         if request.endpoint == 'capture_password_policy_ep':
+            print('capturing ')
             req_data = request.get_json(force = True)
             return self.capture_password_policy(req_data)
 
@@ -39,6 +40,10 @@ class PasswordRecoveryController(Resource):
         if request.endpoint == 'capture_security_answers_ep':
             req_data = request.get_json(force = True)
             return self.capture_sec_que_ans(req_data)
+
+        if request.endpoint == 'validate_otp_ep':
+            req_data = request.get_json(force = True)
+            return self.validate_otp(req_data)
 
     def put(self):
         if request.endpoint == 'edit_password_policy_ep':
@@ -57,9 +62,47 @@ class PasswordRecoveryController(Resource):
         if request.endpoint == 'get_all_security_questions_ep':
             return self.get_all_questions()
 
+        if request.endpoint == 'validate_user_ep':
+            return self.validate_user(id)
+
+        if request.endpoint == 'send_otp_ep':
+            return self.send_otp(id)
+
         # if request.endpoint == 'match_answers_ep':
         #     req_data = request.get_json(forec = True)
         #     return self.capture_sec_que_ans(req_data)
+    def validate_otp(self, red_data):
+        try:
+            user_name = red_data['username']
+            otp = req_data['otp']
+            sql = "select temp_otp from user_pwd_details where user_id = %s"
+            sent_otp = self.db.query(sql,(user_name)).fetchone()
+            if otp == sent_otp:
+                self.db.transact("update user_pwd_details set temp_otp = ' ' where usera_id = %s",(user_name))
+                queryString = "SELECT r.role, u.* FROM regopzuser u JOIN (roles r) ON (u.role_id = r.id)\
+                    WHERE name=%s AND status='Active'"
+                cur = self.db.query(queryString, (user_id, ))
+                data = cur.fetchone()
+                self.db.commit()
+                return Token().create(data)
+            else:
+                return {'O.T.P not matched, Please try again'}, 403
+        except Exception as e:
+                app.logger.error(e.__str__())
+                return (e.__str__())
+
+
+    def validate_user(self, id):
+        try:
+            sql = "select * from regopzuser where name = %s"
+            data = self.db.query(sql,(id, )).fetchone()
+            if data:
+                return {'msg': 'User validated successfully'}, 200
+            else :
+                return {'msg': 'User Name not found'}, 403
+        except Exception as e:
+            app.logger.error(e.__str__())
+            return (e.__str__())
 
     def get_all_questions(self):
         try:
@@ -83,7 +126,7 @@ class PasswordRecoveryController(Resource):
                 sql = "select hash_of_last_passwords from user_pwd_details where user_id = %s"
                 pwd_hash = self.db.query(sql,(user_id)).fetchone()
                 entered_pwd = password.encode('utf-8')
-                for i in range num:
+                for i in range(num):
                     if pwd_hash[i]:
                         p_hash = pwd_hash[i].encode('utf-8')
                         if hashpw(entered_pwd, p_hash) == p_hash:
@@ -125,17 +168,21 @@ class PasswordRecoveryController(Resource):
                 if hashpw(entered_answer, hashed_answer) != hashed_answer:
                     return {'msg': 'Security Answers not matched, Please try again'}, 500
 
-            return {'msg': 'Security Answers matched'}, 200
+            queryString = "SELECT r.role, u.* FROM regopzuser u JOIN (roles r) ON (u.role_id = r.id)\
+                WHERE name=%s AND status='Active'"
+            cur = self.db.query(queryString, (user_id, ))
+            data = cur.fetchone()
+            return Token().create(data)
         except Exception as e:
             app.logger.error(e.__str__())
             return (e.__str__())
 
-    def send_otp(self, req_data):
+    def send_otp(self, user_name):
         try:
-            user_name = req_data['username']
-            sql = "select email from regopzuser where name = '{}'".format(username)
-            email = self.db.transact(sql).fetchone()
-            self.otp = str((uuid.uuid4()).int)[0:5]
+
+            sql = "select email from regopzuser where name = %s"
+            email = self.db.transact(sql,(user_name, )).fetchone()
+            otp = str((uuid.uuid4()).int)[0:5]
 
             app.config.update(
             	DEBUG = True,
@@ -152,7 +199,10 @@ class PasswordRecoveryController(Resource):
             mail = Mail(app)
             mail.send(msg)
             app.logger.info('OTP Sent')
-            return {'Status': 'SUCCESS', 'message': 'OTP SENT'}
+            sql = "update user_pwd_details set temp_otp = %s where user_id = %s"
+            self.db.transact(sql,(otp, user_name))
+            self.db.commit()
+            return {'msg': 'O.T.P sent successfully'}, 200
         except Exception as e:
             app.logger.error(e.__str__())
             return (e.__str__())
@@ -168,8 +218,6 @@ class PasswordRecoveryController(Resource):
         try:
 
             uder_id         = req_id['username']
-            # que_id_list     = req_id['que_id_list']
-            # que_id_str      = json.dumps(que_id_list)
             answers         =  req_id['answers']
             que_id_list     =  answers.keys()
             id              =  self.domain_info['tenant_id']
@@ -211,18 +259,16 @@ class PasswordRecoveryController(Resource):
     def capture_password_policy(self, req_data):
         try:
 
-
             app.logger.info('capturing password policy')
             id            = self.domain_info['tenant_id']
+            #print(id)
             num_ans_to_capture     = req_data['num_ans_to_capture']
-            num_qs_to_throw         = req_data['num_ques_to_throw']
+            num_ques_to_throw         = req_data['num_ques_to_throw']
             not_use_last            = req_data['not_use_last']
             expiry_period           = req_data['expiry_period']
 
             reg_exp = '/^'
             minm = req_data['minm_req']
-            if minm['alpha'] == 'Y':
-                reg_exp = reg_exp + '(?=.*[a-zA-Z])'
 
             if minm['numeric'] == 'Y':
                 reg_exp = reg_exp + '(?=.*\d)'

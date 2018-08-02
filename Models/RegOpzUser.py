@@ -6,6 +6,7 @@ from Constants.Status import *
 import json
 from Helpers.authenticate import *
 from Helpers.utils import autheticateTenant
+from datetime import datetime
 
 labelList = {
     'name': "User Name",
@@ -163,7 +164,23 @@ class RegOpzUser(object):
                 # print("hashpw {}".format(hashpw(password.encode('utf-8'), gensalt())))
                 hashedpassword = data['password'].encode('utf-8')
                 if hashpw(password_entered,hashedpassword)==hashedpassword:
-                    return Token().create(data)
+                    tym = data['pwd_change_tym']
+                    tym_now = datetime.now()
+                    diff = ((tym_now - tym).total_seconds()) / (60 * 60 * 24)
+                    #id = self.domain_info['tenant_id']
+                    id = 'admin'
+                    sql = "select expiry_period from pwd_policy where tenant_id = '{}'".format(id)
+                    db = DatabaseHelper()
+                    limit = db.query(sql).fetchone()
+                    limit = limit['expiry_period']
+                    #print(limit)
+                    if diff > limit:
+                        return{'msg': 'Password expired! , Please change password to continue'}, 403
+                    elif (diff < limit) and (diff > (limit - 10)):
+                         return Token().create(data)
+                    else:
+                        return Token().create(data)
+
             return {"msg": "Login failed", "donotUseMiddleWare": True },403
         except Exception as e:
             print(str(e))
