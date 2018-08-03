@@ -6,29 +6,6 @@ import collections
 import math
 from Helpers.utils import if_null_zero,if_null_blank,round_value
 
-# def if_null_zero(value):
-#     return 0 if value is None else value
-#
-# def if_null_blank(value):
-#     return '""' if value is None else value
-#
-# def round_value(number_to_round,option):
-#     if option=='' or option == None:
-#         option='NONE'
-#     if option=='CEIL':
-#         rounded_number=math.ceil(number_to_round)
-#     elif option=='FLOOR':
-#         rounded_number = math.floor(number_to_round)
-#     elif option=='TRUNC':
-#         rounded_number=math.trunc(number_to_round)
-#     elif 'DECIMAL' in option:
-#         decimal_point=int(option.replace('DECIMAL',''))
-#         rounded_number=round(number_to_round,decimal_point)
-#     else:
-#         rounded_number=number_to_round
-#
-#     return rounded_number
-
 class Context(object):
     """A small context object that nodes in the AST can use to emit code"""
     def __init__(self,df):
@@ -403,7 +380,7 @@ def tree(table = {}, **kwargs):
                 elif isinstance(formula,(int,float)):
                     return str(formula)
                 elif isinstance(formula,str) and is_not_formula(formula):
-                    #print(is_not_formula(formula))
+                    #print("Data type:",formula,is_not_formula(formula))
                     if is_not_formula(formula) == ept.TOK_SUBTYPE_NUMBER:
                         return formula
                     formula=eval(formula)
@@ -434,7 +411,7 @@ def tree(table = {}, **kwargs):
             if root.ttype == ept.TOK_TYPE_OP_PRE:
                 return "-" + str(if_null_zero(dfs(args[0],G)))
             parent = root.parent(G)
-            print(args[0].emit(G),args[1].emit(G))
+            #print(args[0].emit(G),args[1].emit(G))
             ss = str(if_null_zero(dfs(args[0],G))) + op + str(if_null_zero(dfs(args[1],G)))
             # avoid needless parentheses
             if parent and not isinstance(parent, FunctionNode):
@@ -487,9 +464,12 @@ def tree(table = {}, **kwargs):
         #print(value["tree"])
         (root,G)=value["tree"]
         if not isinstance(root,OperandNode) or isinstance(root,RangeNode):
-            #round_val=roundOff(eval(dfs(*value["tree"])),value["rounding"],value["scale"])
+            # dfs_value=dfs(*value["tree"])
+            # print("DFS Value:",dfs_value)
+            # round_val = roundOff(eval(str(if_null_zero(dfs_value))), value["rounding"], value["scale"])
+            # round_val=roundOff(eval(dfs(*value["tree"])),value["rounding"],value["scale"])
             round_val=roundOff(eval(str(if_null_zero(dfs(*value["tree"])))),value["rounding"],value["scale"])
-            print(round_val,type(round_val))
+            #print(round_val,type(round_val))
             #round_val=roundOff(round_val,value["rounding"],value["scale"])
             #print(round_val,type(round_val))
             if isinstance(round_val, (int, float)):
@@ -497,14 +477,14 @@ def tree(table = {}, **kwargs):
             elif isinstance(round_val, str):
                 eTree[key]='"' + round_val + '"'
 
-
-
     if debug:
        print(eTree)
 
+    return eTree
+
 if __name__ == '__main__':
     table = {}
-    table["C1"] = { "formula": "5*4+3", "rounding_option": "DECIMAL0", "reporting_scale": "1" }
+    table["C1"] = { "formula": "5.3136513*4.5+3.0", "rounding_option": "DECIMAL0", "reporting_scale": "1" }
     table["C2"] = { "formula": "20+C1", "rounding_option": "DECIMAL0", "reporting_scale": "10" }
     table["C3"] = { "formula": "C1*C2", "rounding_option": "DECIMAL0", "reporting_scale": "10" }
     table["C4"]={ "formula": "if(C1*C2>0,\"YES\",\"NO\")", "rounding_option": "NONE", "reporting_scale": "NONE" }

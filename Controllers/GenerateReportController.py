@@ -91,8 +91,8 @@ class GenerateReportController(Resource):
                     , operation_narration="Report not generated  for [{0}] Reporting date [{1}].".format(str(report_id),str(reporting_date))
                     )
                 self.opsLog.update_master_status(id=self.log_master_id,operation_status="ERROR")
-            #return {'msg': str(e)}, 400
-            raise e
+            return {'msg': str(e)}, 400
+            # raise e
 
 
     def get_report_list(self,country='ALL'):
@@ -441,7 +441,7 @@ class GenerateReportController(Resource):
             for col in list(df.columns):
                 if col != 'referece_rate_date':
                     df[col]=df[col].astype(dtype='float64',errors='ignore')
-            print(df_expr)
+            #print(df_expr)
             df[new_field_name]=eval(df_expr)
             return df
         except Exception as e:
@@ -665,8 +665,8 @@ class GenerateReportController(Resource):
             formula_set = {}
             for element in contributors:
                 formula_set[element['cell_calc_ref']] = {
-                    'formula': '"'+element['cell_summary']+'"' if isinstance(element['cell_summary'],str) else element['cell_summary'],
-                    'reporting_scale': "NONE" if isinstance(element['cell_summary'],str) else 1,
+                    'formula': '"'+element['cell_summary']+'"' if isinstance(eval(element['cell_summary']),str) else element['cell_summary'],
+                    'reporting_scale': "NONE" if isinstance(eval(element['cell_summary']),str) else 1,
                     'rounding_option': "NONE"
                 }
 
