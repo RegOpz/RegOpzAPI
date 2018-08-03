@@ -12,6 +12,9 @@ def cell_index(col_idx,row_idx):
 def if_null_zero(value):
     return 0 if value is None else value
 
+def if_null_blank(value):
+    return '""' if value is None else value
+
 def flatten(two_d_array):
     return [element for row in two_d_array for element in row]
 

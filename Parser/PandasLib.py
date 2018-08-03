@@ -1,11 +1,11 @@
 import numpy as np
 FUNCTION_MAP = {
-    "if":"xif",
-    "sum":"xsum"
+    "if":"pif",
+    "sum":"psum"
 }
 
-def xif(condition,if_clause,else_clause):
+def pif(condition,if_clause,else_clause):
     return np.where(condition,if_clause,else_clause)
 
-def xsum(*args):
+def psum(*args):
     pass

@@ -16,7 +16,9 @@ from Helpers.utils import autheticateTenant
 from Helpers.authenticate import *
 import math
 import Parser.FormulaTranslator as fm_trns
+import Parser.FormulaTranslator2 as fm_trns2
 from Parser.PandasLib import *
+from Parser.ExcelLib import *
 from Controllers.OperationalLogController import OperationalLogController
 
 class GenerateReportController(Resource):
@@ -89,7 +91,8 @@ class GenerateReportController(Resource):
                     , operation_narration="Report not generated  for [{0}] Reporting date [{1}].".format(str(report_id),str(reporting_date))
                     )
                 self.opsLog.update_master_status(id=self.log_master_id,operation_status="ERROR")
-            return {'msg': str(e)}, 400
+            #return {'msg': str(e)}, 400
+            raise e
 
 
     def get_report_list(self,country='ALL'):
@@ -104,8 +107,8 @@ class GenerateReportController(Resource):
         try:
             country_list=self.db.query("select distinct country from report_def_catalog").fetchall()
             return country_list
-        except Exceptionas as e:
-            app.loger.error(str(e))
+        except Exception as e:
+            app.logger.error(str(e))
             return {'msg': str(e)}, 500
 
     def create_report_catalog(self,report_parameters):
@@ -438,10 +441,11 @@ class GenerateReportController(Resource):
             for col in list(df.columns):
                 if col != 'referece_rate_date':
                     df[col]=df[col].astype(dtype='float64',errors='ignore')
+            print(df_expr)
             df[new_field_name]=eval(df_expr)
             return df
         except Exception as e:
-            app.loger.error(str(e))
+            app.logger.error(str(e))
             raise(e)
 
 
@@ -661,26 +665,26 @@ class GenerateReportController(Resource):
             formula_set = {}
             for element in contributors:
                 formula_set[element['cell_calc_ref']] = {
-                    'formula': element['cell_summary'],
-                    'reporting_scale': 1,
+                    'formula': '"'+element['cell_summary']+'"' if isinstance(element['cell_summary'],str) else element['cell_summary'],
+                    'reporting_scale': "NONE" if isinstance(element['cell_summary'],str) else 1,
                     'rounding_option': "NONE"
                 }
 
             for cls in comp_agg_cls:
                 ref = cls['comp_agg_ref']
                 formula_set[ref] = {'formula': cls['comp_agg_rule'],
-                                    'reporting_scale': cls['reporting_scale'] if cls['reporting_scale'] else 1,
+                                    'reporting_scale': cls['reporting_scale'] if cls['reporting_scale'] else "NONE",
                                     'rounding_option': cls['rounding_option'] if cls['rounding_option'] else "NONE"
                                     }
 
             #print(formula_set)
-            summary_set = tree(formula_set, format_flag=cell_format_yn)
+            summary_set = fm_trns2.tree(formula_set, format_flag=cell_format_yn)
             # print(summary_set)
 
             result_set = []
             for cls in comp_agg_cls:
                 result_set.append({'report_id':cls['report_id'],'sheet_id':cls['sheet_id'],'cell_id':cls['cell_id'],
-                'cell_summary':summary_set[cls['comp_agg_ref']],'reporting_date':reporting_date,'version':report_version_no})
+                'cell_summary':eval(summary_set[cls['comp_agg_ref']]),'reporting_date':reporting_date,'version':report_version_no})
 
 
             if populate_summary:

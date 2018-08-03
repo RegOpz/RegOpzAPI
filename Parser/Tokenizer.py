@@ -548,6 +548,7 @@ class ExcelParser(ExcelParserTokens):
     def parse(self, formula):
         self.tokens = self.getTokens(formula)
 
+
     def render(self):
         output = ""
         if self.tokens:
@@ -584,3 +585,6 @@ class ExcelParser(ExcelParserTokens):
                 if (t.tsubtype == self.TOK_SUBTYPE_START):
                     indent += 1;
         return output,len(self.tokens.items)
+
+    def ret_tokens(self):
+        return self.tokens.items
