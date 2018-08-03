@@ -93,36 +93,11 @@ class TransactionalReportController(Resource):
 
          if request.endpoint == "trans_bulk_process":
             data = request.get_json(force=True)
-            res = self.delete_trans_report(data)
+            res = self.delete_trans_report_rules(data)
             return res
 
          if request.endpoint == 'load_trans_report_template_ep':
-            if 'file' not in request.files:
-                return NO_FILE_SELECTED
-
-            self.report_id = request.form.get('report_id')
-            self.country = request.form.get('country').upper()
-            self.report_description = request.form.get('report_description')
-            self.report_type=request.form.get('report_type')
-
-            if self.report_id == None or self.report_id == "":
-                return REPORT_ID_EMPTY
-
-            if self.country == None or self.country == "":
-                return COUNTRY_EMPTY
-
-            file = request.files['file']
-            self.selected_file=file.filename
-            if file and not self.allowed_file(file.filename):
-                return FILE_TYPE_IS_NOT_ALLOWED
-            filename = str(uuid.uuid4()) + "_" + secure_filename(file.filename)
-            file.save(os.path.join(UPLOAD_FOLDER, filename))
-
-            if self.insert_report_def_catalog():
-                return self.load_report_template(filename)
-
-            else:
-                return {"msg: Report capture failed. Please check."}, 400
+            return self.capture_template()
 
          if request.endpoint=='update_trans_section_ep':
             params=request.get_json(force=True)
@@ -142,6 +117,39 @@ class TransactionalReportController(Resource):
              data = request.get_json(force=True)
              res = self.dcc_tenant.insert_data(data)
              return res
+
+    def capture_template(self):
+        try:
+            if 'file' not in request.files:
+                return NO_FILE_SELECTED
+
+            self.report_id = request.form.get('report_id')
+            self.country = request.form.get('country').upper()
+            self.report_description = request.form.get('report_description')
+            self.report_type=request.form.get('report_type')
+            self.db_object_suffix= request.form.get('domain_type')
+
+            if self.report_id == None or self.report_id == "":
+                return REPORT_ID_EMPTY
+
+            if self.country == None or self.country == "":
+                return COUNTRY_EMPTY
+
+            file = request.files['file']
+            self.selected_file=file.filename
+            if file and not self.allowed_file(file.filename):
+                return FILE_TYPE_IS_NOT_ALLOWED
+            filename = str(uuid.uuid4()) + "_" + secure_filename(file.filename)
+            file.save(os.path.join(UPLOAD_FOLDER, filename))
+
+            res = self.insert_report_def_catalog()
+            if res:
+                return self.load_report_template(filename)
+            else:
+                return res
+        except Exception as e:
+            app.logger.error(str(e))
+            return {"msg":str(e)},500
 
     def create_report(self, report_info):
         try:
@@ -279,14 +287,17 @@ class TransactionalReportController(Resource):
     def insert_report_def_catalog(self):
         app.logger.info("Creating entry for report catalog")
         try:
+            catalog_object = "report_def_catalog"
+            if self.db_object_suffix:
+                catalog_object += "_" + self.db_object_suffix
             app.logger.info("Checking if report {} for country {} already exists in catalog".format(self.report_id,self.country))
-            count = self.db.query("select count(*) as count from report_def_catalog where report_id=%s and country=%s",\
+            count = self.db.query("select count(*) as count from {} where report_id=%s and country=%s".format(catalog_object,),\
                                 (self.report_id,self.country,)).fetchone()
             if not count['count']:
                 app.logger.info("Creating catalog entry for country {} and report {}".format(self.country,self.report_id))
-                res = self.db.transact("insert into report_def_catalog(report_id,country,report_description,report_type) values(%s,%s,%s,%s)",\
+                res = self.db.transact("insert into {}(report_id,country,report_description,report_type) values(%s,%s,%s,%s)".format(catalog_object,),\
                         (self.report_id,self.country,self.report_description,self.report_type))
-                self.db.commit()
+                # self.db.commit()
                 return True
             else:
                 app.logger.info("Catalog entry exists for country {} and report {}".format(self.country,self.report_id))
@@ -299,6 +310,9 @@ class TransactionalReportController(Resource):
     def load_report_template(self,template_file_name):
         app.logger.info("Loading report template")
         try:
+            def_object = "report_dyn_trans_def"
+            if self.db_object_suffix:
+                def_object += "_" + self.db_object_suffix
             formula_dict = {'SUM': 'CALCULATE_FORMULA',
                             '=SUM': 'CALCULATE_FORMULA',
                             }
@@ -313,7 +327,7 @@ class TransactionalReportController(Resource):
             for sheet in wb.worksheets:
                 sheet_index+=1
                 app.logger.info("Deleting definition entries for sheet {} ,report {}".format(sheet.title,self.report_id))
-                self.db.transact('delete from report_dyn_trans_def where report_id=%s and sheet_id=%s', (self.report_id, sheet.title,))
+                self.db.transact('delete from {} where report_id=%s and sheet_id=%s'.format(def_object,), (self.report_id, sheet.title,))
 
                 # First capture the dimensions of the cells of the sheet
                 rowHeights = [sheet.row_dimensions[r + 1].height for r in range(sheet.max_row)]
@@ -321,13 +335,13 @@ class TransactionalReportController(Resource):
 
                 app.logger.info("Creating entries for row height")
                 for row, height in enumerate(rowHeights):
-                    self.db.transact('insert into report_dyn_trans_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref,row_id)\
-                                 values(%s,%s,%s,%s,%s,%s)', (self.report_id, sheet.title, str(row + 1), 'ROW_HEIGHT', str(height),(row + 1)))
+                    self.db.transact('insert into {}(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref,row_id)\
+                                 values(%s,%s,%s,%s,%s,%s)'.format(def_object,), (self.report_id, sheet.title, str(row + 1), 'ROW_HEIGHT', str(height),(row + 1)))
 
                 app.logger.info("Creating entries for column width")
                 for col, width in enumerate(colWidths):
-                    self.db.transact('insert into report_dyn_trans_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
-                                values(%s,%s,%s,%s,%s)',
+                    self.db.transact('insert into {}(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref)\
+                                values(%s,%s,%s,%s,%s)'.format(def_object,),
                                 (self.report_id, sheet.title, get_column_letter(col + 1), 'COLUMN_WIDTH', str(width)))
 
                 app.logger.info("Creating entries for merged cells")
@@ -361,12 +375,12 @@ class TransactionalReportController(Resource):
                                                 "colour":_cell.border.bottom.color.rgb if _cell.border.bottom.color else 'None'},}
                     }
 
-                    self.db.transact('insert into report_dyn_trans_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref,col_id,row_id)\
-                                values(%s,%s,%s,%s,%s,%s,%s)',
+                    self.db.transact('insert into {}(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref,col_id,row_id)\
+                                values(%s,%s,%s,%s,%s,%s,%s)'.format(def_object,),
                                 (self.report_id, sheet.title, rng, 'MERGED_CELL', sheet[startcell].value,colrow[0],str(colrow[1])))
 
-                    self.db.transact('insert into report_dyn_trans_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref,col_id,row_id)\
-                                values(%s,%s,%s,%s,%s,%s,%s)',
+                    self.db.transact('insert into {}(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref,col_id,row_id)\
+                                values(%s,%s,%s,%s,%s,%s,%s)'.format(def_object,),
                                 (self.report_id, sheet.title, rng, 'CELL_STYLE', str(cell_style),colrow[0],str(colrow[1])))
 
                 app.logger.info("Creating entries for static text and formulas")
@@ -398,12 +412,12 @@ class TransactionalReportController(Resource):
                                 cell_obj_value = str(cell_obj.value) if cell_obj.value else ''
                                 cell_render_ref = 'STATIC_TEXT'
 
-                                self.db.transact('insert into report_dyn_trans_def(report_id,sheet_id ,cell_id ,cell_render_def ,cell_calc_ref,col_id,row_id)\
-                                          values(%s,%s,%s,%s,%s,%s,%s)',
+                                self.db.transact('insert into {}(report_id,sheet_id ,cell_id ,cell_render_def ,cell_calc_ref,col_id,row_id)\
+                                          values(%s,%s,%s,%s,%s,%s,%s)'.format(def_object,),
                                             (self.report_id, sheet.title, cell_ref, cell_render_ref, cell_obj_value.strip(),cell_obj.column,str(cell_obj.row)))
 
-                                self.db.transact('insert into report_dyn_trans_def(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref,col_id,row_id)\
-                                                 values(%s,%s,%s,%s,%s,%s,%s)',
+                                self.db.transact('insert into {}(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref,col_id,row_id)\
+                                                 values(%s,%s,%s,%s,%s,%s,%s)'.format(def_object,),
                                                  (self.report_id, sheet.title, cell_ref, 'CELL_STYLE', str(cell_style),cell_obj.column,str(cell_obj.row)))
 
             self.db.commit()
@@ -1046,7 +1060,7 @@ class TransactionalReportController(Resource):
             app.logger.error(str(e))
             return {"msg": str(e)}, 500
 
-    def delete_trans_report(self, data):
+    def delete_trans_report_rules(self, data):
         app.logger.info("Deleting trans calc and agg rules")
         try:
             data_list=data['data']

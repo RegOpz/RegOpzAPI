@@ -51,7 +51,11 @@ class ReportTemplateController(Resource):
             return self.report_template_suggesstion_list(report_id=reports,country=country,report_type=report_type)
 
     def post(self):
+        self.capture_template()
+
+    def capture_template(self):
         try:
+            app.logger.info(request)
             if 'file' not in request.files:
                 return NO_FILE_SELECTED
 
@@ -75,7 +79,7 @@ class ReportTemplateController(Resource):
             file.save(os.path.join(UPLOAD_FOLDER, filename))
             res = self.insert_report_def_catalog()
             if res:
-                return self.load_report_template(filename)
+                return self.load_report_template(filename, def_object)
 
             else:
                 return res
@@ -99,7 +103,7 @@ class ReportTemplateController(Resource):
             if not count['count']:
                 res = self.db.transact("insert into {}(report_id,report_type,country,report_description) values(%s,%s,%s,%s)".format(catalog_object,),\
                         (self.report_id,self.report_type,self.country,self.report_description,))
-                self.db.commit()
+                # self.db.commit()
                 return res
             return 1
         except Exception as e:
