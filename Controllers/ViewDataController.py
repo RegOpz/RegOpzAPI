@@ -37,7 +37,8 @@ class ViewDataController(Resource):
             page = request.args['page']
             filter = request.args['filter']
             version = request.args.get('version')
-            return self.get_data_source(source_id=source_id,business_date=business_date,page=page,filter=filter,version=version)
+            gridCount = request.args.get('gridCount')
+            return self.get_data_source(source_id=source_id,business_date=business_date,page=page,filter=filter,version=version,gridCount=gridCount)
         if(request.endpoint == 'table_data_ep'):
             table = request.args['table']
             filter = request.args['filter']
@@ -135,7 +136,7 @@ class ViewDataController(Resource):
             app.logger.error(e)
             return {"msg":e},500
 
-    def get_data_source(self,source_id,business_date,page,filter=None,version=None):
+    def get_data_source(self,source_id,business_date,page,filter=None,version=None,gridCount=None):
 
         #db = DatabaseHelper()
         app.logger.info("Getting data source")
@@ -193,6 +194,14 @@ class ViewDataController(Resource):
                 qddata = self.db.query(sql).fetchone()
                 if qddata:
                     qd_id_list = [(id,) for id in qddata['id_list'].split(',')]
+                    if not filter or filter == 'null' or filter == 'undefined':
+                        app.logger.info("Qualified data [{0}:{1}] in the version {2} is {3}".format(start_page,start_page+100,version,len(qd_id_list)))
+                        if gridCount and gridCount != 'null' and gridCount != 'undefined':
+                            count={'count': gridCount}
+                        else:
+                            count={'count': len(qd_id_list)}
+                        qd_id_list = qd_id_list[start_page:start_page+100]
+                        limit_sql = ' '
                     self.db.transactmany("insert into tmp_qd_id_list(idlist) values (%s)",qd_id_list)
                     self.db.transact("insert into tmp_data_id_list " + \
                                     " select qd.qualifying_key from qualified_data qd, tmp_qd_id_list v " + \
@@ -210,8 +219,10 @@ class ViewDataController(Resource):
             cur = self.db.query(sqlqry.format( 'a.*', from_sql ,business_date, filter_sql, limit_sql))
             data = cur.fetchall()
             cols = [i[0] for i in cur.description]
-            app.logger.info(sqlqry.format( 'count(*) as count', from_sql ,business_date, filter_sql, ''))
-            count = self.db.query(sqlqry.format( 'count(*) as count', from_sql ,business_date, filter_sql, '')).fetchone()
+            if not version or version =='null' or version =='undefined' \
+               or (filter and filter != 'null' and filter != 'undefined'):
+                app.logger.info(sqlqry.format( 'count(*) as count', from_sql ,business_date, filter_sql, ''))
+                count = self.db.query(sqlqry.format( 'count(*) as count', from_sql ,business_date, filter_sql, '')).fetchone()
             sql = sqlqry.format( 'a.*', from_sql ,business_date, filter_sql, '')
             data_dict['cols'] = cols
             data_dict['rows'] = data

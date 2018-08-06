@@ -36,8 +36,10 @@ ALLOWED_EXTENSIONS = set(['xls', 'xlsx'])
 class TransactionalReportController(Resource):
     def __init__(self):
         self.domain_info = autheticateTenant()
+        self.master_db=DatabaseHelper()
         if self.domain_info:
             tenant_info = json.loads(self.domain_info)
+            self.tenant_id = tenant_info['tenant_id']
             self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
             self.db=DatabaseHelper(self.tenant_info)
             self.user_id = Token().authenticate()
@@ -64,6 +66,7 @@ class TransactionalReportController(Resource):
         if report_id and not reporting_date:
             self.report_id = report_id
             # print("Report id",self.report_id)
+            self.db_object_suffix= request.args.get('domain_type')
             return self.render_trans_report_json()
 
         if cell_id:
@@ -288,7 +291,7 @@ class TransactionalReportController(Resource):
         app.logger.info("Creating entry for report catalog")
         try:
             catalog_object = "report_def_catalog"
-            if self.db_object_suffix:
+            if self.db_object_suffix and self.db_object_suffix!='null' and self.db_object_suffix!='undefined':
                 catalog_object += "_" + self.db_object_suffix
             app.logger.info("Checking if report {} for country {} already exists in catalog".format(self.report_id,self.country))
             count = self.db.query("select count(*) as count from {} where report_id=%s and country=%s".format(catalog_object,),\
@@ -311,7 +314,7 @@ class TransactionalReportController(Resource):
         app.logger.info("Loading report template")
         try:
             def_object = "report_dyn_trans_def"
-            if self.db_object_suffix:
+            if self.db_object_suffix and self.db_object_suffix!='null' and self.db_object_suffix!='undefined':
                 def_object += "_" + self.db_object_suffix
             formula_dict = {'SUM': 'CALCULATE_FORMULA',
                             '=SUM': 'CALCULATE_FORMULA',
@@ -497,8 +500,15 @@ class TransactionalReportController(Resource):
         app.logger.info("Rendering Transactional report Template")
 
         try:
-            app.logger.info("Getting list of sheet for report {0}".format(self.report_id))
-            sheets = self.db.query("select distinct sheet_id from report_dyn_trans_def where report_id=%s",
+            app.logger.info("Getting list of sheet for report {0} {1}".format(self.report_id,self.tenant_id))
+            def_object = "report_dyn_trans_def"
+            db = self.db
+            if self.db_object_suffix and self.db_object_suffix!='null' and self.db_object_suffix!='undefined':
+                def_object += "_" + self.db_object_suffix
+                db = self.master_db
+
+            app.logger.info("Fetching report def for {0}".format(def_object,))
+            sheets = db.query("select distinct sheet_id from {} where report_id=%s".format(def_object,),
                                    (self.report_id,)).fetchall()
 
             agg_format_data = {}
@@ -510,9 +520,9 @@ class TransactionalReportController(Resource):
                 col_attr = {}
                 cell_style = {}
                 app.logger.info("Getting report definition for report {0},sheet {1}".format(self.report_id,sheet["sheet_id"]))
-                report_template = self.db.query(
+                report_template = db.query(
                     "select cell_id,cell_render_def,cell_calc_ref,section_id,section_type,col_id,row_id " + \
-                    " from report_dyn_trans_def where report_id=%s and sheet_id=%s",
+                    " from {} where report_id=%s and sheet_id=%s".format(def_object,),
                     (self.report_id, sheet["sheet_id"])).fetchall()
 
                 app.logger.info("Writing report definition to dictionary")
