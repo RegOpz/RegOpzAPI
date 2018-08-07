@@ -60,7 +60,7 @@ class TransactionalReportController(Resource):
 
         if report_id and reporting_date:
             self.report_id=report_id
-            version = 1 # needs to be amanded to check for request args
+            version= request.args.get('version') # needs to be amanded to check for request args
             return self.render_trans_view_report_json(reporting_date = reporting_date, version = version)
 
         if report_id and not reporting_date:
@@ -73,6 +73,7 @@ class TransactionalReportController(Resource):
             self.cell_id = cell_id
             self.report_id = request.args.get('report_id')
             self.sheet_id = request.args.get('sheet_id')
+            self.db_object_suffix= request.args.get('domain_type')
             return self.get_trans_report_sec()
 
         if rule_cell_id:
@@ -110,6 +111,7 @@ class TransactionalReportController(Resource):
             cell_group=params['cell_group']
             section_id=params['section_id']
             section_type=params['section_type']
+            self.db_object_suffix= request.args.get('domain_type')
             return self.update_section_ref(cell_group,section_id,section_type)
 
          if report_id:
@@ -432,6 +434,11 @@ class TransactionalReportController(Resource):
     def update_section_ref(self,cell_group,section_id,section_type):
         app.logger.info("Marking section {} for report {} and sheet".format(section_id,self.report_id,self.sheet_id))
         try:
+            def_object = "report_dyn_trans_def"
+            db = self.db
+            if self.db_object_suffix and self.db_object_suffix!='null' and self.db_object_suffix!='undefined':
+                def_object += "_" + self.db_object_suffix
+                db = self.master_db
             rows=[]
             columns=[]
             for cell in cell_group:
@@ -446,13 +453,13 @@ class TransactionalReportController(Resource):
 
             app.logger.info("Updating report_dyn_trans_def for making section {} as type {}".format(section_id,section_type))
 
-            self.db.transact("update report_dyn_trans_def set section_id=%s,section_type=%s where row_id between %s and %s and\
-                          col_id between %s and %s and report_id=%s and sheet_id=%s",(section_id,section_type,min_row,max_row,\
+            db.transact("update {0} set section_id=%s,section_type=%s where row_id between %s and %s and\
+                          col_id between %s and %s and report_id=%s and sheet_id=%s".format(def_object,),(section_id,section_type,min_row,max_row,\
                           min_col,max_col,self.report_id,self.sheet_id))
             app.logger.info("update report_dyn_trans_def set section_id={0},section_type={1} where row_id between {2} and {3} and\
                           col_id between {4} and {5} and report_id={6} and sheet_id={7}".format(section_id,section_type,min_row,max_row,\
                           min_col,max_col,self.report_id,self.sheet_id))
-            self.db.commit()
+            db.commit()
             return {"msg":"Cell {} marked successfully as section {} for report {},sheet {}"\
                     .format(cell_group,section_id,self.report_id,self.sheet_id)},200
         except Exception as e:
@@ -595,13 +602,19 @@ class TransactionalReportController(Resource):
 
     def get_trans_report_sec(self):
         try:
-            section_id = self.db.query("select distinct section_id from report_dyn_trans_def where report_id=%s and sheet_id=%s and cell_id=%s", \
+            app.logger.info("Getting list of section for report {0} {1}".format(self.report_id,self.tenant_id))
+            def_object = "report_dyn_trans_def"
+            db = self.db
+            if self.db_object_suffix and self.db_object_suffix!='null' and self.db_object_suffix!='undefined':
+                def_object += "_" + self.db_object_suffix
+                db = self.master_db
+            section_id = db.query("select distinct section_id from {0} where report_id=%s and sheet_id=%s and cell_id=%s".format(def_object,), \
                     (self.report_id,self.sheet_id, self.cell_id)).fetchone()
             app.logger.info("Fetching section details {0} {1} {2} {3}".format(self.report_id,self.sheet_id, self.cell_id,section_id,))
-            section_range = self.db.query("select section_id, min(col_id) min_col_id,min(row_id) min_row_id," + \
+            section_range = db.query("select section_id, min(col_id) min_col_id,min(row_id) min_row_id," + \
                     "max(col_id) max_col_id,max(row_id) max_row_id,max(section_type) section_type " + \
-                    "from report_dyn_trans_def \
-                    where report_id=%s and sheet_id=%s and section_id=%s", \
+                    "from {0} \
+                    where report_id=%s and sheet_id=%s and section_id=%s".format(def_object,), \
                     (self.report_id,self.sheet_id, str(section_id['section_id']))).fetchone()
             return section_range
         except Exception as e:
@@ -694,7 +707,10 @@ class TransactionalReportController(Resource):
                     self.db.commit()
                 comp_agg_rule_version = car_version_no
             else:
-                comp_agg_rule_version = car_max_vers['version']
+                if not car_max_vers:
+                    comp_agg_rule_version = 1
+                else:
+                    comp_agg_rule_version = car_max_vers['version']
 
             #print(sheets)
             all_calc_def = pd.DataFrame(self.db.query("select id, report_id, sheet_id, section_id, source_id from\
@@ -703,17 +719,21 @@ class TransactionalReportController(Resource):
                             and version = (select max(version) from report_dyn_trans_calc_def_vers where \
                             report_id = %s)",(report_id, report_id)).fetchone()
 
-            all_calc_def['id'] = all_calc_def['id'].astype(dtype='int64', errors='ignore')
-            rr_id_list = list(map(int, all_calc_def['id'].tolist()))
-            rr_id_list.sort()
-            rr_id_list_str=",".join(map(str,rr_id_list))
+            if not all_calc_def.empty:
+                all_calc_def['id'] = all_calc_def['id'].astype(dtype='int64', errors='ignore')
+                rr_id_list = list(map(int, all_calc_def['id'].tolist()))
+                rr_id_list.sort()
+                rr_id_list_str=",".join(map(str,rr_id_list))
+            else:
+                rr_id_list = []
+                rr_id_list_str = ''
 
             if not calc_def_vers:
                 calc_def_vers_no = 1
             else:
                 calc_def_old_list = list(map(int, calc_def_vers['id_list'].split(',')))
                 calc_def_vers_no = calc_def_vers['version'] + 1 if set(rr_id_list) != set(calc_def_old_list) else                calc_def_vers['version']
-            #print("Calc_def: " , calc_def_vers_no,calc_def_vers['version'])
+            print("Calc_def: " , calc_def_vers_no,calc_def_vers)
             if not calc_def_vers or calc_def_vers_no != calc_def_vers['version']:
                 self.db.transact("insert into report_dyn_trans_calc_def_vers(report_id,version,id_list) values(%s,%s,%s)",(report_id, calc_def_vers_no, rr_id_list_str))
                 self.db.commit()
@@ -802,10 +822,10 @@ class TransactionalReportController(Resource):
                                 , operation_narration='Processing of qualified data completed for source  : {0}'.format(source,))
 
 
+                    qualified_filtered_data.fillna('',inplace=True)
                     if not qualified_filtered_data.empty:
-                        qualified_filtered_data.fillna('',inplace=True)
                         sql = "select cell_agg_render_ref from report_dyn_trans_agg_def where report_id = %s \
-                                and sheet_id = %s and section_id = %s"
+                                and sheet_id = %s and section_id = %s and in_use='Y'"
                         data = self.db.query(sql,(report_id, sheet_id, section_id)).fetchone()
                         print("Data",data)
                         if data:
@@ -829,7 +849,7 @@ class TransactionalReportController(Resource):
                                         qualified_filtered_data = qualified_filtered_data.head(num)
                                     else :
                                         qualified_filtered_data = qualified_filtered_data.tail(num)
-                        #print("Qualified Data", qualified_filtered_data)
+                        # print("Qualified Data", qualified_filtered_data)
                         qualified_filtered_data = qualified_filtered_data.reset_index()
                         row_id_list=[idx + 1 for idx,row in qualified_filtered_data.iterrows()]
                         qualified_filtered_data['row_id']=row_id_list
