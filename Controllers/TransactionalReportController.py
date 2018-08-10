@@ -37,6 +37,7 @@ class TransactionalReportController(Resource):
     def __init__(self):
         self.domain_info = autheticateTenant()
         self.master_db=DatabaseHelper()
+        self.dcc_master = DefChangeController(tenant_info="master")
         if self.domain_info:
             tenant_info = json.loads(self.domain_info)
             self.tenant_id = tenant_info['tenant_id']
@@ -80,6 +81,7 @@ class TransactionalReportController(Resource):
             self.cell_id = rule_cell_id
             self.report_id = request.args.get('report_id')
             self.sheet_id = request.args.get('sheet_id')
+            self.db_object_suffix= request.args.get('domain_type')
             return self.get_trans_report_rules()
 
     def put(self,id=None,report=None):
@@ -87,7 +89,11 @@ class TransactionalReportController(Resource):
             return BUSINESS_RULE_EMPTY
         data = request.get_json(force=True)
         if request.endpoint == "trans_report_rule":
-            res = self.dcc_tenant.update_or_delete_data(data, id)
+            self.db_object_suffix= request.args.get('domain_type')
+            if self.db_object_suffix == "master":
+                res = self.dcc_master.update_or_delete_data(data, id)
+            else:
+                res = self.dcc_tenant.update_or_delete_data(data, id)
             return res
         if request.endpoint == "report_parameter_ep":
             pass
@@ -96,6 +102,7 @@ class TransactionalReportController(Resource):
     def post(self, calc_ref=None, report_id=None):
 
          if request.endpoint == "trans_bulk_process":
+            self.db_object_suffix= request.args.get('domain_type')
             data = request.get_json(force=True)
             res = self.delete_trans_report_rules(data)
             return res
@@ -119,8 +126,12 @@ class TransactionalReportController(Resource):
             report_info=request.get_json(force=True)
             return self.create_report(report_info)
          if request.endpoint == 'trans_report_rule':
+             self.db_object_suffix= request.args.get('domain_type')
              data = request.get_json(force=True)
-             res = self.dcc_tenant.insert_data(data)
+             if self.db_object_suffix == "master":
+                 res = self.dcc_master.insert_data(data)
+             else:
+                 res = self.dcc_tenant.insert_data(data)
              return res
 
     def capture_template(self):
@@ -623,20 +634,33 @@ class TransactionalReportController(Resource):
 
     def get_trans_report_rules(self):
         try:
-            section_id = self.db.query("select distinct section_id from report_dyn_trans_def where report_id=%s and sheet_id=%s and cell_id=%s", \
-                    (self.report_id,self.sheet_id, self.cell_id)).fetchone()
+            db = self.db
+            if self.db_object_suffix and self.db_object_suffix!='null' and self.db_object_suffix!='undefined':
+                db = self.master_db
+            section_id = self.get_trans_report_sec()
             app.logger.info("Fetching section rule details {0} {1} {2} {3}".format(self.report_id,self.sheet_id, self.cell_id,section_id,))
-            section_col = self.db.query("select distinct col_id from report_dyn_trans_def where report_id=%s and sheet_id=%s and section_id=%s", \
-                    (self.report_id,self.sheet_id, section_id['section_id'])).fetchall()
-            section_rules = self.db.query("select * " + \
-                    "from report_dyn_trans_calc_def \
-                    where report_id=%s and sheet_id=%s and section_id=%s", \
-                    (self.report_id,self.sheet_id, str(section_id['section_id']))).fetchall()
-            order_rules = self.db.query("select * " + \
-                    "from report_dyn_trans_agg_def \
-                    where report_id=%s and sheet_id=%s and section_id=%s", \
-                    (self.report_id,self.sheet_id, str(section_id['section_id']))).fetchall()
-            return {"section": section_id['section_id'],
+            section_col=[]
+            section_rules=[]
+            order_rules=[]
+            if section_id:
+                def_object = "report_dyn_trans_def"
+                def_calc_object = "report_dyn_trans_calc_def"
+                def_agg_object = "report_dyn_trans_agg_def"
+                if self.db_object_suffix and self.db_object_suffix!='null' and self.db_object_suffix!='undefined':
+                    def_object += "_" + self.db_object_suffix
+                    def_calc_object += "_" + self.db_object_suffix
+                    def_agg_object += "_" + self.db_object_suffix
+                section_col = db.query("select distinct col_id from {0} where report_id=%s and sheet_id=%s and section_id=%s".format(def_object,), \
+                        (self.report_id,self.sheet_id, section_id['section_id'])).fetchall()
+                section_rules = db.query("select * " + \
+                        "from {0} \
+                        where report_id=%s and sheet_id=%s and section_id=%s".format(def_calc_object,), \
+                        (self.report_id,self.sheet_id, str(section_id['section_id']))).fetchall()
+                order_rules = db.query("select * " + \
+                        "from {0} \
+                        where report_id=%s and sheet_id=%s and section_id=%s".format(def_agg_object,), \
+                        (self.report_id,self.sheet_id, str(section_id['section_id']))).fetchall()
+            return {"section": section_id['section_id'] if section_id else None,
                     "secRules": section_rules,
                     "secOrders": order_rules,
                     "secColumns": section_col}
@@ -810,7 +834,7 @@ class TransactionalReportController(Resource):
                                     #eval(expr_str)
 
                                     qualified_filtered_data=qualified_filtered_data.append(dfr,ignore_index=True)
-                                    print(qualified_filtered_data)
+                                    # print(qualified_filtered_data)
                                     #qpdf=qpdf.append(qpdf_temp,ignore_index=True)
                                     # link_data_records.append((source,report_id,sheet_id,section_id,rw['cell_calc_ref'],row['business_date'],reporting_date))
 
@@ -858,7 +882,7 @@ class TransactionalReportController(Resource):
                         columns = ",".join(qpdf.columns)
                         placeholders = ",".join(['%s'] * len(qpdf.columns))
                         data = list(qpdf.itertuples(index=False, name=None))
-                        print(qpdf)
+                        # print(qpdf)
                         row_id=self.db.transactmany("insert into report_dyn_trans_qualified_data_link ({0}) \
                                                     values ({1})".format(columns, placeholders),data)
 
@@ -870,7 +894,7 @@ class TransactionalReportController(Resource):
                             #rec = dict(rec)
                             row_seq=rec['row_id']
                             rec.pop('row_id')
-                            print(str(rec))
+                            # print(str(rec))
                             summary_records.append((report_id,sheet_id,section_id,row_seq,str(rec),reporting_date, report_version_no))
 
 
@@ -1102,7 +1126,10 @@ class TransactionalReportController(Resource):
                     sec_rule_count += 1
                 if "agg_def" in i['table_name']:
                     sec_order_count += 1
-                res=self.dcc_tenant.update_or_delete_data(i,id)
+                if self.db_object_suffix=="master":
+                    res=self.dcc_master.update_or_delete_data(i,id)
+                else:
+                    res=self.dcc_tenant.update_or_delete_data(i,id)
             return {"msg": "Marked {0} sec column rules, {1} sec order rules successfully for deletion review.".format(sec_rule_count,sec_order_count)},200
         except Exception as e:
             app.logger.info(str(e))

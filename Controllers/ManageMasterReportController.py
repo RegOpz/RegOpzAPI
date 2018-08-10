@@ -50,6 +50,9 @@ class ManageMasterReportController(Resource):
 
     def post(self):
         data = request.get_json(force=True)
+        if request.endpoint == 'repository_report_rule_ep':
+            return self.dcc_master.insert_data(data)
+
         country = data["country"]
         report_description = data["report_description"]
         report_type = data["report_type"]
@@ -65,10 +68,11 @@ class ManageMasterReportController(Resource):
 
     def put(self):
         data = request.get_json(force=True)
-        id = data['audit_info']['id']
-        if not id:
-            return BUSINESS_RULE_EMPTY
-        return self.dcc_master.update_or_delete_data(data, id)
+        if request.endpoint == 'repository_report_rule_ep':
+            id = data['audit_info']['id']
+            if not id:
+                return BUSINESS_RULE_EMPTY
+            return self.dcc_master.update_or_delete_data(data, id)
 
     def check_report_id(self,report_id,country):
         app.logger.info("Checking if report template already present in tenant space.")
@@ -114,27 +118,31 @@ class ManageMasterReportController(Resource):
             app.logger.info("Copied report_def_master")
             # copy entry of report_calc_def_master to report_calc_def
             report_master = self.master_db.query(
-                "select report_id, sheet_id, cell_id,cell_calc_ref, cell_business_rules, last_updated_by, \
-                'Y' as dml_allowed, 'N' as in_use from report_calc_def_master where report_id=%s and in_use='Y'",
+                "select report_id, sheet_id, cell_id,cell_calc_ref, cell_business_rules, last_updated_by," + \
+                "cell_calc_decsription,cell_calc_extern_ref," + \
+                "'Y' as dml_allowed, 'N' as in_use from report_calc_def_master where report_id=%s and in_use='Y'",
                 (ref_report_id,)).fetchall()
             # type of report_master is list of dictionaries
             params = []
             for x in report_master:
                 values = (target_report_id, x["sheet_id"], x["cell_id"], x["cell_calc_ref"],
-                          x["cell_business_rules"],x["last_updated_by"], x["dml_allowed"], x["in_use"],None,None,None)
+                          x["cell_business_rules"],x["last_updated_by"],
+                          x["cell_calc_decsription"],x["cell_calc_extern_ref"],
+                          x["dml_allowed"], x["in_use"],None,None,None)
                 params.append(values)
             # print(params)
 
             ret = self.tenant_db.transactmany("insert into report_calc_def(report_id, sheet_id, cell_id, \
-            cell_calc_ref, cell_business_rules, last_updated_by, dml_allowed, in_use,aggregation_ref, aggregation_func,source_id)\
-                                                        values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", params)
+            cell_calc_ref, cell_business_rules, last_updated_by, cell_calc_decsription,cell_calc_extern_ref, dml_allowed, in_use,aggregation_ref, aggregation_func,source_id)\
+                                                        values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", params)
 
             app.logger.info("Copied report_calc_def_master")
             # copy entry of report_comp_agg_def_master to report_comp_agg_def
             report_master = self.master_db.query(
-                "select report_id, sheet_id, cell_id, comp_agg_ref, \
-                reporting_scale, rounding_option, \
-                last_updated_by, 'Y' as dml_allowed, 'N' as in_use, comp_agg_rule \
+                "select report_id, sheet_id, cell_id, comp_agg_ref," + \
+                "reporting_scale, rounding_option," + \
+                "cell_agg_decsription,comp_agg_extern_ref," +\
+                "last_updated_by, 'Y' as dml_allowed, 'N' as in_use, comp_agg_rule \
                 from report_comp_agg_def_master where report_id=%s and in_use='Y'",
                 (ref_report_id,)).fetchall()
             # type of report_master is list of dictionaries
@@ -143,13 +151,15 @@ class ManageMasterReportController(Resource):
                 for x in report_master:
                     values = (
                     target_report_id, x["sheet_id"], x["cell_id"], x["comp_agg_ref"],
-                    x["reporting_scale"], x["rounding_option"],x["last_updated_by"], x["dml_allowed"], x["in_use"], x["comp_agg_rule"])
+                    x["reporting_scale"], x["rounding_option"],x["last_updated_by"],
+                    x["cell_agg_decsription"],x["comp_agg_extern_ref"],
+                    x["dml_allowed"], x["in_use"], x["comp_agg_rule"])
                     params.append(values)
                 # print(params)
 
                 ret = self.tenant_db.transactmany("insert into report_comp_agg_def(report_id, sheet_id, cell_id, \
-                    comp_agg_ref,reporting_scale, rounding_option,last_updated_by, dml_allowed, in_use, comp_agg_rule)\
-                    values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", params)
+                    comp_agg_ref,reporting_scale, rounding_option,last_updated_by, cell_agg_decsription, comp_agg_extern_ref, dml_allowed, in_use, comp_agg_rule)\
+                    values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", params)
                 app.logger.info("Copied report_comp_agg_def_master")
 
             # post a notification in ManageDef Change Controller

@@ -354,7 +354,6 @@ api.add_resource(ManageMasterReportController,
     apiPath + "/report-rules-repo",
     apiPath + "/report-rules-repo/<string:country>",
     apiPath + "/report-rules-repo/report/<string:report_id>",
-    apiPath + "/report-rules-repo/report/report-rule",
     apiPath + "/report-rules-repo/copy-report-template"
 )
 
@@ -370,6 +369,11 @@ api.add_resource(ManageMasterReportController,
 api.add_resource(ManageMasterReportController,
     apiPath + "/report-rules-repo/audit-list",
     endpoint = "repository_report_rule_audit_ep"
+)
+
+api.add_resource(ManageMasterReportController,
+    apiPath + "/report-rules-repo/report/report-rule",
+    endpoint = "repository_report_rule_ep"
 )
 
 api.add_resource(OperationalLogController,
