@@ -61,10 +61,12 @@ class ManageMasterReportController(Resource):
         ref_domain = data["ref_domain"]
         target_domain = data["target_domain"]
         target_group_id = data["target_groupId"]
+        table_list = data['table_list']
         return self.copy_template_to_tenant(country=country, report_type=report_type, ref_report_id=ref_report_id,
                                             target_report_id=target_report_id, ref_domain=ref_domain,
                                             target_domain=target_domain,
-                                            target_group_id=target_group_id, report_description=report_description)
+                                            target_group_id=target_group_id, report_description=report_description,
+                                            table_list=table_list)
 
     def put(self):
         data = request.get_json(force=True)
@@ -83,84 +85,61 @@ class ManageMasterReportController(Resource):
         app.logger.info("OK new entry for copy")
         return {"msg": "report-id is available"},200
 
+    def copy_def_master_table(self,ref_table, target_table,ref_report_id,target_report_id,review_columns=True):
+        try:
+            app.logger.info("Def Data copy into tenant started from {0} into {1}".format(ref_table,target_table,))
+            exclusion_list = ['id','report_id','in_use','dml_allowed']
+            table_dict = self.tenant_db.query("describe " + target_table).fetchall()
+            data_dict_tenant = [ r['Field'] for r in table_dict if r['Field'] not in exclusion_list]
+            app.logger.info("Data dict tenant {}".format(data_dict_tenant,))
+            table_dict = self.master_db.query("describe " + ref_table).fetchall()
+            data_dict_master = [ r['Field'] for r in table_dict if r['Field'] in data_dict_tenant]
+            app.logger.info("Data dict master {}".format(data_dict_tenant,))
+            columns = ",".join(data_dict_master)
+            if review_columns:
+                columns += ",'Y' as dml_allowed, 'N' as in_use"
+
+            app.logger.info("columns {}".format(columns,))
+            data_master = self.master_db.query("select " + columns + ",%s as report_id " + \
+                            " from " + ref_table + " where report_id=%s " + \
+                            (" and in_use='Y'" if review_columns else ""),(target_report_id,ref_report_id,)).fetchall()
+            if data_master:
+                data_tenant = [tuple(x.values()) for x in data_master]
+                columns = ",".join(data_dict_master)
+                if review_columns:
+                    columns += ",dml_allowed,in_use"
+                    placeholders = ",".join(['%s'] * (len(data_dict_master) + 3))
+                else:
+                    placeholders = ",".join(['%s'] * (len(data_dict_master) + 1))
+                self.tenant_db.transactmany("insert into " + target_table + "(" + columns + ",report_id)" + \
+                                " values(" + placeholders + ")",data_tenant)
+            app.logger.info("Def Data copy into tenant completed from {0} into {1}".format(ref_table,target_table,))
+
+        except Exception as e:
+            raise(e)
+
     def copy_template_to_tenant(self, country, target_report_id, ref_report_id, report_type, target_group_id,
-                                ref_domain, target_domain, report_description):
+                                ref_domain, target_domain, report_description, table_list):
 
         try:
 
             # copy entry of report_def_catalog_master to report_def_catalog
             report_master = self.master_db.query(
-                "select id,report_parameters from report_def_catalog_master where report_id=%s",
-                (ref_report_id,)).fetchone()
+                "select id,report_parameters from report_def_catalog_master where report_id=%s and country = %s",
+                (ref_report_id,country,)).fetchone()
             report_parameters = report_master["report_parameters"]
-            ret = self.tenant_db.transact("insert into report_def_catalog(report_id,country,report_description,report_parameters,\
+            def_id = self.tenant_db.transact("insert into report_def_catalog(report_id,country,report_description,report_parameters,\
                                         last_updated_by,date_of_change,report_type) values(%s,%s,%s,%s,%s,%s,%s)",
                                           (target_report_id, country, report_description, report_parameters, None, None,
                                            report_type))
-            def_id = ret
+
             app.logger.info("Copied report_def_catalog_master")
             # print('id to be inserted is: ',id)
             # copy entry of report_def_master to report_def
-            report_master = self.master_db.query("select report_id,sheet_id,cell_id,cell_render_def,\
-                cell_calc_ref,last_updated_by from report_def_master where report_id=%s", (ref_report_id,)).fetchall()
-            # type of report_master is list of dictionaries
-            params = []
-            for x in report_master:
-                values = (target_report_id, x["sheet_id"], x["cell_id"], x["cell_render_def"],
-                          x["cell_calc_ref"], x["last_updated_by"])
-                params.append(values)
-            # print(params)
-
-            ret = self.tenant_db.transactmany("insert into report_def(report_id,sheet_id,\
-                cell_id,cell_render_def,cell_calc_ref,last_updated_by)\
-                                            values(%s,%s,%s,%s,%s,%s)", params)
-
-            app.logger.info("Copied report_def_master")
-            # copy entry of report_calc_def_master to report_calc_def
-            report_master = self.master_db.query(
-                "select report_id, sheet_id, cell_id,cell_calc_ref, cell_business_rules, last_updated_by," + \
-                "cell_calc_decsription,cell_calc_extern_ref," + \
-                "'Y' as dml_allowed, 'N' as in_use from report_calc_def_master where report_id=%s and in_use='Y'",
-                (ref_report_id,)).fetchall()
-            # type of report_master is list of dictionaries
-            params = []
-            for x in report_master:
-                values = (target_report_id, x["sheet_id"], x["cell_id"], x["cell_calc_ref"],
-                          x["cell_business_rules"],x["last_updated_by"],
-                          x["cell_calc_decsription"],x["cell_calc_extern_ref"],
-                          x["dml_allowed"], x["in_use"],None,None,None)
-                params.append(values)
-            # print(params)
-
-            ret = self.tenant_db.transactmany("insert into report_calc_def(report_id, sheet_id, cell_id, \
-            cell_calc_ref, cell_business_rules, last_updated_by, cell_calc_decsription,cell_calc_extern_ref, dml_allowed, in_use,aggregation_ref, aggregation_func,source_id)\
-                                                        values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", params)
-
-            app.logger.info("Copied report_calc_def_master")
-            # copy entry of report_comp_agg_def_master to report_comp_agg_def
-            report_master = self.master_db.query(
-                "select report_id, sheet_id, cell_id, comp_agg_ref," + \
-                "reporting_scale, rounding_option," + \
-                "cell_agg_decsription,comp_agg_extern_ref," +\
-                "last_updated_by, 'Y' as dml_allowed, 'N' as in_use, comp_agg_rule \
-                from report_comp_agg_def_master where report_id=%s and in_use='Y'",
-                (ref_report_id,)).fetchall()
-            # type of report_master is list of dictionaries
-            params = []
-            if report_master:
-                for x in report_master:
-                    values = (
-                    target_report_id, x["sheet_id"], x["cell_id"], x["comp_agg_ref"],
-                    x["reporting_scale"], x["rounding_option"],x["last_updated_by"],
-                    x["cell_agg_decsription"],x["comp_agg_extern_ref"],
-                    x["dml_allowed"], x["in_use"], x["comp_agg_rule"])
-                    params.append(values)
-                # print(params)
-
-                ret = self.tenant_db.transactmany("insert into report_comp_agg_def(report_id, sheet_id, cell_id, \
-                    comp_agg_ref,reporting_scale, rounding_option,last_updated_by, cell_agg_decsription, comp_agg_extern_ref, dml_allowed, in_use, comp_agg_rule)\
-                    values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", params)
-                app.logger.info("Copied report_comp_agg_def_master")
+            for t in table_list:
+                self.copy_def_master_table(ref_table=t['ref_table'],target_table=t['target_table'],
+                                            ref_report_id=ref_report_id,target_report_id=target_report_id,
+                                            review_columns=t['review_columns'])
 
             # post a notification in ManageDef Change Controller
             tenant_id=str(json.loads(self.domain_info)["tenant_id"])
