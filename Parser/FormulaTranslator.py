@@ -93,8 +93,8 @@ class RangeNode(OperandNode):
 
     def emit(self, ast, context):
         # resolve the range into cells
-        str=context.df+"['{}']".format(self.tvalue)
-        return str
+        strn=context.df+"['{}']".format(self.tvalue)
+        return strn
 
 
 class FunctionNode(ASTNode):
@@ -109,18 +109,18 @@ class FunctionNode(ASTNode):
 
     def emit(self, ast, context):
         fun = self.tvalue.lower()
-        str = ''
+        strn = ''
         # Get the arguments
         args = self.children(ast)
         if fun=='rate':
-            apply_str=".apply(self.get_fx_rate, args=('{0}',),axis=1)".format(args[0].tvalue,)
-            str=context.df+apply_str
+            apply_strn=".apply(self.get_fx_rate, args=('{0}',),axis=1)".format(args[0].tvalue,)
+            strn=context.df+apply_strn
         else:
             # map to the correct name
             f = self.funmap.get(fun, fun)
-            str = f + "(" + ",".join([n.emit(ast, context=context) for n in args]) + ")"
+            strn = f + "(" + ",".join([n.emit(ast, context=context) for n in args]) + ")"
 
-        return str
+        return strn
 
 
 def create_node(t):
