@@ -7,6 +7,7 @@ from Helpers.DatabaseHelper import DatabaseHelper
 from Constants.Status import *
 from operator import itemgetter
 from datetime import datetime
+from decimal import Decimal
 import json
 from Helpers.utils import autheticateTenant
 from Helpers.authenticate import *
@@ -224,6 +225,16 @@ class ViewDataController(Resource):
                 app.logger.info(sqlqry.format( 'count(*) as count', from_sql ,business_date, filter_sql, ''))
                 count = self.db.query(sqlqry.format( 'count(*) as count', from_sql ,business_date, filter_sql, '')).fetchone()
             sql = sqlqry.format( 'a.*', from_sql ,business_date, filter_sql, '')
+
+            for i,d in enumerate(data):
+                for k,v in d.items():
+                    # app.logger.info("Decimal {} {} {}".format(k,v,isinstance(v, Decimal)))
+                    if isinstance(v,datetime):
+                        d[k] = d[k].isoformat()
+                    if isinstance(v, Decimal):
+                        # app.logger.info("Decimal {} {}".format(k,v))
+                        d[k] = str(v)
+
             data_dict['cols'] = cols
             data_dict['rows'] = data
             data_dict['count'] = count['count']
@@ -255,8 +266,12 @@ class ViewDataController(Resource):
 
             for i,d in enumerate(data):
                 for k,v in d.items():
+                    # app.logger.info("Decimal {} {} {}".format(k,v,isinstance(v, Decimal)))
                     if isinstance(v,datetime):
                         d[k] = d[k].isoformat()
+                    if isinstance(v, Decimal):
+                        # app.logger.info("Decimal {} {}".format(k,v))
+                        d[k] = str(v)
 
 
             cols = [i[0] for i in cur.description]
@@ -484,7 +499,7 @@ class ViewDataController(Resource):
             code += '\tfor row in data:\n'
             code += '\t\tbusiness_rule=\'\'\n'
             code += '\t\tvalidation_rule=\'\'\n'
-            qualifying_key='\'row[\"id\"]\''
+            qualifying_key='row[\"id\"]'
             buy_currency='\'\''
             sell_currency='\'\''
             mtm_currency='\'\''
@@ -584,12 +599,22 @@ class ViewDataController(Resource):
                 #existing_qdf[['source_id', 'business_date', 'qualifying_key']].astype(dtype=int, errors='ignore')
                 #print(existing_qdf.dtypes)
                 #print(ldict['qdf'].dtypes)
+                ceate_version = False
                 if existing_qdf.empty:
                     qdf=ldict['qdf']
                     qdf['id']= qdf.index + 1
                     qdf['id']=qdf['id'].astype(dtype='int32',errors='ignore')
                     id_list=qdf['id'].tolist()
+                    if qdf.empty:
+                        ceate_version = True
                 else:
+                    if ldict['qdf'].empty:
+                        # Check whether this is the new version with no qualified data for the source_id
+                        prev_id_list=db.query("select id_list from qualified_data_vers " + \
+                                                " where version=(select max(version) from qualified_data_vers where business_date=%s and source_id=%s)" +\
+                                                " and business_date=%s and source_id=%s",\
+                                             (business_date,source_id,business_date,source_id)).fetchone()
+                        ceate_version = True if prev_id_list['id_list'] else False
                     qdf = pd.merge(ldict['qdf'], existing_qdf, how='left', on=list(ldict['qdf'].columns),suffixes=('', '_old'))
                     qdf['id'].fillna(0,inplace=True)
                     qdf_old=qdf.loc[qdf['id']!=0]
@@ -611,7 +636,7 @@ class ViewDataController(Resource):
 
                 # for col in ['source_id','business_date','qualifying_key','id']:
                 #     qdf[col]=qdf[col].astype(dtype='int32',errors='ignore')
-                if not qdf.empty:
+                if not qdf.empty or ceate_version:
                     qdf[['source_id','business_date','qualifying_key','id']]=qdf[['source_id','business_date','qualifying_key','id']].astype(dtype='int32',errors='ignore')
                     qdf_records=list(qdf.itertuples(index=False, name=None))
                     placeholder= ",".join(['%s']*len(qdf.columns))

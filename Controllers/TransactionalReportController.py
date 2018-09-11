@@ -853,21 +853,22 @@ class TransactionalReportController(Resource):
                         data = self.db.query(sql,(report_id, sheet_id, section_id)).fetchone()
                         print("Data",data)
                         if data:
-                            data = eval(data['cell_agg_render_ref'])
-                            if "sort_order" in data.keys():
+                            data = eval(data['cell_agg_render_ref'].replace("null","None"))
+                            if "sortorder" in data.keys():
                                 cols = []
                                 order = []
-                                val = data["sort_order"]
+                                val = data["sortorder"]
                                 for element in val:
-                                    key = list(element.keys())[0]
-                                    cols.append(key)
-                                    if element[key] == 'ASC':
+                                    print(element,list(element.keys()))
+                                    # key = list(element.keys())[0]
+                                    cols.append(element['column'])
+                                    if element['order'] == 'ASC':
                                         order.append(1)
                                     else:
                                         order.append(0)
                                 qualified_filtered_data.sort_values(cols, inplace = True , ascending = order)
-                                if 'ranktype' in data.keys():
-                                    num = int(data['rank_value'])
+                                if 'ranktype' in data.keys() and data['ranktype']:
+                                    num = int(data['rankvalue'])
                                     if data['ranktype'] == 'TOP':
                                         #print("top")
                                         qualified_filtered_data = qualified_filtered_data.head(num)
@@ -954,13 +955,14 @@ class TransactionalReportController(Resource):
             app.logger.info("Fetching qualified source data for {}..".format(source_id))
             source_table_name = self.db.query("select source_table_name from data_source_information where source_id=%s",
                                           (source_id,)).fetchone()['source_table_name']
-            key_column = util.get_keycolumn(self.db._cursor(), source_table_name)
+            key_column = 'id' #util.get_keycolumn(self.db._cursor(), source_table_name)
             source_data = self.db.query("select src.*, qd.* from {0} src,qualified_data qd,(select a.business_date,a.source_id,a.version,a.id_list,\
                         a.br_version from qualified_data_vers a,(select business_date,source_id,max(version) version from qualified_data_vers\
                         where business_date between %s and %s and source_id=%s group by business_date,source_id) b\
                         where a.business_date=b.business_date and a.source_id=b.source_id and a.version=b.version) qdv\
                         where qd.business_date=qdv.business_date and instr(concat(',',qdv.id_list,','),concat(',',qd.id,',')) and qd.qualifying_key=src.{1}\
-                        and src.business_date=qd.business_date".format(source_table_name,key_column), (business_date_from,business_date_to,source_id)).fetchall()
+                        and src.business_date=qd.business_date \
+                        and qdv.source_id=qd.source_id".format(source_table_name,key_column), (business_date_from,business_date_to,source_id)).fetchall()
 
             max_vers=self.db.query("select a.business_date,a.source_id,a.version,a.id_list,\
                     a.br_version from qualified_data_vers a,(select business_date,source_id,max(version) version from qualified_data_vers\

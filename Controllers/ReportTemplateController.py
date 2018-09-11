@@ -51,7 +51,7 @@ class ReportTemplateController(Resource):
             return self.report_template_suggesstion_list(report_id=reports,country=country,report_type=report_type)
 
     def post(self):
-        self.capture_template()
+        return self.capture_template()
 
     def capture_template(self):
         try:
@@ -79,7 +79,7 @@ class ReportTemplateController(Resource):
             file.save(os.path.join(UPLOAD_FOLDER, filename))
             res = self.insert_report_def_catalog()
             if res:
-                return self.load_report_template(filename, def_object)
+                return self.load_report_template(filename)
 
             else:
                 return res

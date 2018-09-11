@@ -43,9 +43,15 @@ class ViewReportController(Resource):
             self.report_id = request.args.get('report_id')
             reporting_date = request.args.get('reporting_date')
             cell_format_yn = request.args.get('cell_format_yn')
+            version = request.args.get('version')
+            report_parameters = request.args.get('report_parameters')
+            report_snapshot = request.args.get('report_snapshot')
+
             if cell_format_yn == None or cell_format_yn == "":
                 cell_format_yn = 'N'
-            return self.export_to_excel(reporting_date=reporting_date,cell_format_yn=cell_format_yn)
+            return self.export_to_excel(reporting_date=reporting_date,cell_format_yn=cell_format_yn,
+                                        version=version,report_parameters=report_parameters,
+                                        report_snapshot=report_snapshot)
 
     def render_report_json(self, reporting_date='19000101', cell_format_yn='Y',version=1,report_snapshot="{}",report_parameters="{}"):
 
@@ -240,7 +246,7 @@ class ViewReportController(Resource):
             app.logger.error(e)
             return {"msg": e}, 500
 
-    def export_to_excel(self, reporting_date,cell_format_yn):
+    def export_to_excel(self, reporting_date,cell_format_yn,version=1,report_parameters="{}",report_snapshot="{}"):
 
         app.logger.info("Exporting report to excel")
 
@@ -257,21 +263,27 @@ class ViewReportController(Resource):
             app.logger.info("Getting sheets for thre report")
             sheets=self.db.query('select distinct sheet_id from report_def where report_id=%s', (report_id,)).fetchall()
 
+            report_kwargs=json.loads(report_parameters)
+            report_kwargs["populate_summary"]= False
+            app.logger.info(report_snapshot)
             agg_format_data ={}
             if cell_format_yn == 'Y':
                 app.logger.info("Creating formatted summary set")
-                summary_set = self.report.create_report_summary_final(self,populate_summary = False,
-                                cell_format_yn = cell_format_yn,
-                                report_id = self.report_id,
-                                 business_date_from = str(reporting_date)[:8],
-                                 business_date_to = str(reporting_date)[8:])
+                summary_set = self.report.create_report_summary_final(report_version_no=version,
+                                                                    report_snapshot=report_snapshot,
+                                                                    cell_format_yn=cell_format_yn,
+                                                                    **report_kwargs)
                 #print(summary_set)
+                app.logger.info("Formatted summary set {}".format(summary_set))
                 for e in summary_set:
-                    agg_format_data[e[0]+e[1]+e[2]] = e[3]
+                    # app.logger.info("e is {}".format(e))
+                    # agg_format_data[e[0]+e[1]+e[2]] = e[3]
+                    agg_format_data[e['report_id']+e['sheet_id']+e['cell_id']]=e['cell_summary']
                 #print(agg_format_data)
             # print sheets
             # The default sheet of the workbook
             # al = Alignment(horizontal="center", vertical="center", wrap_text=True, shrink_to_fit=True)
+            app.logger.info("Complete formatted summary set")
             al = Alignment(horizontal="left", vertical="center", wrap_text=True, shrink_to_fit=True)
             ws = wr.worksheets[0]
             # img = xls.drawing.image.Image('/home/deb/Downloads/regopzdata/CloudMargin/SMTB.jpg')
@@ -326,7 +338,7 @@ class ViewReportController(Resource):
                         else:
                             startcell = row["cell_id"]
                         _cell_style=eval(row['cell_calc_ref'])
-                        app.logger.info("{0} CELL_STYLE values are {1} {2}".format(row['cell_id'],_cell_style,row['cell_calc_ref']))
+                        # app.logger.info("{0} CELL_STYLE values are {1} {2}".format(row['cell_id'],_cell_style,row['cell_calc_ref']))
                         _al = Alignment(horizontal=_cell_style['alignment']['horizontal'], vertical=_cell_style['alignment']['vertical'])
                         _font = Font(name=_cell_style['font']['name'],
                                     bold= _cell_style['font']['bold'],

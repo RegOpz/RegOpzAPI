@@ -16,6 +16,7 @@ import json
 import ast
 from operator import itemgetter
 from datetime import datetime
+from decimal import Decimal
 import time
 from Controllers.GenerateReportController import GenerateReportController as report
 from Helpers.utils import autheticateTenant
@@ -719,6 +720,12 @@ class DocumentController(Resource):
         count = self.db.query(sql).fetchone()
         # sql = "select a.* from " + src_inf['source_table_name'] + " a, tmp_rqd_id_list b" + \
         #      " where a." + key_column + "=b.idlist"
+        for i,d in enumerate(data):
+            for k,v in d.items():
+                if isinstance(v,datetime):
+                    d[k] = d[k].isoformat()
+                if isinstance(v, Decimal):
+                    d[k] = str(v)
         data_dict['cols'] = cols
         data_dict['rows'] = data
         data_dict['count'] = count['count']
