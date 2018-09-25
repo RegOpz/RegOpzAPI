@@ -398,10 +398,22 @@ class ViewDataController(Resource):
                     "select * from qualified_data where source_id = %s and qualifying_key = %s and business_date=%s",
                     (data['source_id'],data['qualifying_key'],data['business_date'])).fetchall()
 
-                app.logger.info("Getting cell business rules for data {}".format(data_qual[0],))
+                app.logger.info("Checking report snapshot for the business rule versions")
+                report_ver = self.db.query("select * from report_catalog where report_id = %s and version=%s "+ \
+                                            " and reporting_date=%s", \
+                                                (data["report_id"],data["version"],data["reporting_date"])).fetchone()
+                report_snapshot = eval(report_ver["report_snapshot"])
+                calc_ver = report_snapshot["report_calc_def"]
+                app.logger.info("calc_ver is {}".format(calc_ver))
+                calc_id_list = self.db.query("select * from report_calc_def_vers where source_id=%s and report_id=%s " + \
+                                        " and version=%s", \
+                                        (data["source_id"],data["report_id"],calc_ver[str(data["source_id"])])).fetchone()
+                app.logger.info("Getting cell business rules for data {}".format(data_qual,))
                 cell_rule=self.db.query("select * from report_calc_def where cell_calc_ref=%s and report_id = %s\
-                            and sheet_id = %s and cell_id = %s",(data['cell_calc_ref'],data["report_id"],
-                                                                 data["sheet_id"],data["cell_id"])).fetchone()
+                            and sheet_id = %s and cell_id = %s and id in ({0})".format(calc_id_list["id_list"]),\
+                            (data['cell_calc_ref'],data["report_id"],
+                            data["sheet_id"],data["cell_id"])).fetchone()
+                app.logger.info("Cell rule fetched .... {}".format(cell_rule))
 
                 if cell_rule:
                     data["cell_business_rules"]=cell_rule["cell_business_rules"]
@@ -477,8 +489,10 @@ class ViewDataController(Resource):
                 br_version_no=1
             else:
                old_id_list=map(int,br_version['id_list'].split(','))
-               #print(set(br_id_list),set(old_id_list))
+               br_id_list=map(int,br_id_list_str.split(','))
+               app.logger.info("Old id list != New id list : {}".format(set(br_id_list)!=set(old_id_list)))
                br_version_no=br_version['version']+1 if set(br_id_list)!= set(old_id_list) else br_version['version']
+               app.logger.info("Business rule version no {} {}".format(br_version_no,br_version['version']))
 
             if not br_version or br_version_no != br_version['version']:
                db.transact("insert into business_rules_vers(source_id,version,id_list) values(%s,%s,%s)",(src['source_id'],br_version_no,br_id_list_str))
@@ -599,6 +613,7 @@ class ViewDataController(Resource):
                 #existing_qdf[['source_id', 'business_date', 'qualifying_key']].astype(dtype=int, errors='ignore')
                 #print(existing_qdf.dtypes)
                 #print(ldict['qdf'].dtypes)
+                # print(existing_qdf,ldict['qdf'])
                 ceate_version = False
                 if existing_qdf.empty:
                     qdf=ldict['qdf']
@@ -608,26 +623,33 @@ class ViewDataController(Resource):
                     if qdf.empty:
                         ceate_version = True
                 else:
-                    if ldict['qdf'].empty:
-                        # Check whether this is the new version with no qualified data for the source_id
-                        prev_id_list=db.query("select id_list from qualified_data_vers " + \
-                                                " where version=(select max(version) from qualified_data_vers where business_date=%s and source_id=%s)" +\
-                                                " and business_date=%s and source_id=%s",\
-                                             (business_date,source_id,business_date,source_id)).fetchone()
-                        ceate_version = True if prev_id_list['id_list'] else False
+                    # Check whether this is the new version with no qualified data for the source_id
+                    prev_id_list=db.query("select id_list from qualified_data_vers " + \
+                                            " where version=(select max(version) from qualified_data_vers where business_date=%s and source_id=%s)" +\
+                                            " and business_date=%s and source_id=%s",\
+                                         (business_date,source_id,business_date,source_id)).fetchone()
+                    ceate_version = True if prev_id_list['id_list'] and ldict['qdf'].empty else False
+                    if prev_id_list['id_list']:
+                        ceate_version = True if ldict['qdf'].empty else False
+                        prev_ver_id_list = list(map(int, prev_id_list['id_list'].split(',')))
                     qdf = pd.merge(ldict['qdf'], existing_qdf, how='left', on=list(ldict['qdf'].columns),suffixes=('', '_old'))
                     qdf['id'].fillna(0,inplace=True)
                     qdf_old=qdf.loc[qdf['id']!=0]
                     qdf_old['id'] = qdf_old['id'].astype(dtype='int32', errors='ignore')
                     old_id_list=qdf_old['id'].tolist()
                     qdf_new=qdf[qdf['id']==0]
-                    qdf_new=qdf_new.reset_index(drop=True)
-                    qdf_new['id'] = qdf_new['id'].astype(dtype='int32', errors='ignore')
-                    max_id=existing_qdf['id'].max()
-                    new_id_list=[max_id+idx+1 for idx,rec in qdf_new.iterrows() ]
-                    id_list=old_id_list+new_id_list
-                    id_df=pd.DataFrame({'id':new_id_list})
-                    qdf_new.update(id_df)
+                    # Now if we do not have any new qdf for this run of apply rule check whether it matches with the existing id list
+                    if qdf_new.empty and old_id_list != prev_ver_id_list :
+                        create_version = True
+                        id_list=old_id_list
+                    else:
+                        qdf_new=qdf_new.reset_index(drop=True)
+                        qdf_new['id'] = qdf_new['id'].astype(dtype='int32', errors='ignore')
+                        max_id=existing_qdf['id'].max()
+                        new_id_list=[max_id+idx+1 for idx,rec in qdf_new.iterrows() ]
+                        id_list=old_id_list+new_id_list
+                        id_df=pd.DataFrame({'id':new_id_list})
+                        qdf_new.update(id_df)
                     qdf=qdf_new
 
                 # print(qdf)

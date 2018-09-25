@@ -58,6 +58,19 @@ class TransactionalReportController(Resource):
             sheet_id = request.args.get('sheet_id')
             section_id = request.args.get('section_id')
             return self.get_trans_report_audit_list(report_id=report_id, sheet_id=sheet_id, section_id=section_id)
+        if request.endpoint == 'get_transreport_export_to_excel_ep':
+            self.report_id = request.args.get('report_id')
+            reporting_date = request.args.get('reporting_date')
+            cell_format_yn = request.args.get('cell_format_yn')
+            version = request.args.get('version')
+            report_parameters = request.args.get('report_parameters')
+            report_snapshot = request.args.get('report_snapshot')
+
+            if cell_format_yn == None or cell_format_yn == "":
+                cell_format_yn = 'N'
+            return self.export_transreport_to_excel(reporting_date=reporting_date,cell_format_yn=cell_format_yn,
+                                        version=version,report_parameters=report_parameters,
+                                        report_snapshot=report_snapshot)
 
         if report_id and reporting_date:
             self.report_id=report_id
@@ -388,7 +401,8 @@ class TransactionalReportController(Resource):
                                         "top":{"style": _cell.border.top.style,
                                                 "colour":_cell.border.top.color.rgb if _cell.border.top.color else 'None'},
                                         "bottom":{"style": _cell.border.bottom.style,
-                                                "colour":_cell.border.bottom.color.rgb if _cell.border.bottom.color else 'None'},}
+                                                "colour":_cell.border.bottom.color.rgb if _cell.border.bottom.color else 'None'},},
+                                "number_format":_cell.number_format
                     }
 
                     self.db.transact('insert into {}(report_id,sheet_id,cell_id,cell_render_def,cell_calc_ref,col_id,row_id)\
@@ -405,6 +419,7 @@ class TransactionalReportController(Resource):
                         cell_ref = str(cell_obj.column) + str(cell_obj.row)
                         #agg_ref='S'+str(sheet_index)+'AGG'+str(cell_ref)
                         _cell=sheet[cell_ref]
+                        # app.logger.info("Cell format {0} {1}".format(cell_ref,_cell.number_format))
                         cell_style={"font":{"name":_cell.font.name,
                                             "bold": _cell.font.b,
                                             "italic": _cell.font.i,
@@ -421,7 +436,8 @@ class TransactionalReportController(Resource):
                                             "top":{"style": _cell.border.top.style,
                                                     "colour":_cell.border.top.color.rgb if _cell.border.top.color else 'None'},
                                             "bottom":{"style": _cell.border.bottom.style,
-                                                    "colour":_cell.border.bottom.color.rgb if _cell.border.bottom.color else 'None'},}
+                                                    "colour":_cell.border.bottom.color.rgb if _cell.border.bottom.color else 'None'},},
+                                    "number_format":_cell.number_format
                         }
                         if (len(rng_startcell) > 0 and cell_ref not in rng_startcell) or (len(rng_startcell) == 0):
                             if not self.check_if_cell_isin_range(cell_ref,rng_boundary):
@@ -546,9 +562,10 @@ class TransactionalReportController(Resource):
                 app.logger.info("Writing report definition to dictionary")
                 for row in report_template:
                     cell_d = {}
+                    # app.logger.info("row data: {}".format(row,))
                     if row["cell_render_def"] == 'STATIC_TEXT':
                         cell_d['cell'] = row['cell_id']
-                        cell_d['value'] = row['cell_calc_ref'] + (" DYNDATA("+row['section_id']+")" if row['section_type']=="DYNDATA" else "")
+                        cell_d['value'] = (row['cell_calc_ref'] if row['cell_calc_ref'] else '') + (" DYNDATA("+row['section_id']+")" if row['section_type']=="DYNDATA" else "")
                         cell_d['origin'] = "TEMPLATE"
                         cell_d['section'] = row['section_id']
                         cell_d['sectionType'] = row['section_type']
@@ -560,7 +577,7 @@ class TransactionalReportController(Resource):
                     elif row['cell_render_def'] == 'MERGED_CELL':
                         start_cell, end_cell = row['cell_id'].split(':')
                         cell_d['cell'] = start_cell
-                        cell_d['value'] = row['cell_calc_ref'] + (" DYNDATA("+row['section_id']+")" if row['section_type']=="DYNDATA" else "")
+                        cell_d['value'] = (row['cell_calc_ref'] if row['cell_calc_ref'] else '') + (" DYNDATA("+row['section_id']+")" if row['section_type']=="DYNDATA" else "")
                         cell_d['merged'] = end_cell
                         cell_d['origin'] = "TEMPLATE"
                         cell_d['section'] = row['section_id']
@@ -609,6 +626,7 @@ class TransactionalReportController(Resource):
             return json_dump
         except Exception as e:
             app.logger.error(str(e))
+            # raise e
             return {"msg": str(e)}, 500
 
     def get_trans_report_sec(self):
@@ -707,7 +725,9 @@ class TransactionalReportController(Resource):
 
             reporting_date=business_date_from+business_date_to
             app.logger.info("Getting list of sections for report {}".format(report_id))
-            sheets = self.db.query("select distinct sheet_id,section_id from report_dyn_trans_def where report_id=%s and section_type='DYNDATA' ",
+            # sheets = self.db.query("select distinct sheet_id,section_id from report_dyn_trans_def where report_id=%s and section_type='DYNDATA' ",
+            #                    (report_id,)).fetchall()
+            sheets = self.db.query("select distinct sheet_id,section_id,row_id from report_dyn_trans_def where report_id=%s and section_type='DYNDATA' order by row_id ",
                                (report_id,)).fetchall()
             cardf = pd.DataFrame(self.db.query("select id, report_id, sheet_id , section_id from report_dyn_trans_agg_def where \
                                     report_id = %s and in_use = 'Y'",(report_id,)).fetchall())
@@ -765,9 +785,11 @@ class TransactionalReportController(Resource):
 
 
             qualified_data_version=defaultdict(dict)
+            app.logger.info("Processing sheets {0}".format(sheets))
             for sheet in sheets:
                 sheet_id = sheet['sheet_id']
                 section_id=sheet['section_id']
+                app.logger.info("Processing sheet {0} section {1}".format(sheet_id,section_id))
                 trans_calc_def=self.get_dyn_trans_calc_def_details(report_id,sheet_id,section_id)
                 if trans_calc_def:
                     trans_calc_def=pd.DataFrame(trans_calc_def)
@@ -800,43 +822,49 @@ class TransactionalReportController(Resource):
                             for idx,rw in tcd_source.iterrows():
                                 cell_calc_render_ref=eval(rw['cell_calc_render_ref'])
                                 cell_calc_rule=cell_calc_render_ref['rule']
-                                expr_str=""
-                                for r in cell_calc_rule.split(','):
-                                    if r is not None and r !='':
-                                        expr_str= "(qd_source_data['{0}']==1)".format(r,) if expr_str=="" else expr_str + " & (qd_source_data['{0}']==1)".format(r,)
-                                expr_str = "qd_source_data[" + expr_str + "]"
-                                app.logger.info("Before dfr filter ...{0}".format(expr_str,))
-                                dfr=eval(expr_str)
-                                #print("evaluated string : " , dfr)
-                                #qpdf_temp=dfr[['qualifying_key','business_date']]
-                                dfr['source_id']=source
-                                dfr['report_id'] = report_id
-                                dfr['sheet_id'] = sheet_id
-                                dfr['section_id'] = section_id
-                                dfr['cell_calc_ref'] = rw['cell_calc_ref']
-                                dfr['reporting_date'] = reporting_date
-                                dfr['version'] = report_version_no
-                                # app.logger.info("After dfr filter ...{0}".format(dfr,))
-                                if not dfr.empty:
-                                    data_dict={}
-                                    cell_calc_columns=cell_calc_render_ref['calc']
-                                    col_list=[]
+                                # If the set of rules exist as they keys in the qualified data set then check further
+                                # else no data qualified for the source of the section
+                                cell_rules_list=cell_calc_rule.split(',')
+                                cell_rules_list = [r for r in cell_rules_list if r is not None and r !='']
+                                app.logger.info("Before checking subset of qdr columns. Cell: {0} and QD Col: {1}".format(cell_rules_list,list(qd_source_data.columns)))
+                                if set(cell_rules_list).issubset(set(list(qd_source_data.columns))):
                                     expr_str=""
-                                    if cell_calc_columns:
-                                        for col in cell_calc_columns.keys():
-                                            # app.logger.info("Column value [{0}]".format(col))
-                                            if cell_calc_columns[col]['column'] is not None and cell_calc_columns[col]['column'] !='':
-                                                col_list.append(col)
-                                                dfr=self.apply_formula_to_frame(dfr,cell_calc_columns[col]['column'],col)
-                                                #expr_str = "\""+cell_calc_columns[col]['column']+"\":\""+col+"\"" if expr_str=="" else expr_str + ",\""+cell_calc_columns[col]['column']+"\":\""+col+"\""
-                                    #expr_str="dfr.rename(columns={" + expr_str + "},inplace=True)"
-                                    #app.logger.info("Before dfr column rename  ...{0}".format(expr_str,))
-                                    #eval(expr_str)
+                                    for r in cell_calc_rule.split(','):
+                                        if r is not None and r !='':
+                                            expr_str= "(qd_source_data['{0}']==1)".format(r,) if expr_str=="" else expr_str + " & (qd_source_data['{0}']==1)".format(r,)
+                                    expr_str = "qd_source_data[" + expr_str + "]"
+                                    app.logger.info("Before dfr filter ...{0}".format(expr_str,))
+                                    dfr=eval(expr_str)
+                                    #print("evaluated string : " , dfr)
+                                    #qpdf_temp=dfr[['qualifying_key','business_date']]
+                                    dfr['source_id']=source
+                                    dfr['report_id'] = report_id
+                                    dfr['sheet_id'] = sheet_id
+                                    dfr['section_id'] = section_id
+                                    dfr['cell_calc_ref'] = rw['cell_calc_ref']
+                                    dfr['reporting_date'] = reporting_date
+                                    dfr['version'] = report_version_no
+                                    # app.logger.info("After dfr filter ...{0}".format(dfr,))
+                                    if not dfr.empty:
+                                        data_dict={}
+                                        cell_calc_columns=cell_calc_render_ref['calc']
+                                        col_list=[]
+                                        expr_str=""
+                                        if cell_calc_columns:
+                                            for col in cell_calc_columns.keys():
+                                                # app.logger.info("Column value [{0}]".format(col))
+                                                if cell_calc_columns[col]['column'] is not None and cell_calc_columns[col]['column'] !='':
+                                                    col_list.append(col)
+                                                    dfr=self.apply_formula_to_frame(dfr,cell_calc_columns[col]['column'],col)
+                                                    #expr_str = "\""+cell_calc_columns[col]['column']+"\":\""+col+"\"" if expr_str=="" else expr_str + ",\""+cell_calc_columns[col]['column']+"\":\""+col+"\""
+                                        #expr_str="dfr.rename(columns={" + expr_str + "},inplace=True)"
+                                        #app.logger.info("Before dfr column rename  ...{0}".format(expr_str,))
+                                        #eval(expr_str)
 
-                                    qualified_filtered_data=qualified_filtered_data.append(dfr,ignore_index=True)
-                                    # print(qualified_filtered_data)
-                                    #qpdf=qpdf.append(qpdf_temp,ignore_index=True)
-                                    # link_data_records.append((source,report_id,sheet_id,section_id,rw['cell_calc_ref'],row['business_date'],reporting_date))
+                                        qualified_filtered_data=qualified_filtered_data.append(dfr,ignore_index=True)
+                                        # print(qualified_filtered_data)
+                                        #qpdf=qpdf.append(qpdf_temp,ignore_index=True)
+                                        # link_data_records.append((source,report_id,sheet_id,section_id,rw['cell_calc_ref'],row['business_date'],reporting_date))
 
                         app.logger.info("At the end of the qualified data loop...")
                         if self.log_master_id:
@@ -903,14 +931,14 @@ class TransactionalReportController(Resource):
                                                     values(%s,%s,%s,%s,%s,%s,%s)",summary_records)
 
                     self.db.commit()
-                report_snapshot=json.dumps({"report_dyn_trans_calc_def":report_rule_version,"report_dyn_trans_agg_def":comp_agg_rule_version,
-                                            "qualified_data":qualified_data_version})
-                if self.log_master_id:
-                    self.opsLog.write_log_detail(master_id=self.log_master_id
-                        , operation_sub_type='Report Creation Completed'
-                        , operation_status='Complete'
-                        , operation_narration='Report creation completed for  report_id  : {0}'.format(report_info['report_id'],))
-                return report_snapshot
+            report_snapshot=json.dumps({"report_dyn_trans_calc_def":report_rule_version,"report_dyn_trans_agg_def":comp_agg_rule_version,
+                                        "qualified_data":qualified_data_version})
+            if self.log_master_id:
+                self.opsLog.write_log_detail(master_id=self.log_master_id
+                    , operation_sub_type='Report Creation Completed'
+                    , operation_status='Complete'
+                    , operation_narration='Report creation completed for  report_id  : {0}'.format(report_info['report_id'],))
+            return report_snapshot
 
         except Exception as e:
             self.db.rollback()
@@ -1021,11 +1049,14 @@ class TransactionalReportController(Resource):
                             matrix_list.append(cell_d)
                         else:
                             # dyn_data_sec_columns=self.get_col_list_for_row(row['row_id'])
-                            # Since one increment already have been given for ROW HEIGHT and STYLE
-                            processing_row = processing_row - 1
                             if processing_dyn_sec != row['section_id']:
                                 sql="select * from report_dyn_trans_summary where report_id=%s and sheet_id=%s and section_id=%s and reporting_date=%s and version = %s"
                                 dyn_summary_data=self.db.query(sql,(self.report_id, sheet["sheet_id"],row['section_id'],reporting_date, version)).fetchall()
+                                # If no dyn summary data then retain processing row value else decrease it by 1
+                                # Since one increment already have been given for ROW HEIGHT and STYLE
+                                processing_row = processing_row - 1 if len(dyn_summary_data) else processing_row
+                                dynsec_cell_style = self.get_dynsec_cell_style(sheet_id=sheet["sheet_id"],section_id=row['section_id'],mode="GUI")
+
                                 for data in dyn_summary_data:
                                     app.logger.info("Processing row...{0}".format(processing_row));
                                     processing_row = (processing_row+1)
@@ -1041,7 +1072,8 @@ class TransactionalReportController(Resource):
                                         cell_d['col'] = str(col)
                                         cell_d['row'] = processing_row
                                         matrix_list.append(cell_d)
-                                        cell_style[col+str(processing_row)]=eval("{'font': {'name': 'Arial', 'colour': 'None', 'size': 10.0, 'bold': False, 'italic': False}, 'border': {'bottom': {'style': None, 'colour': 'None'}, 'top': {'style': None, 'colour': 'None'}, 'left': {'style': None, 'colour': 'None'}, 'right': {'style': None, 'colour': 'None'}}, 'alignment': {'vertical': None, 'horizontal': None}, 'fill': {'colour': '00000000', 'type': None}}")
+                                        cell_style[col+str(processing_row)]=dynsec_cell_style[col]
+                                        # val("{'font': {'name': 'Arial', 'colour': 'None', 'size': 10.0, 'bold': False, 'italic': False}, 'border': {'bottom': {'style': None, 'colour': 'None'}, 'top': {'style': None, 'colour': 'None'}, 'left': {'style': None, 'colour': 'None'}, 'right': {'style': None, 'colour': 'None'}}, 'alignment': {'vertical': None, 'horizontal': None}, 'fill': {'colour': '00000000', 'type': None}}")
                                     row_attr[str(processing_row)] = {'height': '12.5'}
                                 processing_dyn_sec = row['section_id']
 
@@ -1060,7 +1092,35 @@ class TransactionalReportController(Resource):
                             cell_d['row'] = row['row_id']
                             matrix_list.append(cell_d)
                         else:
-                            pass
+                            # dyn_data_sec_columns=self.get_col_list_for_row(row['row_id'])
+                            if processing_dyn_sec != row['section_id']:
+                                sql="select * from report_dyn_trans_summary where report_id=%s and sheet_id=%s and section_id=%s and reporting_date=%s and version = %s"
+                                dyn_summary_data=self.db.query(sql,(self.report_id, sheet["sheet_id"],row['section_id'],reporting_date, version)).fetchall()
+                                # If no dyn summary data then retain processing row value else decrease it by 1
+                                # Since one increment already have been given for ROW HEIGHT and STYLE
+                                processing_row = processing_row - 1 if len(dyn_summary_data) else processing_row
+                                dynsec_cell_style = self.get_dynsec_cell_style(sheet_id=sheet["sheet_id"],section_id=row['section_id'],mode="GUI")
+
+                                for data in dyn_summary_data:
+                                    app.logger.info("Processing row...{0}".format(processing_row));
+                                    processing_row = (processing_row+1)
+                                    record=eval(data['row_summary'])
+                                    for col in record.keys():
+                                        cell_d = {}
+                                        app.logger.info("Processing row...{0} for column {1}".format(processing_row,col));
+                                        cell_d['cell'] = str(col) + str(processing_row)
+                                        cell_d['value'] = record[str(col)]
+                                        cell_d['merged'] = end_cell.replace(str(row['row_id']),str(processing_row))
+                                        cell_d['origin'] = "SUMMARY"
+                                        cell_d['section'] = row['section_id']
+                                        cell_d['sectionType'] = row['section_type']
+                                        cell_d['col'] = str(col)
+                                        cell_d['row'] = processing_row
+                                        matrix_list.append(cell_d)
+                                        cell_style[col+str(processing_row)]=dynsec_cell_style[col]
+                                        # val("{'font': {'name': 'Arial', 'colour': 'None', 'size': 10.0, 'bold': False, 'italic': False}, 'border': {'bottom': {'style': None, 'colour': 'None'}, 'top': {'style': None, 'colour': 'None'}, 'left': {'style': None, 'colour': 'None'}, 'right': {'style': None, 'colour': 'None'}}, 'alignment': {'vertical': None, 'horizontal': None}, 'fill': {'colour': '00000000', 'type': None}}")
+                                    row_attr[str(processing_row)] = {'height': '12.5'}
+                                processing_dyn_sec = row['section_id']
 
 
                     elif row['cell_render_def'] == 'ROW_HEIGHT':
@@ -1071,7 +1131,7 @@ class TransactionalReportController(Resource):
                                 row_height = '12.5'
                             else:
                                 row_height = row['cell_calc_ref']
-                            row_attr[row['cell_id']] = {'height': row_height}
+                            row_attr[str(processing_row)] = {'height': row_height}
                         else:
                             pass
 
@@ -1088,10 +1148,12 @@ class TransactionalReportController(Resource):
                         if row['section_type'] != 'DYNDATA':
                             processing_row = (processing_row+1) if reference_row != row['row_id'] else processing_row
                             reference_row =row['row_id'] if reference_row != row['row_id'] else reference_row
-                            if ':' in row['cell_id']:
-                                start_cell, end_cell = row['cell_id'].split(':')
-                            else:
-                                start_cell=row['cell_id']
+                            # if ':' in row['cell_id']:
+                            #     start_cell, end_cell = row['cell_id'].split(':')
+                            # else:
+                            #     start_cell=row['cell_id']
+
+                            start_cell = row['col_id']+str(processing_row)
 
                             #app.logger.info("Inside CELL_STYLE for cell {}".format(start_cell,))
                             cell_style[start_cell] = eval(row['cell_calc_ref'])
@@ -1166,3 +1228,241 @@ class TransactionalReportController(Resource):
         except Exception as e:
             app.logger.error(e)
             return {"msg": e}, 500
+
+    def get_dynsec_cell_style(self,sheet_id,section_id,mode='XLSX'):
+        app.logger.info("Getting cell styles for dynamic section {0}".format(section_id,))
+        try:
+            dynsec_style_def = self.db.query(
+                "select cell_id,cell_render_def,cell_calc_ref,section_id,section_type,col_id,row_id " + \
+                " from report_dyn_trans_def where report_id=%s and sheet_id=%s and section_id=%s " + \
+                " and cell_render_def = 'CELL_STYLE' ",
+                (self.report_id, sheet_id, section_id)).fetchall()
+            dynsec_style={}
+            for row in dynsec_style_def:
+                app.logger.info("Processing cell style: {}".format(row,))
+                _cell_style=eval(row['cell_calc_ref'])
+                if mode != 'XLSX':
+                    dynsec_style[row["col_id"]] = _cell_style
+                else:
+                    # app.logger.info("{0} CELL_STYLE values are {1} {2}".format(row['cell_id'],_cell_style,row['cell_calc_ref']))
+                    _al = Alignment(horizontal=_cell_style['alignment']['horizontal'], vertical=_cell_style['alignment']['vertical'])
+                    _font = Font(name=_cell_style['font']['name'],
+                                bold= _cell_style['font']['bold'],
+                                italic= _cell_style['font']['italic'],
+                                color= _cell_style['font']['colour'] if _cell_style['font']['colour'] != 'None' else None,
+                                size= _cell_style['font']['size'])
+                    _fill = PatternFill(fill_type=_cell_style['fill']['type'],
+                                fgColor=_cell_style['fill']['colour'] if _cell_style['fill']['colour'] != 'None' else None)
+                    _border = Border(left=Side(style= _cell_style['border']['left']['style'],
+                                                color= _cell_style['border']['left']['colour'] if _cell_style['border']['left']['colour'] != 'None' else None),
+                                    right=Side(style= _cell_style['border']['right']['style'],
+                                             color= _cell_style['border']['right']['colour'] if _cell_style['border']['right']['colour'] != 'None' else None),
+                                    top=Side(style= _cell_style['border']['top']['style'],
+                                             color= _cell_style['border']['top']['colour'] if _cell_style['border']['top']['colour'] != 'None' else None),
+                                    bottom=Side(style= _cell_style['border']['bottom']['style'],
+                                             color= _cell_style['border']['bottom']['colour'] if _cell_style['border']['bottom']['colour'] != 'None' else None))
+                    _number_format = _cell_style['number_format'] if 'number_format' in _cell_style.keys() else 'General'
+                    # app.logger.info("Dynamic cell style step 0: {}".format(_cell_style,))
+                    dynsec_style[row["col_id"]] = {
+                                                    'alignment' : _al,
+                                                    'font' : _font,
+                                                    'fill' : _fill,
+                                                    'border' : _border,
+                                                    'number_format' : _number_format
+                                                }
+                # app.logger.info("Dynamic cell style: {}".format(dynsec_style,))
+            return dynsec_style
+        except Exception as e:
+            app.logger.error(str(e))
+            raise e
+
+    def export_transreport_to_excel(self, reporting_date,cell_format_yn,version=1,report_parameters="{}",report_snapshot="{}"):
+
+        app.logger.info("Exporting Transactional report")
+
+        try:
+            target_file_name = self.report_id+ '_' + str(reporting_date) + '_' + str(time.time())+ '.xlsx'
+
+            #Create report template
+            wr = xls.Workbook()
+            # target_dir='../output/'
+            target_dir = './static/'
+            app.logger.info("Getting list of sheet for report {0}".format(self.report_id))
+            sheets = self.db.query("select distinct sheet_id from report_dyn_trans_def where report_id=%s",
+                                   (self.report_id,)).fetchall()
+
+            agg_format_data = {}
+
+            sheet_d_list = []
+            al = Alignment(horizontal="left", vertical="center", wrap_text=True, shrink_to_fit=True)
+            ws = wr.worksheets[0]
+            # img = xls.drawing.image.Image('/home/deb/Downloads/regopzdata/CloudMargin/SMTB.jpg')
+
+            for sheet in sheets:
+                # The first sheet title will be Sheet, so do not create any sheet, just rename the title
+                if ws.title == 'Sheet':
+                    ws.title = sheet["sheet_id"]
+                else:
+                    ws = wr.create_sheet(title=sheet["sheet_id"])
+                matrix_list = []
+                row_attr = {}
+                col_attr = {}
+                cell_style = {}
+                processing_row =1
+                reference_row =1
+                processing_cell_id=""
+                processing_dyn_sec = ""
+                app.logger.info("Export excel: Getting transaction report definition for report {0},sheet {1}".format(self.report_id,sheet["sheet_id"]))
+                report_template = self.db.query(
+                    "select cell_id,cell_render_def,cell_calc_ref,section_id,section_type,col_id,row_id " + \
+                    " from report_dyn_trans_def where report_id=%s and sheet_id=%s order by row_id, col_id, cell_render_def asc",
+                    (self.report_id, sheet["sheet_id"])).fetchall()
+
+                app.logger.info("Writing report definition to excel file")
+                for row in report_template:
+                    cell_d = {}
+                    if row["cell_render_def"] == 'STATIC_TEXT':
+                        if row['section_type'] != 'DYNDATA':
+                            processing_row = (processing_row+1) if reference_row != row['row_id'] else processing_row
+                            reference_row =row['row_id'] if reference_row != row['row_id'] else reference_row
+                            ws[row["col_id"]+str(processing_row)].value = row['cell_calc_ref'] + (" DYNDATA("+row['section_id']+")" if row['section_type']=="DYNDATA" else "")
+                        else:
+                            # dyn_data_sec_columns=self.get_col_list_for_row(row['row_id'])
+                            if processing_dyn_sec != row['section_id']:
+                                sql="select * from report_dyn_trans_summary where report_id=%s and sheet_id=%s and section_id=%s and reporting_date=%s and version = %s"
+                                dyn_summary_data=self.db.query(sql,(self.report_id, sheet["sheet_id"],row['section_id'],reporting_date, version)).fetchall()
+                                # If no dyn summary data then retain processing row value else decrease it by 1
+                                # Since one increment already have been given for ROW HEIGHT and STYLE
+                                processing_row = processing_row - 1 if len(dyn_summary_data) else processing_row
+
+                                dynsec_cell_style = self.get_dynsec_cell_style(sheet["sheet_id"],row['section_id'])
+
+                                for data in dyn_summary_data:
+                                    app.logger.info("Processing row...{0}".format(processing_row));
+                                    processing_row = (processing_row+1)
+                                    record=eval(data['row_summary'])
+                                    for col in record.keys():
+                                        cell_d = {}
+                                        app.logger.info("Processing row...{0} for column {1}".format(processing_row,col));
+                                        ws[str(col)+str(processing_row)].value = record[str(col)]
+                                        # Now set style of the cell
+                                        startcell = str(col)+str(processing_row)
+                                        ws[startcell].alignment = dynsec_cell_style[col]['alignment']
+                                        ws[startcell].font = dynsec_cell_style[col]['font']
+                                        ws[startcell].fill = dynsec_cell_style[col]['fill']
+                                        ws[startcell].border = dynsec_cell_style[col]['border']
+                                        ws[startcell].number_format = dynsec_cell_style[col]['number_format']
+                                        # cell_style[col+str(processing_row)]=eval("{'font': {'name': 'Arial', 'colour': 'None', 'size': 10.0, 'bold': False, 'italic': False}, 'border': {'bottom': {'style': None, 'colour': 'None'}, 'top': {'style': None, 'colour': 'None'}, 'left': {'style': None, 'colour': 'None'}, 'right': {'style': None, 'colour': 'None'}}, 'alignment': {'vertical': None, 'horizontal': None}, 'fill': {'colour': '00000000', 'type': None}}")
+                                    # row_attr[str(processing_row)] = {'height': '12.5'}
+                                processing_dyn_sec = row['section_id']
+
+                    elif row['cell_render_def'] == 'MERGED_CELL':
+                        start_cell, end_cell = row['cell_id'].split(':')
+                        if row['section_type'] != 'DYNDATA':
+                            processing_row = (processing_row+1) if reference_row != row['row_id'] else processing_row
+                            reference_row =row['row_id'] if reference_row != row['row_id'] else reference_row
+                            ws.merge_cells(row["cell_id"])
+                            ws[row["col_id"]+str(processing_row)].value = row['cell_calc_ref'] + (" DYNDATA("+row['section_id']+")" if row['section_type']=="DYNDATA" else "")
+                        else:
+                            # dyn_data_sec_columns=self.get_col_list_for_row(row['row_id'])
+                            if processing_dyn_sec != row['section_id']:
+                                sql="select * from report_dyn_trans_summary where report_id=%s and sheet_id=%s and section_id=%s and reporting_date=%s and version = %s"
+                                dyn_summary_data=self.db.query(sql,(self.report_id, sheet["sheet_id"],row['section_id'],reporting_date, version)).fetchall()
+                                # If no dyn summary data then retain processing row value else decrease it by 1
+                                # Since one increment already have been given for ROW HEIGHT and STYLE
+                                processing_row = processing_row - 1 if len(dyn_summary_data) else processing_row
+
+                                dynsec_cell_style = self.get_dynsec_cell_style(sheet["sheet_id"],row['section_id'])
+
+                                for data in dyn_summary_data:
+                                    app.logger.info("Processing row...{0}".format(processing_row));
+                                    processing_row = (processing_row+1)
+                                    record=eval(data['row_summary'])
+                                    for col in record.keys():
+                                        cell_d = {}
+                                        app.logger.info("Processing row...{0} for column {1}".format(processing_row,col));
+                                        ws.merge_cells(start_cell.replace(str(row["row_id"]),str(processing_row))+":"+end_cell.replace(str(row["row_id"]),str(processing_row)))
+                                        ws[str(col)+str(processing_row)].value = record[str(col)]
+                                        # Now set style of the cell
+                                        startcell = str(col)+str(processing_row)
+                                        ws[startcell].alignment = dynsec_cell_style[col]['alignment']
+                                        ws[startcell].font = dynsec_cell_style[col]['font']
+                                        ws[startcell].fill = dynsec_cell_style[col]['fill']
+                                        ws[startcell].border = dynsec_cell_style[col]['border']
+                                        ws[startcell].number_format = dynsec_cell_style[col]['number_format']
+                                        # cell_style[col+str(processing_row)]=eval("{'font': {'name': 'Arial', 'colour': 'None', 'size': 10.0, 'bold': False, 'italic': False}, 'border': {'bottom': {'style': None, 'colour': 'None'}, 'top': {'style': None, 'colour': 'None'}, 'left': {'style': None, 'colour': 'None'}, 'right': {'style': None, 'colour': 'None'}}, 'alignment': {'vertical': None, 'horizontal': None}, 'fill': {'colour': '00000000', 'type': None}}")
+                                    # row_attr[str(processing_row)] = {'height': '12.5'}
+                                processing_dyn_sec = row['section_id']
+
+
+                    elif row['cell_render_def'] == 'ROW_HEIGHT':
+                        if row['section_type'] != 'DYNDATA':
+                            processing_row = (processing_row+1) if reference_row != row['row_id'] else processing_row
+                            reference_row =row['row_id'] if reference_row != row['row_id'] else reference_row
+                            if row['cell_calc_ref'] == 'None':
+                                row_height = '12.5'
+                            else:
+                                row_height = row['cell_calc_ref']
+                            # row_attr[str(processing_row)] = {'height': row_height}
+                            ws.row_dimensions[processing_row].height = row_height
+                        else:
+                            pass
+
+
+
+                    elif row['cell_render_def'] == 'COLUMN_WIDTH':
+                        if row['cell_calc_ref'] == 'None':
+                            col_width = '13.88'
+                        else:
+                            col_width = row['cell_calc_ref']
+                        # col_attr[row['cell_id']] = {'width': col_width}
+                        ws.column_dimensions[row["cell_id"]].width = col_width
+
+                    elif row['cell_render_def'] == 'CELL_STYLE':
+                        if row['section_type'] != 'DYNDATA':
+                            processing_row = (processing_row+1) if reference_row != row['row_id'] else processing_row
+                            reference_row =row['row_id'] if reference_row != row['row_id'] else reference_row
+                            # if ':' in row['cell_id']:
+                            #     start_cell, end_cell = row['cell_id'].split(':')
+                            # else:
+                            #     start_cell=row['cell_id']
+
+                            startcell = row['col_id']+str(processing_row)
+
+                            #app.logger.info("Inside CELL_STYLE for cell {}".format(start_cell,))
+                            # cell_style[start_cell] = eval(row['cell_calc_ref'])
+                            _cell_style=eval(row['cell_calc_ref'])
+                            # app.logger.info("{0} CELL_STYLE values are {1} {2}".format(row['cell_id'],_cell_style,row['cell_calc_ref']))
+                            _al = Alignment(horizontal=_cell_style['alignment']['horizontal'], vertical=_cell_style['alignment']['vertical'])
+                            _font = Font(name=_cell_style['font']['name'],
+                                        bold= _cell_style['font']['bold'],
+                                        italic= _cell_style['font']['italic'],
+                                        color= _cell_style['font']['colour'] if _cell_style['font']['colour'] != 'None' else None,
+                                        size= _cell_style['font']['size'])
+                            _fill = PatternFill(fill_type=_cell_style['fill']['type'],
+                                        fgColor=_cell_style['fill']['colour'] if _cell_style['fill']['colour'] != 'None' else None)
+                            _border = Border(left=Side(style= _cell_style['border']['left']['style'],
+                                                        color= _cell_style['border']['left']['colour'] if _cell_style['border']['left']['colour'] != 'None' else None),
+                                            right=Side(style= _cell_style['border']['right']['style'],
+                                                     color= _cell_style['border']['right']['colour'] if _cell_style['border']['right']['colour'] != 'None' else None),
+                                            top=Side(style= _cell_style['border']['top']['style'],
+                                                     color= _cell_style['border']['top']['colour'] if _cell_style['border']['top']['colour'] != 'None' else None),
+                                            bottom=Side(style= _cell_style['border']['bottom']['style'],
+                                                     color= _cell_style['border']['bottom']['colour'] if _cell_style['border']['bottom']['colour'] != 'None' else None))
+                            _number_format = _cell_style['number_format'] if 'number_format' in _cell_style.keys() else 'General'
+                            ws[startcell].alignment = _al
+                            ws[startcell].font = _font
+                            ws[startcell].fill = _fill
+                            ws[startcell].border = _border
+                            ws[startcell].number_format = _number_format
+                        else:
+                            pass
+
+
+            app.logger.info("Saving report template to file {}".format(target_dir + target_file_name))
+            wr.save(target_dir + target_file_name)
+
+            return { "file_name": target_file_name }
+        except Exception as e:
+            app.logger.error(str(e))
+            return {"msg": str(e)}, 500

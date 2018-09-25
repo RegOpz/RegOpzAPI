@@ -265,9 +265,9 @@ class ViewReportController(Resource):
 
             report_kwargs=json.loads(report_parameters)
             report_kwargs["populate_summary"]= False
-            app.logger.info(report_snapshot)
+            app.logger.info("Reporting date: {0} Report snapshot: {1}".format(reporting_date,report_snapshot))
             agg_format_data ={}
-            if cell_format_yn == 'Y':
+            if cell_format_yn == 'Y' and reporting_date != '1900010119000101':
                 app.logger.info("Creating formatted summary set")
                 summary_set = self.report.create_report_summary_final(report_version_no=version,
                                                                     report_snapshot=report_snapshot,
@@ -355,55 +355,58 @@ class ViewReportController(Resource):
                                                  color= _cell_style['border']['top']['colour'] if _cell_style['border']['top']['colour'] != 'None' else None),
                                         bottom=Side(style= _cell_style['border']['bottom']['style'],
                                                  color= _cell_style['border']['bottom']['colour'] if _cell_style['border']['bottom']['colour'] != 'None' else None))
+                        _number_format = _cell_style['number_format'] if 'number_format' in _cell_style.keys() else 'General'
                         ws[startcell].alignment = _al
                         ws[startcell].font = _font
                         ws[startcell].fill = _fill
                         ws[startcell].border = _border
+                        ws[startcell].number_format = _number_format
                     else:
                         pass
             app.logger.info("Saving report template to file {}".format(target_dir + target_file_name))
             wr.save(target_dir + target_file_name)
             #End create report template
 
-            #Create report body
-            wb = xls.load_workbook(target_dir + target_file_name)
-            app.logger.info("Getting report data")
-            data=self.db.query('select b.report_id,b.sheet_id,b.cell_id,a.cell_summary,\
-                        b.reporting_scale,b.rounding_option \
-                        from report_comp_agg_def b left join report_summary a\
-                        on a.report_id=b.report_id and\
-                        a.sheet_id=b.sheet_id and \
-                        a.cell_id=b.cell_id and \
-                        a.reporting_date=%s \
-                        where b.report_id=%s \
-                        order by b.report_id,b.sheet_id,b.cell_id',(reporting_date,report_id,)).fetchall()
+            if reporting_date != '1900010119000101':
+                #Create report body
+                wb = xls.load_workbook(target_dir + target_file_name)
+                app.logger.info("Getting report data")
+                data=self.db.query('select b.report_id,b.sheet_id,b.cell_id,a.cell_summary,\
+                            b.reporting_scale,b.rounding_option \
+                            from report_comp_agg_def b left join report_summary a\
+                            on a.report_id=b.report_id and\
+                            a.sheet_id=b.sheet_id and \
+                            a.cell_id=b.cell_id and \
+                            a.reporting_date=%s \
+                            where b.report_id=%s \
+                            order by b.report_id,b.sheet_id,b.cell_id',(reporting_date,report_id,)).fetchall()
 
-            app.logger.info("Writing report data")
-            # for sheet in sheets:
-                # ws = wb.get_sheet_by_name(sheet["sheet_id"])
-                # img = xls.drawing.image.Image('/home/deb/Downloads/regopzdata/CloudMargin/SMTB.2.1.jpg')
-                # # img.anchor(ws.cell('T1'))
-                # ws.add_image(img,'N1')
-            for row in data:
-                ws = wb.get_sheet_by_name(row["sheet_id"])
-                if cell_format_yn == 'Y':
-                    # print(row["cell_id"],row["cell_summary"])
-                    try:
-                        cell_summary = agg_format_data[row['report_id']+row['sheet_id']+row['cell_id']]
-                    except KeyError:
-                        cell_summary = util.round_value(
-                        float(util.if_null_zero(row["cell_summary"])) / float(row["reporting_scale"]),
-                        row["rounding_option"])
-                    ws[row["cell_id"]].value = cell_summary
-                else:
-                    ws[row["cell_id"]].value = float(util.if_null_zero(row["cell_summary"]))
+                app.logger.info("Writing report data")
+                # for sheet in sheets:
+                    # ws = wb.get_sheet_by_name(sheet["sheet_id"])
+                    # img = xls.drawing.image.Image('/home/deb/Downloads/regopzdata/CloudMargin/SMTB.2.1.jpg')
+                    # # img.anchor(ws.cell('T1'))
+                    # ws.add_image(img,'N1')
+                for row in data:
+                    ws = wb.get_sheet_by_name(row["sheet_id"])
+                    if cell_format_yn == 'Y':
+                        # print(row["cell_id"],row["cell_summary"])
+                        try:
+                            cell_summary = agg_format_data[row['report_id']+row['sheet_id']+row['cell_id']]
+                        except KeyError:
+                            cell_summary = util.round_value(
+                            float(util.if_null_zero(row["cell_summary"])) / float(row["reporting_scale"]),
+                            row["rounding_option"])
+                        ws[row["cell_id"]].value = cell_summary
+                    else:
+                        ws[row["cell_id"]].value = float(util.if_null_zero(row["cell_summary"]))
 
-                ws[row["cell_id"]].font = Font(size=9)
+                    ws[row["cell_id"]].font = Font(size=9)
 
-            app.logger.info("Saving report to file {}".format(target_dir + target_file_name))
-            wb.save(target_dir + target_file_name)
+                app.logger.info("Saving report to file {}".format(target_dir + target_file_name))
+                wb.save(target_dir + target_file_name)
 
-            #End create report body
+                #End create report body
 
             return { "file_name": target_file_name }
         except Exception as e:

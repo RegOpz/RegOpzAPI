@@ -353,6 +353,11 @@ def tree(table = {}, **kwargs):
         if len(tokens)==1 and tokens[0].ttype ==ept.TOK_TYPE_OPERAND and \
            tokens[0].tsubtype in (ept.TOK_SUBTYPE_TEXT,ept.TOK_SUBTYPE_LOGICAL,ept.TOK_SUBTYPE_NUMBER):
            return tokens[0].tsubtype
+        # to handle negative numbers in the result. which is a formula according to the parser
+        elif len(tokens)==2 and tokens[0].ttype ==ept.TOK_TYPE_OP_PRE and \
+            tokens[1].ttype ==ept.TOK_TYPE_OPERAND and \
+            tokens[1].tsubtype in (ept.TOK_SUBTYPE_TEXT,ept.TOK_SUBTYPE_LOGICAL,ept.TOK_SUBTYPE_NUMBER):
+            return tokens[1].tsubtype
         else:
             return False
 
@@ -386,9 +391,9 @@ def tree(table = {}, **kwargs):
                     formula=eval(formula)
                     formula = formula.replace('"', '\\"')
                     return '"'+formula+'"'
-                #print(formula)
-                #dfs_formula=dfs(*formula["tree"])
-                #print("DFS formula:",dfs_formula)
+                # print(formula)
+                # dfs_formula=dfs(*formula["tree"])
+                # print("DFS formula:",dfs_formula)
                 round_val = roundOff(eval(str(if_null_zero(dfs(*formula["tree"])))),formula["rounding"],formula["scale"])
                 #round_val=eval(dfs(*formula["tree"]))
                 #return round_val

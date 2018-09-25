@@ -320,6 +320,11 @@ api.add_resource(TransactionalReportController,
 )
 
 api.add_resource(TransactionalReportController,
+    apiPath + "/transactionalReport/get-transreport-export-to-excel",
+    endpoint = "get_transreport_export_to_excel_ep"
+)
+
+api.add_resource(TransactionalReportController,
     apiPath+"/transactionalReport/defineSection",
     endpoint="update_trans_section_ep"
 )
