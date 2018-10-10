@@ -639,7 +639,7 @@ class ViewDataController(Resource):
                     old_id_list=qdf_old['id'].tolist()
                     qdf_new=qdf[qdf['id']==0]
                     # Now if we do not have any new qdf for this run of apply rule check whether it matches with the existing id list
-                    if qdf_new.empty and old_id_list != prev_ver_id_list :
+                    if qdf_new.empty and set(old_id_list) != set(prev_ver_id_list) :
                         create_version = True
                         id_list=old_id_list
                     else:

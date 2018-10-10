@@ -29,6 +29,7 @@ class RegOpzUser(object):
         self.domain_info=autheticateTenant()
         if self.domain_info:
             tenant_info = json.loads(self.domain_info)
+            self.tenant_id = tenant_info['tenant_id']
             self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
             self.dbhelper = DatabaseHelper(self.tenant_info)
         if user and user['password'] == user['passwordConfirm']:
@@ -163,6 +164,8 @@ class RegOpzUser(object):
                 # print("hashpw {}".format(hashpw(password.encode('utf-8'), gensalt())))
                 hashedpassword = data['password'].encode('utf-8')
                 if hashpw(password_entered,hashedpassword)==hashedpassword:
+                    # Adding element tenant_id to the data for subsequent use in other calls to get user permissions
+                    data['tenant_id'] = self.tenant_id
                     return Token().create(data)
             return {"msg": "Login failed", "donotUseMiddleWare": True },403
         except Exception as e:

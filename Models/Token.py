@@ -24,6 +24,7 @@ class Token(object):
 		user_id = user['name']
 		firstname = user['first_name']
 		role = user['role']
+		tenant_id = user['tenant_id']
 		try:
 			self.tokenId = self.get(user_id)
 		except ValueError:
@@ -40,7 +41,7 @@ class Token(object):
 				self.dbhelper.commit()
 			except Exception:
 				return NO_USER_FOUND
-		user_permission = UserPermission(self.tenant_info).get(role)
+		user_permission = UserPermission(self.tenant_info).get(roleId=role,inUseCheck='Y',tenant_id=tenant_id, getDetails=False)
 		if user_permission:
 			user = {
 				'tokenId': self.tokenId,
@@ -48,6 +49,8 @@ class Token(object):
 				'name': firstname,
 				'role': user_permission['role'],
 				'permission': user_permission['components'],
+				'source': user_permission['sources'],
+				'report': user_permission['reports'],
 				'domainInfo': self.domain_info
 			}
 			jwtObject = JWT()

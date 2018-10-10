@@ -956,13 +956,14 @@ class TransactionalReportController(Resource):
             rpn_expr=fm_trns.shunting_yard(excel_formula)
             G,root=fm_trns.build_ast(rpn_expr)
             df_expr=root.emit(G,context=context)
+            # app.logger.info("df_expr {}".format(df_expr))
             for col in list(df.columns):
                 if 'date' not in col:
                     df[col]=df[col].astype(dtype='float64',errors='ignore')
             df[new_field_name]=eval(df_expr)
             return df
         except Exception as e:
-            app.loger.error(str(e))
+            app.logger.error(str(e))
             raise(e)
 
     def get_dyn_trans_calc_def_details(self, report_id, sheet_id,section_id):

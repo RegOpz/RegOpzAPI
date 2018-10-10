@@ -169,11 +169,11 @@ class DefChangeController(Resource):
             app.logger.error(str(e))
             return {"msg":str(e)},500
 
-    def update_or_delete_data(self,data,id):
+    def update_or_delete_data(self,data,id, create_new_flag=True):
         if data['change_type']=='DELETE':
             return self.delete_data(data,id)
         if data['change_type']=='UPDATE':
-            return self.update_data(data,id)
+            return self.update_data(data,id,create_new_flag)
 
     def create_new_record(self, data):
         try:
@@ -199,12 +199,41 @@ class DefChangeController(Resource):
             app.logger.error(str(e))
             raise(e)
 
-    def insert_data(self, data):
+    def update_existing_record(self, data):
+        try:
+            table_name = data['table_name']
+            change_type = data['change_type']
+            app.logger.info("Updating existing record for : {0} Change Event: {1}".format(table_name,change_type))
+
+            update_info = data['update_info']
+            # Loop through change summary
+            update_info_cols=None
+            params=[]
+            for change in update_info:
+                if update_info_cols:
+                    update_info_cols += "," + change['field_name'] + "=%s"
+                else:
+                    update_info_cols = change['field_name'] + "=%s"
+
+                params.append(change['new_val'])
+
+            sql = "update {0} set {1} where id = {2}".format(table_name,update_info_cols,data['id'])
+            app.logger.info("Updating existing record: {0} {1}".format(sql,tuple(params)))
+            self.db.transact(sql, tuple(params))
+            
+        except Exception as e:
+            app.logger.error(str(e))
+            raise(e)
+
+    def insert_data(self, data, create_new_flag=True):
         try:
             app.logger.info("Insert meta data")
             table_name = data['table_name']
             change_type = data['change_type']
-            id = self.create_new_record(data)
+            if create_new_flag:
+                id = self.create_new_record(data)
+            else:
+                id = data["audit_info"]["id"]
             self.audit_insert(data,id)
             self.db.commit()
 
@@ -215,13 +244,16 @@ class DefChangeController(Resource):
             self.db.rollback()
             return {"msg": str(e)},500
 
-    def update_data(self, data, prev_id):
+    def update_data(self, data, prev_id, create_new_flag=True):
         try:
             app.logger.info("Update meta data for source table")
             table_name = data['table_name']
             change_type = data['change_type']
 
-            id = self.create_new_record(data)
+            if create_new_flag:
+                id = self.create_new_record(data)
+            else:
+                id = data["audit_info"]["id"]
             self.audit_update(data,id,prev_id)
             self.update_approval_status(table_name=table_name, id=prev_id, dml_allowed='X')
             self.db.commit()
@@ -360,14 +392,15 @@ class DefChangeController(Resource):
             app.logger.error(str(e))
             raise(e)
 
-    def reject_dml(self,data):
+    def reject_dml(self,data,create_new_flag=True):
         try:
             app.logger.info("AuditDicision meta data reject dml")
             if data["change_type"]=="INSERT":
                 self.update_approval_status(table_name=data["table_name"],id=data["id"],dml_allowed='Y',in_use='N')
             elif data["change_type"]=="UPDATE":
                 self.update_approval_status(table_name=data["table_name"], id=data["prev_id"], dml_allowed='Y')
-                self.update_approval_status(table_name=data["table_name"], id=data["id"], dml_allowed='X',in_use='X')
+                if create_new_flag:
+                    self.update_approval_status(table_name=data["table_name"], id=data["id"], dml_allowed='X',in_use='X')
             elif data["change_type"]=="DELETE":
                 self.update_approval_status(table_name=data["table_name"], id=data["id"], dml_allowed='Y')
             self.update_audit_record(data)
@@ -377,14 +410,15 @@ class DefChangeController(Resource):
             app.logger.error(str(e))
             raise(e)
 
-    def regress_dml(self,data):
+    def regress_dml(self,data,create_new_flag=True):
         try:
             app.logger.info("AuditDicision meta data regress dml")
             if data["change_type"]=="INSERT":
                 self.update_approval_status(table_name=data["table_name"],id=data["id"],dml_allowed='Y',in_use='N')
             elif data["change_type"]=="UPDATE":
                 self.update_approval_status(table_name=data["table_name"], id=data["prev_id"], dml_allowed='Y')
-                self.update_approval_status(table_name=data["table_name"], id=data["id"], dml_allowed='X',in_use='X')
+                if create_new_flag:
+                    self.update_approval_status(table_name=data["table_name"], id=data["id"], dml_allowed='X',in_use='X')
             elif data["change_type"]=="DELETE":
                 self.update_approval_status(table_name=data["table_name"], id=data["id"], dml_allowed='Y')
             self.update_audit_record(data)
@@ -395,7 +429,7 @@ class DefChangeController(Resource):
             raise(e)
 
 
-    def approve_dml(self,data):
+    def approve_dml(self,data,create_new_flag=True):
         try:
             app.logger.info("AuditDicision meta data approval dml")
             if data["change_type"]=="INSERT":
@@ -403,7 +437,10 @@ class DefChangeController(Resource):
             elif data["change_type"]=="DELETE":
                 self.update_approval_status(table_name=data["table_name"], id=data["id"], dml_allowed='X',in_use='X')
             elif data["change_type"] == "UPDATE":
-                self.update_approval_status(table_name=data["table_name"], id=data["prev_id"], dml_allowed='X',in_use='X')
+                if create_new_flag:
+                    self.update_approval_status(table_name=data["table_name"], id=data["prev_id"], dml_allowed='X',in_use='X')
+                else:
+                    self.update_existing_record(data)
                 self.update_approval_status(table_name=data["table_name"], id=data["id"], dml_allowed='Y',in_use='Y')
 
             self.update_audit_record(data)
@@ -419,17 +456,23 @@ class DefChangeController(Resource):
             approve=0
             reject=0
             regress=0
+            create_new_flag = True
             for key in data_list.keys():
                 for data in data_list[key]:
                     app.logger.info("Inside meta data audit decision for status {}".format(data["status"]))
+                    # Set create new flag as false if the change decision is for role related tables e.g.
+                    # permissions : for role permissions,
+                    # object_permissions: for report and data permissions
+                    # As we do not create new records for changing permissions!!!!
+                    create_new_flag = False if data["table_name"] in ['permissions','object_permissions'] else True
                     if data["status"]=="REJECTED":
-                        self.reject_dml(data)
+                        self.reject_dml(data,create_new_flag)
                         reject+=1
                     if data["status"]=="APPROVED":
-                        self.approve_dml(data)
+                        self.approve_dml(data,create_new_flag)
                         approve+=1
                     if data["status"]=="REGRESSED":
-                        self.regress_dml(data)
+                        self.regress_dml(data,create_new_flag)
                         regress+=1
             return {"msg":"Successfully processed reviews for the following: " + \
                           "{0} approval, {1} rejection and {2} regress".format(approve,reject,regress)},200

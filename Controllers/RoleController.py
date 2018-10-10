@@ -5,7 +5,8 @@ from Models.Token import Token
 class RoleController(Resource):
     def get(self, role = None):
         inUseCheck = request.args.get('inUseCheck') if request.args.get('inUseCheck') else 'Y'
-        return UserPermission().get(role, inUseCheck)
+        tenant_id = request.args.get('tenant_id')
+        return UserPermission().get(role, inUseCheck, tenant_id)
 
     def post(self):
         userId = Token().authenticate()
