@@ -6,6 +6,7 @@ from Constants.Status import *
 import json
 from Helpers.authenticate import *
 from Helpers.utils import autheticateTenant
+from Controllers.PasswordRecoveryController import PasswordRecoveryController
 
 labelList = {
     'name': "User Name",
@@ -27,6 +28,7 @@ labelList = {
 class RegOpzUser(object):
     def __init__(self, user = None):
         self.domain_info=autheticateTenant()
+        self.pwd = PasswordRecoveryController()
         if self.domain_info:
             tenant_info = json.loads(self.domain_info)
             self.tenant_id = tenant_info['tenant_id']
@@ -34,6 +36,7 @@ class RegOpzUser(object):
             self.dbhelper = DatabaseHelper(self.tenant_info)
         if user and user['password'] == user['passwordConfirm']:
             self.id = True
+            self.user = user
             self.name = user['name']
             self.password = user['password']
             self.hashedpassword = hashpw(self.password.encode('utf-8'), gensalt())
@@ -53,6 +56,7 @@ class RegOpzUser(object):
             self.last_name, self.contact_number, self.email, self.ip, self.image,)
         try:
             rowid = self.dbhelper.transact(queryString, queryParams)
+            self.pwd.save_sec_question_answers(data=self.user, dbcon=self.dbhelper)
             self.dbhelper.commit()
             return { "msg": "Added user successfully, please contact Admin to activate",
                     "donotUseMiddleWare": True },200
@@ -100,6 +104,8 @@ class RegOpzUser(object):
         else:
             data = form
 
+        password_check = False
+
         if data:
             queryString = "UPDATE regopzuser SET role_id=(SELECT id from roles WHERE role=%s), first_name=%s, last_name=%s, email=%s,\
                 contact_number=%s, status=%s"
@@ -108,17 +114,23 @@ class RegOpzUser(object):
             if 'password' in data.keys() and data['password'] and data['password']==data['passwordConfirm']:
                 queryString += ",password=%s"
                 queryParams = queryParams + (hashpw(data['password'].encode('utf-8'), gensalt()),)
+                password_check = True
 
             queryString += " WHERE name=%s"
             queryParams = queryParams + (data['name'],)
 
             try:
+                if password_check:
+                    previous_password = self.pwd.validate_pwd(data=data, dbcon=self.dbhelper)
+                    if previous_password:
+                        return { "msg": "Can not use recently used passwords as new password ! Try a different password.", 'status': False, "donotUseMiddleWare": True },200
                 rowId = self.dbhelper.transact(queryString, queryParams)
+                self.pwd.save_sec_question_answers(data=data, dbcon=self.dbhelper)
                 self.dbhelper.commit()
-                return { "msg": "Successfully updated user details." },200
+                return { "msg": "Successfully updated user details.", 'status': True },200
             except Exception as e:
                 print(e)
-                return { "msg": "Cannot update this user, please review the details" },400
+                return { "msg": "Cannot update this user, please review the details", 'status': False },400
         return NO_USER_FOUND
 
     def getUserList(self, userId = None):

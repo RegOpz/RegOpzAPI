@@ -24,6 +24,7 @@ from Controllers.SharedDataController import SharedDataController
 from Controllers.ManageMasterBusinessRulesController import ManageMasterBusinessRulesController
 from Controllers.ManageMasterReportController import ManageMasterReportController
 from Controllers.OperationalLogController import OperationalLogController
+from Controllers.PasswordRecoveryController import PasswordRecoveryController
 from flask_cors import CORS, cross_origin
 
 api.add_resource(Info, apiPath + "/info")
@@ -384,6 +385,61 @@ api.add_resource(ManageMasterReportController,
 api.add_resource(OperationalLogController,
     apiPath + "/fetch-operation-log",
 )
+
+api.add_resource(PasswordRecoveryController,
+    apiPath + "/pwd-recovery/get-all-security-questions",
+    endpoint = "get_all_security_questions_ep"
+)
+
+api.add_resource(PasswordRecoveryController,
+    apiPath + "/pwd-recovery/get-user-security-questions/<string:username>",
+    endpoint = "get_user_security_questions_ep"
+)
+
+api.add_resource(PasswordRecoveryController,
+    apiPath + "/pwd-recovery/validate-pwd-recovery-answers",
+    endpoint = "validate_pwd_recovery_answers"
+)
+#
+# api.add_resource(PasswordRecoveryController,
+#     apiPath + "/validate_user/<string:id>",
+#     endpoint = "validate_user_ep"
+# )
+#
+# api.add_resource(PasswordRecoveryController,
+#     apiPath + "/change_pwd",
+#     endpoint = "change_pwd_ep"
+# )
+#
+# api.add_resource(PasswordRecoveryController,
+#     apiPath + "/edit_password_policy",
+#     endpoint = "edit_password_policy_ep"
+# )
+#
+# api.add_resource(PasswordRecoveryController,
+#     apiPath + "/validate_otp",
+#     endpoint = "validate_otp_ep"
+# )
+#
+# api.add_resource(PasswordRecoveryController,
+#     apiPath + "/capture_security_answers",
+#     endpoint = "capture_security_answers_ep"
+# )
+#
+# api.add_resource(PasswordRecoveryController,
+#     apiPath + "/check_answers",
+#     endpoint = "check_answers_ep"
+# )
+#
+# api.add_resource(PasswordRecoveryController,
+#     apiPath + "/capture_password_policy",
+#     endpoint = "capture_password_policy_ep"
+# )
+#
+# api.add_resource(PasswordRecoveryController,
+#     apiPath + "/send_otp_pwd_recovery/<string:id>",
+#     endpoint = "send_otp_ep"
+# )
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=APIConfig.API['port'], threaded=True)

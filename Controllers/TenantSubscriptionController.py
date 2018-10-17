@@ -3,6 +3,7 @@ from flask_restful import Resource,abort
 from flask import Flask, request, redirect, url_for
 from jwt import JWT, jwk_from_pem
 from Helpers.DatabaseHelper import DatabaseHelper
+from Controllers.PasswordRecoveryController import PasswordRecoveryController
 import json
 from datetime import datetime
 
@@ -10,6 +11,7 @@ from datetime import datetime
 class TenantSubscirptionController(Resource):
     def __init__(self):
         self.db=DatabaseHelper()
+        self.pwd = PasswordRecoveryController()
 
     def get(self, domain_name=None):
         self.userCheck = request.args.get('userCheck')
@@ -128,6 +130,8 @@ class TenantSubscirptionController(Resource):
                 data['tenant_phone'])
             try:
                 rowId = self.db.transact(queryString, queryParams)
+                if rowId:
+                    self.pwd.create_default_password_policy(tenant_id=data['tenant_id'], dbcon=self.db)
                 self.db.commit()
                 return { "msg": "Added subscriber {} successfully, please contact Admin to activate".format(data['tenant_id']),
                         "donotUseMiddleWare": True },200
