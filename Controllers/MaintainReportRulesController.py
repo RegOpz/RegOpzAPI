@@ -133,7 +133,7 @@ class MaintainReportRulesController(Resource):
 
 			data_dict['source_suggestion'] = source
 			for i,s in enumerate(data_dict['source_suggestion']):
-				sql = "select * from business_rules where source_id = '{0}' ".format(str(s['source_id']))
+				sql = "select distinct business_rule from business_rules where source_id = '{0}' ".format(str(s['source_id']))
 				app.logger.info("Retrieving business rules for source {}".format(s['source_id']))
 				rules_suggestion = self.db.query(sql).fetchall()
 				data_dict['source_suggestion'][i]['rules_suggestion'] = rules_suggestion

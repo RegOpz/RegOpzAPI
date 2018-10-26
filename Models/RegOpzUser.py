@@ -176,6 +176,17 @@ class RegOpzUser(object):
                 # print("hashpw {}".format(hashpw(password.encode('utf-8'), gensalt())))
                 hashedpassword = data['password'].encode('utf-8')
                 if hashpw(password_entered,hashedpassword)==hashedpassword:
+                    # Check whether password expired or not
+                    is_pwd_expired = self.pwd.check_password_expiry(username)
+                    if is_pwd_expired:
+                        return {'msg': 'Password expired. Please change password.',
+                                "donotUseMiddleWare": True,
+                                "validation": {
+                                                'status': False,
+                                                'name': data['name'],
+                                                'isPasswordExpired': True,
+                                            },
+                                }, 403
                     # Adding element tenant_id to the data for subsequent use in other calls to get user permissions
                     data['tenant_id'] = self.tenant_id
                     return Token().create(data)

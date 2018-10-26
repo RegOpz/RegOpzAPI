@@ -1,7 +1,8 @@
 from flask_restful import Resource
 import time
 import re
-from datetime import datetime
+import uuid
+from datetime import datetime, timedelta
 from app import *
 import Helpers.utils as util
 from Helpers.DatabaseHelper import DatabaseHelper
@@ -10,9 +11,9 @@ import random
 from bcrypt import hashpw, gensalt
 from Helpers.utils import autheticateTenant
 from Helpers.authenticate import *
-from Controllers.OperationalLogController import OperationalLogController
-# from flask_mail import Mail, Message
-# from Configs import mailconfig
+from Controllers.DefChangeController import DefChangeController
+from flask_mail import Mail, Message
+from Configs import mailconfig
 
 
 class PasswordRecoveryController(Resource):
@@ -25,6 +26,7 @@ class PasswordRecoveryController(Resource):
             self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
             self.db=DatabaseHelper(self.tenant_info)
             # self.user_id=Token().authenticate()
+            self.dcc=DefChangeController(tenant_info=self.tenant_info)
 
 
     def get(self, username = None):
@@ -32,29 +34,45 @@ class PasswordRecoveryController(Resource):
             return self.get_all_questions()
         if request.endpoint == 'get_user_security_questions_ep':
             return self.get_pwd_recovery_questions(username)
+        if request.endpoint == 'generate_pwd_recovery_otp_ep':
+            return self.generate_otp(username)
+        if request.endpoint == 'get_password_policy_ep':
+            return self.get_password_policy()
 
     def post(self):
-        if request.endpoint == 'validate_pwd_recovery_answers':
+        if request.endpoint == 'validate_pwd_recovery_answers_ep':
             data = request.get_json(force=True)
             return self.validate_pwd_recovery_answers(data)
+        if request.endpoint == 'validate_pwd_recovery_otp_ep':
+            data = request.get_json(force=True)
+            return self.validate_otp(data)
+
+    def put(self, id=None):
+        data = request.get_json(force=True)
+        if id == None:
+            return {'msg': 'No data found as record id not supplied'}, 500
+        return self.update_password_policy(data, id)
 
 
 
     def get_all_questions(self):
         try:
             sql = "select * from pwd_policy where tenant_id=%s and in_use='Y'"
-            policy = self.dbm.query(sql,(self.tenant_id,)).fetchone()
+            policy = self.db.query(sql,(self.tenant_id,)).fetchone()
             if not policy:
-                return {'msg': 'No password policy defined for {}. Please contact administrator.'.format(self.tenant_id)}, 500
+                app.logger.info('No password policy defined for {}. Creating default passwordpolicy.'.format(self.tenant_id))
+                self.create_default_password_policy(tenant_id=self.tenant_id)
+                policy = self.db.query(sql,(self.tenant_id,)).fetchone()
+
             restrictions = json.loads(policy['pwd_restrictions'])
             reg_exp = restrictions['reg_exp']
-            policy_statement = "Password should include "
+            policy_statement = "Password should have "
             for k in restrictions.keys():
                 if k != 'reg_exp' :
                     if k=='length':
                         policy_statement += (" length >= " + str(restrictions[k]) + " characters, ") if restrictions[k] else ""
                     else:
-                        policy_statement += (" " + k.replace('_',' ') + ",") if restrictions[k] == 'Y' else ""
+                        policy_statement += (" " + k.replace('_',' ') + ",") if restrictions[k] else ""
 
             sql = 'select * from sec_questions'
             data = self.dbm.query(sql).fetchall()
@@ -75,7 +93,7 @@ class PasswordRecoveryController(Resource):
 
             app.logger.info('Creating default password policy')
             if dbcon:
-                self.dbm = dbcon
+                self.db = dbcon
 
             sql = 'insert into pwd_policy( ' + \
                                     	'tenant_id, ' + \
@@ -90,14 +108,15 @@ class PasswordRecoveryController(Resource):
             params = ( self.tenant_id if not tenant_id else tenant_id,\
                         5,\
                         2,\
-                        json.dumps({'lowercase': 'Y', 'uppercase':'Y', 'number':'Y', 'special_char':'Y', 'length': 8, 'reg_exp':"(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#\$%\^&\*])(?=.{8,})"}),
+                        json.dumps({'lowercase': True, 'uppercase':True, 'number':True, 'special_char':True, 'length': 8, 'reg_exp':"(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#\$%\^&\*])(?=.{8,})"}),
                         3,\
                         90,\
                         'Y',\
                         'Y'\
                         )
 
-            self.dbm.transact(sql, params)
+            self.db.transact(sql, params)
+            self.db.commit()
             app.logger.info('Default password policy created successfully')
         except Exception as e:
             app.logger.error(str(e))
@@ -134,6 +153,9 @@ class PasswordRecoveryController(Resource):
                     params = (data['name'],'QA',json.dumps(answers))
 
                 self.db.transact(sql,params)
+
+            self.save_password_change_date(data['name'],self.db)
+
             return {'msg':'Security questions saved successfully'}, 200
         except Exception as e:
             app.logger.error(str(e))
@@ -144,8 +166,8 @@ class PasswordRecoveryController(Resource):
         try:
             #self.dbm = DatabaseHelper()
             app.logger.info("Getting list of security questions for {}".format(username))
-            sql = "select * from pwd_policy where tenant_id = %s"
-            policy = self.dbm.query(sql,(self.tenant_id,)).fetchone()
+            sql = "select * from pwd_policy where tenant_id = %s and in_use='Y'"
+            policy = self.db.query(sql,(self.tenant_id,)).fetchone()
             no_of_ques = policy['no_ques_to_throw']
 
             sql = "select * from user_pwd_recovery_details where user_name=%s and details_type='QA'"
@@ -205,8 +227,8 @@ class PasswordRecoveryController(Resource):
             password                = data['password']
             prvPassword = False
 
-            sql = "select * from pwd_policy where  tenant_id = %s"
-            policy = self.dbm.query(sql,(self.tenant_id,)).fetchone()
+            sql = "select * from pwd_policy where  tenant_id = %s and in_use='Y'"
+            policy = self.db.query(sql,(self.tenant_id,)).fetchone()
 
             sql = "select * from user_pwd_recovery_details where user_name=%s and details_type='PWD'"
             params = (username,)
@@ -242,17 +264,42 @@ class PasswordRecoveryController(Resource):
 
                 self.db.transact(sql,params)
 
+            self.save_password_change_date(username,self.db)
+
             return prvPassword
         except Exception as e:
              app.logger.error(str(e))
              raise e
 
+    def save_password_change_date(self,username,dbcon):
+        try:
+            # Now set the password change date for the user
+            sql = "select * from user_pwd_recovery_details where user_name=%s and details_type='PWDCHNGDATE'"
+            params = (username,)
+            pwd_change_date = dbcon.query(sql,params).fetchone()
+
+            if pwd_change_date:
+                sql = "update user_pwd_recovery_details set details_data=%s where user_name=%s and details_type='PWDCHNGDATE'"
+                params = (datetime.now().strftime('%Y%m%d'),username,)
+
+                dbcon.transact(sql,params)
+            else:
+                sql = "insert into user_pwd_recovery_details (user_name, details_type, details_data) " + \
+                        "values(%s, %s, %s)"
+                params = (username,'PWDCHNGDATE',datetime.now().strftime('%Y%m%d'))
+
+                dbcon.transact(sql,params)
+        except Exception as e:
+            app.logger.error(str(e))
+            raise e
+
     def generate_otp(self, username):
         try:
 
             sql = "select * from regopzuser where name = %s"
-            user = self.db.transact(sql,(username, )).fetchone()
+            user = self.db.query(sql,(username, )).fetchone()
             generated_otp = uuid.uuid4().hex[0:8]
+            app.logger.info("Generated new OTP is : {}".format(generated_otp))
             hash_otp = hashpw(generated_otp.encode('utf-8'), gensalt())
             new_otp = {
                         'OTP' : hash_otp.decode('utf-8')
@@ -274,31 +321,36 @@ class PasswordRecoveryController(Resource):
             self.send_otp_email(user,generated_otp)
             self.db.commit()
             return {'msg': 'OTP generated successfully',
-                    "donotUseMiddleWare": True,
+                    "donotUseMiddleWare": False,
                     'status': True,
                     'name': username
                     }, 200
         except Exception as e:
              app.logger.error(str(e))
-             return {'msg': 'OTP generated successfully',
+             return {'msg': 'OTP could not be generated !' + str(e),
                     'status': False}, 500
 
     def send_otp_email(self, user, new_otp):
         try:
-            app.config.update(
-            	DEBUG = True,
-            	MAIL_SERVER = mailconfig.MAIL_CONFIG['mail_server'],
-            	MAIL_PORT = mailconfig.MAIL_CONFIG['mail_port'],
-            	MAIL_USE_SSL = True,
-            	MAIL_USERNAME = mailconfig.MAIL_CONFIG['mail_username'],
-            	MAIL_PASSWORD = mailconfig.MAIL_CONFIG['mail_password']
-            )
-            msg = Message('RegOpz!',
-                            sender =  'donot-reply@regopz.com',
+            mail_settings={
+            	"DEBUG" : True,
+            	"MAIL_SERVER" : mailconfig.MAIL_CONFIG['mail_server'],
+            	"MAIL_PORT" : mailconfig.MAIL_CONFIG['mail_port'],
+                "MAIL_USE_TLS" : False,
+            	"MAIL_USE_SSL" : True,
+            	"MAIL_USERNAME" : mailconfig.MAIL_CONFIG['mail_username'],
+            	"MAIL_PASSWORD" : mailconfig.MAIL_CONFIG['mail_password'],
+            }
+            app.config.update(mail_settings)
+            msg = Message( subject='RegOpz!',
+                            sender =  ("RegOpz Mailer","donot-reply"),
+                            reply_to =  'donot-reply@regopz.com',
                             recipients = [user['email']])
-            msg.body = "Hi {0},\n" + \
-                        "Please use the following OTP to reset password:\n " + \
-                        "OTP: {1}".format(user['first_name'],new_otp)
+            msg.body = ("Hi {0},\n" + \
+                        "Please use the following OTP to reset password:\n\n" + \
+                        "{1} \n\n" + \
+                        "Thanks,\n" + \
+                        "Team RegOpz").format(user['first_name'],new_otp)
             mail = Mail(app)
             mail.send(msg)
             app.logger.info('OTP Sent for {}'.format(user['name']))
@@ -314,7 +366,19 @@ class PasswordRecoveryController(Resource):
             sql = "select * from user_pwd_recovery_details where user_name=%s and details_type='OTP'"
             recovery = self.db.query(sql,(data['name'], )).fetchone()
 
+            if not recovery:
+                return {'msg': 'No valid OTP found ! Please try after generating OTP again.',
+                         "donotUseMiddleWare": True,
+                         'status': False,
+                         'name': data['name']
+                         }, 200
             otp = json.loads(recovery['details_data'])
+            if not otp['OTP']:
+                return {'msg': 'No valid OTP found ! Please try after generating OTP again.',
+                         "donotUseMiddleWare": True,
+                         'status': False,
+                         'name': data['name']
+                         }, 200
             entered_otp = data['otp'].encode('utf-8')
             saved_otp = otp['OTP'].encode('utf-8')
             if hashpw(entered_otp, saved_otp) != saved_otp:
@@ -323,6 +387,11 @@ class PasswordRecoveryController(Resource):
                          'status': False,
                          'name': data['name']
                          }, 200
+            sql = "update user_pwd_recovery_details set details_data=%s where user_name=%s and details_type='OTP'"
+            params = (json.dumps({'OTP':None}),data['name'])
+
+            self.db.transact(sql,params)
+            self.db.commit()
             return {'msg': 'OTP validated successfully',
                     "donotUseMiddleWare": True,
                     'status': True,
@@ -332,139 +401,49 @@ class PasswordRecoveryController(Resource):
             app.logger.error(str(e))
             return {'msg' : str(e), 'status': False}, 500
 
+    def check_password_expiry(self, username):
+        try:
+            sql = "select * from pwd_policy where tenant_id=%s and in_use='Y'"
+            policy = self.db.query(sql,(self.tenant_id,)).fetchone()
 
+            expiry_period = 90
+            if policy:
+                expiry_period = int(policy['expiry_period'])
 
+            sql = "select * from user_pwd_recovery_details where user_name=%s and details_type='PWDCHNGDATE'"
+            params = (username,)
 
-    #     if request.endpoint == 'get_users_security_questions_ep':
-    #         return self.get_questions_pwd_recovery(id)
-    #
-    #     if request.endpoint == 'validate_user_ep':
-    #         return self.validate_user(id)
-    #
-    #     if request.endpoint == 'send_otp_ep':
-    #         return self.send_otp(id)
-    #
-    #     # if request.endpoint == 'match_answers_ep':
-    #     #     req_data = request.get_json(forec = True)
-    #     #     return self.capture_sec_que_ans(req_data)
-    #
-    # def post(self):
-    #     if request.endpoint == 'capture_password_policy_ep':
-    #         print('capturing ')
-    #         req_data = request.get_json(force = True)
-    #         return self.capture_password_policy(req_data)
-    #
-    #     if request.endpoint == 'check_answers_ep':
-    #         req_data = request.get_json(force = True)
-    #         return self.check_answers(req_data)
-    #
-    #     if request.endpoint == 'capture_security_answers_ep':
-    #         req_data = request.get_json(force = True)
-    #         return self.capture_sec_que_ans(req_data)
-    #
-    #     if request.endpoint == 'validate_otp_ep':
-    #         req_data = request.get_json(force = True)
-    #         return self.validate_otp(req_data)
-    #
-    # def put(self):
-    #     if request.endpoint == 'edit_password_policy_ep':
-    #         req_data = request.get_json(force = True)
-    #         return self.edit_password_policy(req_data)
-    #
-    #     if requestself.endpoint ==  'change_pwd_ep':
-    #         req_data = request.get_json(force = True)
-    #         return self.change_pwd(req_data)
-    #
-    #
-    # def validate_otp(self, red_data):
-    #     try:
-    #         user_name = red_data['username']
-    #         otp = req_data['otp']
-    #         sql = "select temp_otp from user_pwd_details where user_id = %s"
-    #         sent_otp = self.db.query(sql,(user_name)).fetchone()
-    #         if otp == sent_otp:
-    #             self.db.transact("update user_pwd_details set temp_otp = ' ' where usera_id = %s",(user_name))
-    #             queryString = "SELECT r.role, u.* FROM regopzuser u JOIN (roles r) ON (u.role_id = r.id)\
-    #                 WHERE name=%s AND status='Active'"
-    #             cur = self.db.query(queryString, (user_id, ))
-    #             data = cur.fetchone()
-    #             self.db.commit()
-    #             return Token().create(data)
-    #         else:
-    #             return {'O.T.P not matched, Please try again'}, 403
-    #     except Exception as e:
-    #             app.logger.error(e.__str__())
-    #             return (e.__str__())
-    #
-    #
-    # def validate_user(self, id):
-    #     try:
-    #         sql = "select * from regopzuser where name = %s"
-    #         data = self.db.query(sql,(id, )).fetchone()
-    #         if data:
-    #             return {'msg': 'User validated successfully'}, 200
-    #         else :
-    #             return {'msg': 'User Name not found'}, 403
-    #     except Exception as e:
-    #         app.logger.error(e.__str__())
-    #         return (e.__str__())
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    # def send_otp(self, user_name):
-    #     try:
-    #
-    #         sql = "select email from regopzuser where name = %s"
-    #         email = self.db.transact(sql,(user_name, )).fetchone()
-    #         otp = str((uuid.uuid4()).int)[0:5]
-    #
-    #         app.config.update(
-    #         	DEBUG = True,
-    #         	MAIL_SERVER = mailconfig.MAIL_CONFIG['mail_server'],
-    #         	MAIL_PORT = mailconfig.MAIL_CONFIG['mail_port'],
-    #         	MAIL_USE_SSL = True,
-    #         	MAIL_USERNAME = mailconfig.MAIL_CONFIG['mail_username'],
-    #         	MAIL_PASSWORD = mailconfig.MAIL_CONFIG['mail_password']
-    #         )
-    #         msg = Message('Sending mail from my applcation!',
-    #         sender =  'xyz@xyz.com',
-    #         recipients = [email])
-    #         msg.body = "Enter The following OTP to reset your password '{}'".format(otp)
-    #         mail = Mail(app)
-    #         mail.send(msg)
-    #         app.logger.info('OTP Sent')
-    #         sql = "update user_pwd_details set temp_otp = %s where user_id = %s"
-    #         self.db.transact(sql,(otp, user_name))
-    #         self.db.commit()
-    #         return {'msg': 'O.T.P sent successfully'}, 200
-    #     except Exception as e:
-    #         app.logger.error(e.__str__())
-    #         return (e.__str__())
-    #
-    # # def reset_password_otp(self, req_data):
-    # #     try:
-    # #         print('WIll do it later')
-    # #     except Exception as e:
-    # #         app.logger.error(e.__str__())
-    # #         return (e.__str__())
-    #
-    #
-    # def edit_password_policy(self, req_data):
-    #     try:
-    #         #self.dbm = DatabaseHelper()
-    #         app.logger.info('capturing password policy')
-    #         ## What will be the request format for edit_passsword_policy
-    #         ## _____________________TODO_______________________________
-    #     except Exception as e:
-    #         app.logger.error(e.__str__())
-    #         return (e.__str__())
-    #
-    #
-    #
-    #
-    #
-    #
+            dp = self.db.query(sql,params).fetchone()
+            if dp:
+                pwd_change_date = datetime.strptime(dp['details_data'],'%Y%m%d')
+                is_password_expired = (pwd_change_date + timedelta(expiry_period) < datetime.now())
+                return is_password_expired
+            else:
+                return True
+
+        except Exception as e:
+            app.logger.error(str(e))
+            raise e
+
+    def get_password_policy(self):
+        try:
+            sql = "select * from pwd_policy where tenant_id=%s and in_use='Y'"
+            policy = self.db.query(sql,(self.tenant_id,)).fetchone()
+            if not policy:
+                app.logger.info('No password policy defined for {}. Creating default passwordpolicy.'.format(self.tenant_id))
+                self.create_default_password_policy(tenant_id=self.tenant_id)
+                policy = self.db.query(sql,(self.tenant_id,)).fetchone()
+
+            return policy
+        except Exception as e:
+            app.logger.error(str(e))
+            return {'msg': str(e)}, 500
+
+    def update_password_policy(self,data,id):
+        app.logger.info("Updating Password Policy data")
+        try:
+            res = self.dcc.update_or_delete_data(data, id)
+            return res
+        except Exception as e:
+            app.logger.error(str(e))
+            return {"msg":str(e)},500

@@ -217,10 +217,13 @@ class DefChangeController(Resource):
 
                 params.append(change['new_val'])
 
-            sql = "update {0} set {1} where id = {2}".format(table_name,update_info_cols,data['id'])
-            app.logger.info("Updating existing record: {0} {1}".format(sql,tuple(params)))
-            self.db.transact(sql, tuple(params))
-            
+            if update_info_cols:
+                sql = "update {0} set {1} where id = {2}".format(table_name,update_info_cols,data['id'])
+                app.logger.info("Updating existing record: {0} {1}".format(sql,tuple(params)))
+                self.db.transact(sql, tuple(params))
+            else:
+                app.logger.info("No column values to be updated!!!! Investigate if its not permissions table!")
+
         except Exception as e:
             app.logger.error(str(e))
             raise(e)
