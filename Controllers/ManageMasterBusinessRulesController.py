@@ -23,9 +23,15 @@ class ManageMasterBusinessRulesController(Resource):
             self.user_id=Token().authenticate()
 
     def get(self):
-        country = request.args.get('country')
-        rule = request.args.get('rule')
-        return self.fetch_repository_rules(country,rule)
+        if request.endpoint == "master_business_rules_ep":
+            country = request.args.get('country')
+            rule = request.args.get('rule')
+            return self.fetch_repository_rules(country,rule)
+        if request.endpoint == "master_business_rule_linkage_multiple_ep":
+            country = request.args.get('country')
+            rules = request.args.get('rules')
+            #print(source,rules)
+            return self.list_master_reports_for_rule_list(country=country,rules=rules)
 
     def put(self):
         br = request.get_json(force=True)
@@ -36,13 +42,14 @@ class ManageMasterBusinessRulesController(Resource):
 
     def post(self, source_id=None):
         br = request.get_json(force=True)
-        if source_id:
+        if source_id and request.endpoint=="copy_business_rules_to_tenant_ep":
             br_list = br['rules']
             audit_info = br['audit_info']
             res = self.copy_to_tenant(br_list,source_id,audit_info)
-        else:
+            return res
+        if request.endpoint == "master_business_rules_ep":
             res = self.dcc_master.insert_data(br)
-        return res
+            return res
 
     def fetch_repository_rules(self,country,rule):
         app.logger.info("Fetching repository business rules from master for country {} rule {}".format(country,rule))
@@ -147,3 +154,69 @@ class ManageMasterBusinessRulesController(Resource):
             self.tenant_db.rollback()
             app.logger.error(str(e))
             return {"msg":str(e)},500
+
+    def list_master_reports_for_rule_list(self,country,rules):
+
+        business_rule_list = rules.split(',')
+        sql = "select rc.report_id,rc.sheet_id,rc.cell_id,rc.cell_business_rules,rc.in_use " + \
+                " from report_calc_def_master rc, report_def_catalog_master rd" + \
+                " where rc.report_id = rd.report_id " + \
+                " and country='" + str(country) + "'"
+        cur=self.master_db.query(sql)
+        data_list = cur.fetchall()
+
+        result_set = []
+        if len(business_rule_list)==1 and business_rule_list[0] in ['undefined','null']:
+            result_set = data_list
+        else:
+            for data in data_list:
+                # print(data['cell_business_rules'])
+                cell_rule_list = data['cell_business_rules'].split(',')
+                # print(type(cell_rule_list))
+                if set(business_rule_list).issubset(set(cell_rule_list)):
+                    # print(data)
+                    result_set.append(data)
+
+        trans_result_set = self.list_master_trans_reports_for_rule_list(country, business_rule_list)
+        for trans in trans_result_set:
+            result_set.append(trans)
+
+        print('data_list append result_set final {}'.format(result_set))
+        return result_set
+
+    def list_master_trans_reports_for_rule_list(self, country, business_rule_list):
+
+        sql = "select rc.report_id,rc.sheet_id,rc.section_id,rc.cell_calc_render_ref,rc.in_use " + \
+				" from report_dyn_trans_calc_def_master rc, report_def_catalog_master rd" + \
+                " where rc.report_id = rd.report_id " + \
+                " and country='" + str(country) + "'"
+
+        cur=self.master_db.query(sql)
+        trans_data_list = cur.fetchall()
+        data_list=[]
+        for data in trans_data_list:
+            calc_rule_ref = json.loads(data['cell_calc_render_ref'])
+            newdata = {
+						'report_id': 	data['report_id'],
+						'sheet_id': 	data['sheet_id'],
+						'cell_id': 		data['section_id'],
+						'cell_business_rules': calc_rule_ref['rule'],
+						'in_use':		data['in_use']
+					}
+            data_list.append(newdata)
+            print('data_list append {}'.format(data_list))
+
+        result_set = []
+        if len(business_rule_list)==1 and business_rule_list[0] in ['undefined','null']:
+            result_set = data_list
+        else:
+            for data in data_list:
+                # print(data['cell_business_rules'])
+                cell_rule_list = data['cell_business_rules'].split(',')
+                # print(type(cell_rule_list))
+                if set(business_rule_list).issubset(set(cell_rule_list)):
+                    # print(data)
+                    result_set.append(data)
+
+        print('data_list append result_set trans {}'.format(result_set))
+        return result_set

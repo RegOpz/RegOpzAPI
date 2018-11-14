@@ -29,5 +29,6 @@ def pdate(col,input_format,output_format):
     # %M - Minutes
     # %S - Second
     # %p - am or pm in 12 hr format
+    # print("inside pandas lib",col,input_format,output_format)
 
-    return col.apply(lambda x: (datetime.strptime(str(x),input_format) if str(x)!='' else datetime.strptime('19000101','%Y%d%m')).strftime(output_format))
+    return col.apply(lambda x: (datetime.strptime(str(int(x)),input_format) if str(x)!='' else datetime.strptime('19000101','%Y%d%m')).strftime(output_format))

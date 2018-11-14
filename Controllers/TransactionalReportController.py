@@ -57,7 +57,8 @@ class TransactionalReportController(Resource):
             report_id = request.args.get('report_id')
             sheet_id = request.args.get('sheet_id')
             section_id = request.args.get('section_id')
-            return self.get_trans_report_audit_list(report_id=report_id, sheet_id=sheet_id, section_id=section_id)
+            domain_type = request.args.get('domain_type')
+            return self.get_trans_report_audit_list(report_id=report_id, sheet_id=sheet_id, section_id=section_id,domain_type=domain_type)
         if request.endpoint == 'get_transreport_export_to_excel_ep':
             self.report_id = request.args.get('report_id')
             reporting_date = request.args.get('reporting_date')
@@ -1186,6 +1187,7 @@ class TransactionalReportController(Resource):
             sec_rule_count = 0
             sec_order_count = 0
             for i in data_list:
+                app.logger.info("Processing data {}".format(i))
                 id=i['id']
                 if "calc_def" in i['table_name']:
                     sec_rule_count += 1
@@ -1195,16 +1197,22 @@ class TransactionalReportController(Resource):
                     res=self.dcc_master.update_or_delete_data(i,id)
                 else:
                     res=self.dcc_tenant.update_or_delete_data(i,id)
+
+                if res[1]==500:
+                    return res
+
             return {"msg": "Marked {0} sec column rules, {1} sec order rules successfully for deletion review.".format(sec_rule_count,sec_order_count)},200
         except Exception as e:
             app.logger.info(str(e))
             return {"msg":"ERROR"+str(e)},500
         return None
 
-    def get_trans_report_audit_list(self, report_id=None, sheet_id=None, section_id=None):
+    def get_trans_report_audit_list(self, report_id=None, sheet_id=None, section_id=None, domain_type=None):
         app.logger.info("Getting report audit list")
         try:
             audit_list=[]
+            db_object_suffix = "_master" if domain_type=="master" else ""
+            db = self.master_db if domain_type=="master" else self.db
             sql = "SELECT id FROM {0} WHERE 1 "
             if report_id:
                 sql += " AND report_id='{}' ".format(report_id,)
@@ -1212,19 +1220,25 @@ class TransactionalReportController(Resource):
                     sql += " AND sheet_id='{}'".format(sheet_id,)
                 if section_id:
                     sql += " AND section_id='{}'".format(section_id)
-                calc_id_list = self.db.query(sql.format('report_dyn_trans_calc_def',)).fetchall()
+                calc_id_list = db.query(sql.format('report_dyn_trans_calc_def' + db_object_suffix,)).fetchall()
                 if calc_id_list:
                     calc_id_list = ",".join(map(str,[id['id'] for id in calc_id_list]))
                 else:
                     calc_id_list = "-99999999"
-                audit_list+=self.dcc_tenant.get_audit_history(id_list=calc_id_list,table_name='report_dyn_trans_calc_def')
+                if domain_type=="master":
+                    audit_list+=self.dcc_master.get_audit_history(id_list=calc_id_list,table_name='report_dyn_trans_calc_def' + db_object_suffix)
+                else:
+                    audit_list+=self.dcc_tenant.get_audit_history(id_list=calc_id_list,table_name='report_dyn_trans_calc_def' + db_object_suffix)
 
-                agg_id_list = self.db.query(sql.format('report_dyn_trans_agg_def',)).fetchall()
+                agg_id_list = db.query(sql.format('report_dyn_trans_agg_def' + db_object_suffix,)).fetchall()
                 if agg_id_list:
                     agg_id_list = ",".join(map(str,[id['id'] for id in agg_id_list]))
                 else:
                     agg_id_list = "-99999999"
-                audit_list+=self.dcc_tenant.get_audit_history(id_list=agg_id_list,table_name='report_dyn_trans_agg_def')
+                if domain_type=="master":
+                    audit_list+=self.dcc_master.get_audit_history(id_list=agg_id_list,table_name='report_dyn_trans_agg_def' + db_object_suffix)
+                else:
+                    audit_list+=self.dcc_tenant.get_audit_history(id_list=agg_id_list,table_name='report_dyn_trans_agg_def' + db_object_suffix)
                 return audit_list
         except Exception as e:
             app.logger.error(e)

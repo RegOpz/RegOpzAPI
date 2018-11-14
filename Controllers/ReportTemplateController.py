@@ -29,6 +29,7 @@ ALLOWED_EXTENSIONS = set(['txt', 'xls', 'xlsx'])
 class ReportTemplateController(Resource):
     def __init__(self):
         self.domain_info = autheticateTenant()
+        self.db_master=DatabaseHelper()
         if self.domain_info:
             tenant_info = json.loads(self.domain_info)
             self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
@@ -48,7 +49,8 @@ class ReportTemplateController(Resource):
             reports = request.args.get('reports')
             country = request.args.get('country')
             report_type = request.args.get('reportType')
-            return self.report_template_suggesstion_list(report_id=reports,country=country,report_type=report_type)
+            domain_type = request.args.get('domain_type')
+            return self.report_template_suggesstion_list(report_id=reports,country=country,report_type=report_type,domain_type=domain_type)
 
     def post(self):
         return self.capture_template()
@@ -277,21 +279,26 @@ class ReportTemplateController(Resource):
         return incl
 
 
-    def report_template_suggesstion_list(self,report_id='ALL',country='ALL',report_type='ALL'):
+    def report_template_suggesstion_list(self,report_id='ALL',country='ALL',report_type='ALL',domain_type=None):
 
-        app.logger.info("Getting report template list")
+        app.logger.info("Getting report template list {}")
 
         try:
             #db=DatabaseHelper()
+            db_object_suffix=""
+            print("Domain type ...", domain_type)
+            if domain_type=="master":
+                self.db = self.db_master
+                db_object_suffix = "_master"
             data_dict={}
             where_clause = ''
 
-            sql = "select distinct country from report_def_catalog where 1 "
+            sql = "select distinct country from report_def_catalog{0} where 1 ".format(db_object_suffix,)
             country_suggestion = self.db.query(sql).fetchall()
             if country is not None and country !='ALL':
                  where_clause =  " and instr('" + country.upper() + "', upper(country)) > 0"
             if report_id is not None and report_id !='ALL':
-                 where_clause +=  " and instr('" + report_id.upper() + "', upper(report_id)) > 0"
+                 where_clause +=  " and upper(report_id)='" + report_id.upper() + "'"
             if report_type is not None and report_type !='ALL':
                  where_clause +=  " and instr('" + report_type.upper() + "', upper(report_type)) > 0"
 
@@ -303,10 +310,10 @@ class ReportTemplateController(Resource):
             data_dict['country'] = country
             for i,c in enumerate(data_dict['country']):
                 # sql = "select distinct report_id, report_description from report_def_catalog where country = '" + c['country'] + "'"
-                sql = "select * from report_def_catalog where country = '" + c['country'] + "'"
+                sql = "select * from report_def_catalog{0} where country = '{1}'".format(db_object_suffix,c['country'],)
 
                 if report_id is not None and report_id !='ALL':
-                     where_clause =  " and instr(upper('" + report_id + "'), upper(report_id)) > 0"
+                     where_clause =  " and upper(report_id)='" + report_id.upper() + "'"
                 if report_type is not None and report_type !='ALL':
                      where_clause =  " and instr(upper('" + report_type + "'), upper(report_type)) > 0"
 

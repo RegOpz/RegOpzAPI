@@ -38,6 +38,11 @@ class ManageMasterReportController(Resource):
             cell_id = request.args.get('cell_id')
             return self.get_report_audit_list(report_id=self.report_id, sheet_id=sheet_id, cell_id=cell_id)
 
+        if request.endpoint == "master_report_business_rules_ep":
+            report_id = request.args.get('report_id')
+            sheet_id = request.args.get('sheet_id')
+            cell_id = request.args.get('cell_id')
+            return self.master_report_cell_business_rules(report_id=report_id,sheet_id=sheet_id,cell_id=cell_id)
         if report_id:
             self.report_id = report_id
             return self.render_report_json()
@@ -68,13 +73,15 @@ class ManageMasterReportController(Resource):
                                             target_group_id=target_group_id, report_description=report_description,
                                             table_list=table_list)
 
-    def put(self):
+    def put(self,report=None):
         data = request.get_json(force=True)
         if request.endpoint == 'repository_report_rule_ep':
             id = data['audit_info']['id']
             if not id:
                 return BUSINESS_RULE_EMPTY
             return self.dcc_master.update_or_delete_data(data, id)
+        if request.endpoint == 'edit_repository_report_parameter_ep':
+            return self.update_report_parameters(data, report)
 
     def check_report_id(self,report_id,country):
         app.logger.info("Checking if report template already present in tenant space.")
@@ -127,10 +134,15 @@ class ManageMasterReportController(Resource):
             report_master = self.master_db.query(
                 "select id,report_parameters from report_def_catalog_master where report_id=%s and country = %s",
                 (ref_report_id,country,)).fetchone()
-            report_parameters = report_master["report_parameters"]
+            if report_master["report_parameters"]:
+                report_parameters = json.loads(report_master["report_parameters"])
+            else:
+                report_parameters = {}
+            if 'report_id' in report_parameters.keys():
+                report_parameters['report_id'] = target_report_id
             def_id = self.tenant_db.transact("insert into report_def_catalog(report_id,country,report_description,report_parameters,\
                                         last_updated_by,date_of_change,report_type) values(%s,%s,%s,%s,%s,%s,%s)",
-                                          (target_report_id, country, report_description, report_parameters, None, None,
+                                          (target_report_id, country, report_description, json.dumps(report_parameters), None, None,
                                            report_type))
 
             app.logger.info("Copied report_def_catalog_master")
@@ -379,3 +391,55 @@ class ManageMasterReportController(Resource):
         except Exception as e:
             app.logger.error(e)
             return {"msg": e}, 500
+
+    def master_report_cell_business_rules(self,report_id,sheet_id,cell_id):
+
+        additional_filter = ''
+        comp_agg_ref = None
+        if sheet_id != 'undefined' and cell_id != 'undefined':
+            additional_filter = " and sheet_id=%s and cell_id=%s "
+            # Now get the comp agg ref to calculate the next sequence number for the cell calc ref
+            sql="select cell_calc_ref from report_def_master where report_id=%s and sheet_id=%s and (cell_id=%s or cell_id like %s) and cell_render_def='COMP_AGG_REF'"
+            comp_agg_ref=self.master_db.query(sql,(report_id,sheet_id,cell_id,cell_id+":%")).fetchone()
+
+        calc_sql = "select  a.* from report_calc_def_master a " + \
+            " where a.report_id=%s" + additional_filter
+
+        if additional_filter=='':
+            calc_parameters=(report_id,)
+        else:
+            calc_parameters=(report_id, sheet_id, cell_id,)
+
+        # print("sql {0} \n parameters {1}".format(calc_sql,calc_parameters))
+        cell_rules = self.master_db.query(calc_sql, calc_parameters).fetchall()
+
+        agg_sql="select * from report_comp_agg_def_master where report_id=%s " + additional_filter
+
+        if additional_filter =='':
+            parameters=(report_id,)
+        else:
+            parameters=(report_id,sheet_id,cell_id)
+
+        # print("Agg sql {0} \n parameters {1}".format(agg_sql,parameters))
+        comp_agg_rules=self.master_db.query(agg_sql,parameters).fetchall()
+
+        display_dict={}
+
+        display_dict['comp_agg_ref']=comp_agg_ref['cell_calc_ref'] if comp_agg_ref else ''
+        display_dict['comp_agg_rules']=comp_agg_rules
+        display_dict['agg_rules']=[]
+        display_dict['cell_rules']=cell_rules
+        display_dict['report_snapshot'] = {}
+
+        return display_dict
+
+    def update_report_parameters(self,data,report):
+        app.logger.info("Updating Master Report Parameters in Report Def Catalog {}".format(data,))
+        sql = "update report_def_catalog_master set report_parameters='{0}' where report_id='{1}'"
+        sql = sql.format(json.dumps(data),report)
+        try:
+            self.master_db.transact(sql)
+            self.master_db.commit()
+            return {"msg": "Repository Report parameters updated successfully for {0}".format(report,)}, 200
+        except Exception as e:
+            return {"msg": "Repository Report parameters update error : " + str(e)},500

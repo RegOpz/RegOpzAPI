@@ -104,13 +104,19 @@ class MaintainReportRulesController(Resource):
 			data_dict={}
 			where_clause = ''
 
+			parameter_as_source = [{
+						'source_id': 0,
+						'source_table_name': 'parameters',}]
+
+			data_dict['source_suggestion']=parameter_as_source
+
 			sql = "select *  from data_source_information where 1 "
 			if source_id is not None and source_id !='ALL':
 				 where_clause =  " and source_id = " + source_id
 
 			app.logger.info("Retrieving source suggestion")
 			source = self.db.query(sql + where_clause).fetchall()
-			data_dict['source_suggestion'] = source
+			data_dict['source_suggestion'] += source
 
 			return data_dict
 		except Exception as e:
@@ -124,11 +130,19 @@ class MaintainReportRulesController(Resource):
 			data_dict={}
 			where_clause = ''
 
+			if str(source_id) == '0':
+				data_dict['source_suggestion']=[{
+							'source_id': 0,
+							'source_table_name': 'parameters',
+							'rules_suggestion':[{'business_rule':'parameter'}]
+							}]
+				return data_dict
+
 			sql = "select source_id, source_table_name from data_source_information where 1 "
 
 			if source_id is not None and source_id !='ALL':
 				 where_clause =  " and source_id = " + str(source_id)
-			app.logger.info("Retrieving source list")
+			app.logger.info("Retrieving source list for source id {}".format(source_id,))
 			source = self.db.query(sql + where_clause).fetchall()
 
 			data_dict['source_suggestion'] = source
@@ -138,7 +152,7 @@ class MaintainReportRulesController(Resource):
 				rules_suggestion = self.db.query(sql).fetchall()
 				data_dict['source_suggestion'][i]['rules_suggestion'] = rules_suggestion
 
-			if not data_dict['source_suggestion']:
+			if source_id !='ALL' and not data_dict['source_suggestion']:
 				return {"msg":"No sources found"},404
 			else:
 				return data_dict
@@ -149,6 +163,17 @@ class MaintainReportRulesController(Resource):
 	def get_agg_function_column_suggestion_list(self,table_name=None,source_id=None):
 		app.logger.info("Getting column suggestion list for agrregate function")
 		try:
+			if  table_name =='parameters' or str(source_id) == '0':
+				data_dict = [{
+					'Default': None,
+					'Extra': "",
+					'Field': "parameter",
+					'Key': "",
+					'Null': "YES",
+					'Type': "TEXT"
+				}]
+				return data_dict
+
 			if source_id and source_id !='null' and source_id != 'undefined':
 				source = self.db.query("select * from data_source_information where source_id = %s",(source_id,)).fetchone()
 				if source:

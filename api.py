@@ -353,9 +353,18 @@ api.add_resource(SharedDataController,
 
 api.add_resource(ManageMasterBusinessRulesController,
     apiPath + "/business-rules-repo",
-    apiPath + "/business-rules-repo/copy-to-tenant/<int:source_id>",
+    endpoint = "master_business_rules_ep"
 )
 
+api.add_resource(ManageMasterBusinessRulesController,
+    apiPath + "/business-rules-repo/master-business-rule-linkage-multiple",
+    endpoint = "master_business_rule_linkage_multiple_ep"
+)
+
+api.add_resource(ManageMasterBusinessRulesController,
+    apiPath + "/business-rules-repo/copy-to-tenant/<int:source_id>",
+    endpoint = "copy_business_rules_to_tenant_ep"
+)
 api.add_resource(ManageMasterReportController,
     apiPath + "/report-rules-repo",
     apiPath + "/report-rules-repo/<string:country>",
@@ -367,6 +376,12 @@ api.add_resource(ManageMasterReportController,
     apiPath + "/report-rules-repo/drilldown",
     endpoint = "repository_drill_down_rule_ep"
 )
+
+api.add_resource(ManageMasterReportController,
+    apiPath + "/report-rules-repo/master-report-business-rules_ep",
+    endpoint = "master_report_business_rules_ep"
+)
+
 api.add_resource(ManageMasterReportController,
     apiPath + "/report-rules-repo/fetch-report-id",
     endpoint = "fetch-report-id"
@@ -380,6 +395,11 @@ api.add_resource(ManageMasterReportController,
 api.add_resource(ManageMasterReportController,
     apiPath + "/report-rules-repo/report/report-rule",
     endpoint = "repository_report_rule_ep"
+)
+
+api.add_resource(ManageMasterReportController,
+    apiPath + "/report-rules-repo/report/report-parameters/<string:report>",
+    endpoint = "edit_repository_report_parameter_ep"
 )
 
 api.add_resource(OperationalLogController,

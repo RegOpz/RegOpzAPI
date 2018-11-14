@@ -521,7 +521,7 @@ class GenerateReportController(Resource):
             result_set=[]
             # for static parameters value.
             sql = "select * from report_calc_def where \
-                    report_id='{0}' and source_id=0".format(report_id)
+                    report_id='{0}' and source_id=0 and in_use='Y'".format(report_id)
             all_agg_param = self.db.query(sql).fetchall()
             app.logger.info("Parameter DataFrame {}".format(all_agg_param,))
             for calc_rule in all_agg_param:
@@ -534,7 +534,10 @@ class GenerateReportController(Resource):
                 source_data_trans = self.apply_formula_to_frame(parameters, agg_ref, 'static_value')
                 source_data_trans['static_value']=source_data_trans['static_value'].astype(dtype='float64',errors='ignore')
                 summary = eval("source_data_trans['static_value']." + agg_func + "()")
-                summary=0 if math.isnan(float(summary)) else float(summary)
+                # app.logger.info("summary {0} and data type: {1}".format(summary,type(summary)))
+                # summary=0 if math.isnan(summary) else (summary)
+                summary=summary.tolist()[0]
+                # app.logger.info("summary2 {0} and data type: {1}".format(summary,type(summary)))
                 result_set.append({'source_id': '0', 'report_id': report_id, 'sheet_id': sheet_id, 'cell_id': cell_id,
                                    'cell_calc_ref': cell_calc_ref, 'reporting_date': reporting_date, 'cell_summary': summary, 'version':report_version_no})
 
@@ -607,7 +610,7 @@ class GenerateReportController(Resource):
                     source_data_trans = self.apply_formula_to_frame(source_data, agg_ref, 'reporting_value')
                     source_data_trans['reporting_value']=source_data_trans['reporting_value'].astype(dtype='float64',errors='ignore')
                     summary = eval("source_data_trans['reporting_value']." + agg_func + "()")
-                    summary=0 if math.isnan(float(summary)) else float(summary)
+                    # summary=0 if math.isnan(summary) else (summary)
                     app.logger.info("Summary by source for ...{0} {1}".format(row['sheet_id'],row['cell_id'],))
 
                     result_set.append({'source_id':src,'report_id':report_id,'sheet_id':row['sheet_id'],'cell_id':row['cell_id'],

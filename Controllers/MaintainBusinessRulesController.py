@@ -143,7 +143,7 @@ class MaintainBusinessRulesController(Resource):
 		data_dict['rows'] = data
 		data_dict['count'] = count['count']
 		data_dict['table_name'] = 'business_rules'
-		data_dict['sql'] = sql
+		data_dict['sql'] = sql + where_clause
 
 		return data_dict
 
@@ -294,7 +294,44 @@ class MaintainBusinessRulesController(Resource):
 		data_list = cur.fetchall()
 
 		result_set = []
-		if len(business_rule_list)==1 and business_rule_list[0]=='undefined':
+		if len(business_rule_list)==1 and business_rule_list[0] in ['undefined','null']:
+			result_set = data_list
+		else:
+			for data in data_list:
+				# print(data['cell_business_rules'])
+				cell_rule_list = data['cell_business_rules'].split(',')
+				# print(type(cell_rule_list))
+				if set(business_rule_list).issubset(set(cell_rule_list)):
+					# print(data)
+					result_set.append(data)
+
+		trans_result_set = self.list_trans_reports_for_rule_list(source_id, business_rule_list)
+		for trans in trans_result_set:
+			result_set.append(trans)
+
+		return result_set
+
+	def list_trans_reports_for_rule_list(self, source_id, business_rule_list):
+
+		sql = "select report_id,sheet_id,section_id,cell_calc_render_ref,in_use " + \
+				" from report_dyn_trans_calc_def where source_id=" + str(source_id)
+		cur=self.db.query(sql)
+		trans_data_list = cur.fetchall()
+		data_list=[]
+		for data in trans_data_list:
+			calc_rule_ref = json.loads(data['cell_calc_render_ref'])
+			newdata = {
+						'report_id': 	data['report_id'],
+						'sheet_id': 	data['sheet_id'],
+						'cell_id': 		data['section_id'],
+						'cell_business_rules': calc_rule_ref['rule'],
+						'in_use':		data['in_use']
+					}
+			data_list.append(newdata)
+			print('data_list append {}'.format(newdata))
+
+		result_set = []
+		if len(business_rule_list)==1 and business_rule_list[0] in ['undefined','null']:
 			result_set = data_list
 		else:
 			for data in data_list:
@@ -306,6 +343,7 @@ class MaintainBusinessRulesController(Resource):
 					result_set.append(data)
 
 		return result_set
+
 
 	def get_source_suggestion_list(self,source_id='ALL'):
 

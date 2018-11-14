@@ -24,7 +24,8 @@ def xdate(col,input_format,output_format):
     # %M - Minutes
     # %S - Second
     # %p - am or pm in 12 hr format
-    return (datetime.strptime(str(col),input_format) if not col and str(col)!='' else datetime.strptime('19000101','%Y%d%m')).strftime(output_format)
+    # print("inside ExcelLib",col,input_format,output_format)
+    return (datetime.strptime(str(int(col)),input_format) if col and str(col)!='' else datetime.strptime('19000101','%Y%d%m')).strftime(output_format)
 
 def xsum(*args):
     pass
