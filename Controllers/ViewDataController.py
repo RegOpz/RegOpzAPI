@@ -14,6 +14,7 @@ from Helpers.authenticate import *
 import pandas as pd
 from Controllers.DataChangeController import DataChangeController
 from Controllers.DocumentController import DocumentController
+from Controllers.OperationalLogController import OperationalLogController
 
 class ViewDataController(Resource):
     def __init__(self):
@@ -24,6 +25,8 @@ class ViewDataController(Resource):
             self.dcc=DataChangeController()
             self.db=DatabaseHelper(self.tenant_info)
         self.doc = DocumentController()
+        self.opsLog = OperationalLogController()#Added by sudipta
+        self.log_master_id = None #Added by sudipta
 
     @authenticate
     def get(self):
@@ -89,6 +92,19 @@ class ViewDataController(Resource):
 
     def delete_data(self,business_date,table_name,id):
         app.logger.info("Deleting data")
+
+        # Added By Sudipta
+        if self.log_master_id:
+            self.opsLog.write_log_detail(master_id=self.log_master_id
+                                         , operation_sub_type='Deleting Data'
+                                         , operation_status='Started'
+                                         ,
+                                         operation_narration='Processing Deletion of Data'
+                                         )
+        #self.opsLog.update_master_status(id=self.log_master_id, operation_status="SUCCESS")
+
+        # End of addition by Sudipta
+
         try:
             sql="delete from {} where business_date = %s and id=%s".format(table_name)
             #print(sql)
@@ -97,31 +113,120 @@ class ViewDataController(Resource):
             #print(params)
             res=self.db.transact(sql,params)
             self.db.commit()
+            #Added By Sudipta
+            if self.log_master_id:
+             self.opsLog.write_log_detail(master_id=self.log_master_id
+                                         , operation_sub_type='End of Deleting Data'
+                                         , operation_status='Complete'
+                                         ,
+                                         operation_narration='Data Deleted Successfully'
+                                         )
+            self.opsLog.update_master_status(id=self.log_master_id, operation_status="SUCCESS")
 
+            #End of addition by Sudipta
             return res
         except Exception as e:
             self.db.rollback()
             app.logger.error(e)
+
+            #Added by Sudipta
+            if self.log_master_id:
+              self.opsLog.write_log_detail(master_id=self.log_master_id
+                    , operation_sub_type='Error occured while deleting data'
+                    , operation_status='Failed'
+                    , operation_narration='Error occured while deleting data'
+                    )
+              self.opsLog.update_master_status(id=self.log_master_id,operation_status="ERROR")
+            #End of Addition by Sudipta
+
             return {"msg":e},500
 
 
     def insert_data(self,data):
 
         app.logger.info("Inseting data")
+        # Added By Sudipta
+        if self.log_master_id:
+            self.opsLog.write_log_detail(master_id=self.log_master_id
+                                         , operation_sub_type='Inserting Data'
+                                         , operation_status='Started'
+                                         ,
+                                         operation_narration='Processing Insertion of Data'
+                                         )
+            self.opsLog.update_master_status(id=self.log_master_id, operation_status="PROCESSING")
+
+        # End of addition by Sudipta
         try:
             res = self.dcc.insert_data(data)
+
+            # Added By Sudipta
+            if self.log_master_id:
+                self.opsLog.write_log_detail(master_id=self.log_master_id
+                                             , operation_sub_type='End of Inserting Data'
+                                             , operation_status='Complete'
+                                             ,
+                                             operation_narration='Data Inserted Successfully'
+                                             )
+            self.opsLog.update_master_status(id=self.log_master_id, operation_status="SUCCESS")
+
+            # End of addition by Sudipta
+
             return res
         except Exception as e:
             app.logger.error(str(e))
+
+            # Added by Sudipta
+            if self.log_master_id:
+                self.opsLog.write_log_detail(master_id=self.log_master_id
+                                             , operation_sub_type='Error occured while Inserting data'
+                                             , operation_status='Failed'
+                                             , operation_narration='Error occured while Inserting data'
+                                             )
+                self.opsLog.update_master_status(id=self.log_master_id, operation_status="ERROR")
+            # End of Addition by Sudipta
             return {"msg":str(e)},500
 
     def update_or_delete_data(self,data,id):
         app.logger.info("Updating or Deleting data")
+
+        # Added By Sudipta
+        if self.log_master_id:
+            self.opsLog.write_log_detail(master_id=self.log_master_id
+                                         , operation_sub_type='Updating or Deleting Data'
+                                         , operation_status='Processing'
+                                         ,
+                                         operation_narration='Processing updating or deleting of Data'
+                                         )
+            self.opsLog.update_master_status(id=self.log_master_id, operation_status="PROCESSING")
+
+        # End of addition by Sudipta
         try:
             res = self.dcc.update_or_delete_data(data, id)
+
+            # Added By Sudipta
+            if self.log_master_id:
+                self.opsLog.write_log_detail(master_id=self.log_master_id
+                                             , operation_sub_type='End of updating or deleting Data'
+                                             , operation_status='Complete'
+                                             ,
+                                             operation_narration='Data updated/deleted Successfully'
+                                             )
+            self.opsLog.update_master_status(id=self.log_master_id, operation_status="SUCCESS")
+
+            # End of addition by Sudipta
             return res
         except Exception as e:
             app.logger.error(str(e))
+
+            # Added by Sudipta
+            if self.log_master_id:
+                self.opsLog.write_log_detail(master_id=self.log_master_id
+                                             , operation_sub_type='Error occured while updating or deleting data'
+                                             , operation_status='Failed'
+                                             , operation_narration='Error occured while updating or deleting data'
+                                             )
+                self.opsLog.update_master_status(id=self.log_master_id, operation_status="ERROR")
+            # End of Addition by Sudipta
             return {"msg":str(e)},500
 
     def ret_source_data_by_id(self, table_name,business_date,id):
@@ -141,8 +246,31 @@ class ViewDataController(Resource):
 
         #db = DatabaseHelper()
         app.logger.info("Getting data source")
+        # Added By Sudipta
+        if self.log_master_id:
+            self.opsLog.write_log_detail(master_id=self.log_master_id
+                                         , operation_sub_type='Getting Data Source'
+                                         , operation_status='Processing'
+                                         ,
+                                         operation_narration='Getting Data Source'
+                                         )
+            self.opsLog.update_master_status(id=self.log_master_id, operation_status="PROCESSING")
+
+        # End of addition by Sudipta
         try:
             app.logger.info("Getting source table name ")
+
+            # Added By Sudipta
+            if self.log_master_id:
+                self.opsLog.write_log_detail(master_id=self.log_master_id
+                                             , operation_sub_type='Getting Source Table Name'
+                                             , operation_status='Processing'
+                                             ,
+                                             operation_narration='Getting Source Table Name'
+                                             )
+                self.opsLog.update_master_status(id=self.log_master_id, operation_status="PROCESSING")
+
+            # End of addition by Sudipta
             filter_maps = {
                 "starts":{"operator": "like", "start_wild_char":"", "end_wild_char":"%"},
                 "notstarts":{"operator": "not like", "start_wild_char":"", "end_wild_char":"%"},
@@ -160,6 +288,17 @@ class ViewDataController(Resource):
             start_page = int(page) * 100
             data_dict = {}
             app.logger.info("Getting data")
+            # Added By Sudipta
+            if self.log_master_id:
+                self.opsLog.write_log_detail(master_id=self.log_master_id
+                                             , operation_sub_type='Getting Data Source'
+                                             , operation_status='Processing'
+                                             ,
+                                             operation_narration='Getting Data Source'
+                                             )
+                self.opsLog.update_master_status(id=self.log_master_id, operation_status="PROCESSING")
+
+            # End of addition by Sudipta
             filter_sql = ''
             if filter and filter != 'null' and filter != 'undefined':
                 filter=json.loads(filter)
