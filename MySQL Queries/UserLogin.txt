@@ -1,9 +1,0 @@
-alter table permissions add constraint u_perm unique(role_id,permission_id,component_id);
-alter table permission_def add component_id int;
-alter table roles add column last_updated_by varchar(20);
-alter table roles add column dml_allowed varchar(1);
-alter table roles add column in_use varchar(1);
-alter table permissions add column last_updated_by varchar(20);
-alter table permissions add column dml_allowed varchar(1);
-alter table permissions add column in_use varchar(1);
-<Add key in permissions for (role, comp, perm) unique>

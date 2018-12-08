@@ -24,6 +24,7 @@ from Controllers.SharedDataController import SharedDataController
 from Controllers.ManageMasterBusinessRulesController import ManageMasterBusinessRulesController
 from Controllers.ManageMasterReportController import ManageMasterReportController
 from Controllers.OperationalLogController import OperationalLogController
+from Controllers.JobController import JobController
 from flask_cors import CORS, cross_origin
 
 api.add_resource(Info, apiPath + "/info")
@@ -374,6 +375,21 @@ api.add_resource(ManageMasterReportController,
 
 api.add_resource(OperationalLogController,
     apiPath + "/fetch-operation-log",
+)
+
+api.add_resource(JobController,
+    apiPath + "/pipeline/run-job",
+    endpoint="run_job_ep"
+)
+
+api.add_resource(JobController,
+    apiPath + "/pipeline/restart-job",
+    endpoint="restart_job_ep"
+)
+
+api.add_resource(JobController,
+    apiPath+"/pipeline/get-job-parameter",
+    endpoint="get_job_parameter_ep"
 )
 
 if __name__ == '__main__':
