@@ -518,6 +518,14 @@ class ViewDataController(Resource):
         try:
             data_key_list = eval("["+qualifying_key+"]")
             app.logger.info("data key list {}".format(data_key_list,))
+            self.opsLog.write_log_detail(master_id=self.log_master_id
+                                         , operation_sub_type='Getting List of reports for Data'
+                                         , operation_status='Processing'
+                                         ,
+                                         operation_narration='Getting Data Source'
+                                         )
+            self.opsLog.update_master_status(id=self.log_master_id, operation_status="PROCESSING")
+
             self.db.transact("create temporary table tmp_report_link_key_list(key_source_id int,key_id bigint,key_date int)")
             self.db.transact("truncate table tmp_report_link_key_list")
             self.db.transactmany("insert into tmp_report_link_key_list(key_source_id,key_id,key_date) values (%s,%s,%s)",data_key_list)
@@ -830,6 +838,14 @@ class ViewDataController(Resource):
 
     def update_data_catalog(self,status,source_id,business_date):
         app.logger.info("Updating data catalog")
+        self.opsLog.write_log_detail(master_id=self.log_master_id
+                                     , operation_sub_type='Updating data catalog'
+                                     , operation_status='Processing'
+                                     ,
+                                     operation_narration='Getting Data Source'
+                                     )
+        self.opsLog.update_master_status(id=self.log_master_id, operation_status="PROCESSING")
+
         try:
             self.db.transact("update data_catalog set file_load_status=%s \
                         where source_id=%s and business_date=%s",(status,source_id,business_date))
