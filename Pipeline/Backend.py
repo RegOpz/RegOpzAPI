@@ -52,6 +52,14 @@ class Backend:
 
         return task_log
 
+    def get_task_status(self,job_run_id,job_id,task_id):
+        task_status = self.db.query("select a.task_status,a.task_status_code from task_log a,(select max(id) id from task_log \
+                                         where job_run_id=%s and job_id=%s and task_id=%s) b where a.id=b.id",
+                                 (job_run_id, int(job_id),int(task_id))).fetchone()["task_status"]
+        return task_status
+
+
+
 
 
 

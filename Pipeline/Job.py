@@ -21,6 +21,7 @@ class Job(DAG):
         self.task_list = {}
         self.task_status = {}
         self.running_procs = {}
+        self.task_output={}
         self.scheduler = None
         self.completed_task = Queue(maxsize=1000)
         self.job_parameters={}
@@ -63,10 +64,11 @@ class Job(DAG):
 
         while True:
             self.check_complete()
-            next_tasks=self.get_next_task()
-
             if self.is_job_end():
                 break
+
+            next_tasks=self.get_next_task()
+
             if next_tasks is None:
                 time.sleep(5)
                 continue
@@ -79,8 +81,7 @@ class Job(DAG):
         for dep in dependencies:
             if self.task_status[dep] != TaskStatus.COMPLETE:
                 return
-            task=self.task_list[dep]
-            if not task.output():
+            if not self.task_output[dep]:
                 return
         self.run_task(task_id)
 
@@ -90,9 +91,11 @@ class Job(DAG):
                 prc=self.running_procs.get(task,None)
                 if (prc and not prc.is_alive()) or not prc:
                    self.set_task_status(task,TaskStatus.COMPLETE)
+                   self.task_output[task]=self.task_list[task].output()
                    self.completed_task.put(task)
             elif self.task_status[task]==TaskStatus.PREVIOUS:
                 self.set_task_status(task, TaskStatus.COMPLETE)
+                self.task_output[task] = self.task_list[task].output()
                 self.completed_task.put(task)
 
     def get_next_task(self):
@@ -145,6 +148,8 @@ class Job(DAG):
         self.scheduler.join()
         self.update_job_status()
 
+        return self.end_scheduler
+
 
     def create_job(self,job_id):
         self.set_job_id(job_id)
@@ -195,6 +200,7 @@ class Job(DAG):
 
         self.scheduler.join()
         self.update_job_status()
+        return self.end_scheduler
 
     def recreate_job(self,job_id,job_run_id,start_task_id):
 
@@ -238,6 +244,8 @@ class Job(DAG):
         valid, message = self.validate()
         if not valid:
             raise ValueError(message)
+
+        return self.graph
 
 
 

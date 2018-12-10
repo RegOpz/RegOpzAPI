@@ -7,7 +7,7 @@ from Helpers.DatabaseHelper import DatabaseHelper
 from Helpers.utils import autheticateTenant
 from Helpers.authenticate import *
 import json
-from Pipeline.Tasks import Task
+from Pipeline.Tasks import Task,JobSignal
 
 class JobController(Resource):
     def __init__(self):
@@ -25,9 +25,16 @@ class JobController(Resource):
                 job_parameters=job_detail.get('job_parameters',{})
                 job_decision=job_detail.get('job_decision',{})
                 runtime_job_parameters={**job_parameters,**job_decision}
-                self.job.start_job(job_id,runtime_job_parameters)
+                ret_code=self.job.start_job(job_id,runtime_job_parameters)
+                if ret_code == JobSignal.SUCCESS:
+                    return {"msg":"Job {} completed sucessfully".format(job_id)},200
+                elif ret_code==JobSignal.ABORT:
+                    return {"msg":"Job {} aborted".format(job_id)},200
+                elif ret_code==JobSignal.FAILURE:
+                    return {"msg": "Job {} failed".format(job_id)},403
             except Exception as e:
-                raise(e)
+                return {"msg":"Job {} failed with exception:{}".format(job_id,str(e))},403
+
 
         if request.endpoint=="restart_job_ep":
             try:
@@ -39,9 +46,15 @@ class JobController(Resource):
                 job_run_id=job_detail['job_run_id']
                 restart_task_id=job_detail.get('restart_task_id',None)
 
-                self.job.restart_job(job_id,job_run_id,restart_task_id,runtime_job_parameters)
+                ret_code=self.job.restart_job(job_id,job_run_id,restart_task_id,runtime_job_parameters)
+                if ret_code == JobSignal.SUCCESS:
+                    return {"msg":"Job {} completed sucessfully".format(job_id)},200
+                elif ret_code==JobSignal.ABORT:
+                    return {"msg":"Job {} aborted".format(job_id)},200
+                elif ret_code==JobSignal.FAILURE:
+                    return {"msg": "Job {} failed".format(job_id)},403
             except Exception as e:
-                raise(e)
+                return {"msg": "Job {} failed with exception:{}".format(job_id, str(e))}, 403
 
     def get(self):
        if request.endpoint=="get_job_parameter_ep":

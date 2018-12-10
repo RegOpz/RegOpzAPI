@@ -1,7 +1,9 @@
 from .Backend import  Backend
 from multiprocessing import Pool
+from Controllers.GenerateReportController import GenerateReportController
 task_types = {
-    'DummyTask': "Dummy Task"
+    'DummyTask': "Dummy Task",
+    'CreateReportTask':"Create Report"
 }
 
 class JobSignal:
@@ -32,7 +34,7 @@ class Task:
             self.run_id = None
             self.job_id = None
             self.backend = None
-            
+
         self.task_id=task_id
 
     def set_input(self,input):
@@ -103,3 +105,76 @@ class DummyTask(Task):
         if not decision:
             self.parent_job.terminate_scheduler(JobSignal.ABORT)
         return decision
+
+
+class CreateReportTask(Task):
+    def inputs(self):
+        inp={"report_id":"string",
+             "reporting_currency":"string",
+             'ref_date_rate':"string",
+             'rate_type':"string"
+             }
+
+        return inp
+
+    def parameters(self):
+        param={'business_date_from':"date",
+               'business_date_to':"date",
+               "reporting_parameters":"dictionary"}
+        return param
+
+    def run(self):
+        try:
+            report=GenerateReportController()
+
+            self.backend.create_task_run(self.run_id, self.job_id, self.task_id)
+            input = self.inputs()
+            for key in input:
+                if key not in self.input.keys():
+                    raise KeyError("%s not present in inputs" % key)
+
+            param = self.parameters()
+            for key in param:
+                if key not in self.runtime_parameters.keys():
+                    raise KeyError("%s not present in parameters" % key)
+
+            report_parameters={**self.runtime_parameters["reporting_parameters"],
+                               "report_id":self.input["report_id"],
+                               "reporting_currency":self.input["reporting_currency"],
+                               "business_date_from":self.runtime_parameters["business_date_from"],
+                               "business_date_to": self.runtime_parameters["business_date_to"],
+                               'ref_date_rate': self.input["ref_date_rate"],
+                               'rate_type': self.input["rate_type"]
+
+                               }
+
+            msg,status_code=report.create_report(report_parameters)
+            status="SUCCESS" if status_code ==200 else "FAILURE"
+
+            self.backend.update_task_run(self.run_id, self.job_id, self.task_id, status,
+                                         msg["msg"], status_code)
+        except Exception as e:
+            self.backend.update_task_run(self.run_id, self.job_id, self.task_id, "FAILURE",
+                                         str(e), "403")
+            raise(e)
+
+
+
+    def output(self):
+        decision = self.runtime_parameters.get(self.task_id, True)
+        if not decision:
+            self.parent_job.terminate_scheduler(JobSignal.ABORT)
+            return decision
+
+        task_status=self.backend.get_task_status(self.run_id,self.job_id,self.task_id)
+        decision= True if task_status=="SUCCESS" else False
+
+        if not decision:
+            self.parent_job.terminate_scheduler(JobSignal.FAILURE)
+
+        return decision
+
+
+
+
+
