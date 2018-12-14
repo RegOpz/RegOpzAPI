@@ -15,6 +15,8 @@ class JobSignal:
 
 class Task:
     def create_task(self,task_type,task_id=None,input=None,parent_job=None):
+        if task_type not in task_types.keys():
+            raise TypeError("Task type {} is not defined".format(task_type))
         task=eval(task_type+"()")
         task.set_input(input)
         task.set_run_id(parent_job,task_id)

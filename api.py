@@ -392,6 +392,11 @@ api.add_resource(JobController,
     endpoint="get_job_parameter_ep"
 )
 
+api.add_resource(JobController,
+    apiPath+"/pipeline/get-task-input",
+    endpoint="get_task_input_ep"
+)
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=APIConfig.API['port'], threaded=True)
 #hello

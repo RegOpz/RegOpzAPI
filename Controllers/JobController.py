@@ -60,6 +60,9 @@ class JobController(Resource):
        if request.endpoint=="get_job_parameter_ep":
            job_id=request.args.get("job_id")
            return self.get_input_parameter_list(job_id)
+       if request.endpoint=="get_task_input_ep":
+           task_type=request.args.get("task_type")
+           return self.get_task_input(task_type)
 
     def get_input_parameter_list(self,job_id):
         task_inst=Task()
@@ -75,4 +78,9 @@ class JobController(Resource):
             parameter_list.update(task.parameters())
 
         return {'inputs':input_list,'parameters':parameter_list}
+
+    def get_task_input(self,task_type):
+        task_inst=Task()
+        task_type_inst=task_inst.create_task(task_type)
+        return task_type_inst.inputs()
 

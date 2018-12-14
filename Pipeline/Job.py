@@ -162,10 +162,7 @@ class Job(DAG):
             self.add_task(task)
 
         for task in tasks:
-            if task['task_dependency']:
-                dependencies=task['task_dependency'].split(',')
-                for dep in dependencies:
-                    self.add_dependency(str(dep),str(task['task_id']))
+            self.add_dependency(task)
 
         valid,message=self.validate()
         if not valid:
@@ -184,8 +181,12 @@ class Job(DAG):
         self.add_node(str(task['task_id']))
         self.set_task_status(str(task['task_id']),task_status)
 
-    def add_dependency(self,from_task_id,to_task_id):
-        self.add_edge(from_task_id,to_task_id)
+    def add_dependency(self,task):
+        if task['task_dependency']:
+            dependencies = task['task_dependency'].split(',')
+            for dep in dependencies:
+                self.add_edge(str(dep), str(task['task_id']))
+
 
     def restart_job(self,job_id,job_run_id,start_task_id,runtime_job_parameters=None):
         job_log = self.backend.get_job_log(job_id, job_run_id)
@@ -230,10 +231,7 @@ class Job(DAG):
                     self.add_task(task,TaskStatus.FAILED)
 
         for task in tasks:
-            if task['task_dependency']:
-                dependencies = task['task_dependency'].split(',')
-                for dep in dependencies:
-                    self.add_dependency(str(dep), str(task['task_id']))
+            self.add_dependency(task)
 
         if start_task_id:
             self.set_task_status(str(start_task_id), TaskStatus.READY)
