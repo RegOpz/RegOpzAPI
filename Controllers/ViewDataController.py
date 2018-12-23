@@ -93,18 +93,6 @@ class ViewDataController(Resource):
     def delete_data(self,business_date,table_name,id):
         app.logger.info("Deleting data")
 
-        # Added By Sudipta
-        if self.log_master_id:
-            self.opsLog.write_log_detail(master_id=self.log_master_id
-                                         , operation_sub_type='Deleting Data'
-                                         , operation_status='Started'
-                                         ,
-                                         operation_narration='Processing Deletion of Data'
-                                         )
-        #self.opsLog.update_master_status(id=self.log_master_id, operation_status="SUCCESS")
-
-        # End of addition by Sudipta
-
         try:
             sql="delete from {} where business_date = %s and id=%s".format(table_name)
             #print(sql)
@@ -113,120 +101,31 @@ class ViewDataController(Resource):
             #print(params)
             res=self.db.transact(sql,params)
             self.db.commit()
-            #Added By Sudipta
-            if self.log_master_id:
-             self.opsLog.write_log_detail(master_id=self.log_master_id
-                                         , operation_sub_type='End of Deleting Data'
-                                         , operation_status='Complete'
-                                         ,
-                                         operation_narration='Data Deleted Successfully'
-                                         )
-            self.opsLog.update_master_status(id=self.log_master_id, operation_status="SUCCESS")
-
-            #End of addition by Sudipta
             return res
         except Exception as e:
             self.db.rollback()
             app.logger.error(e)
-
-            #Added by Sudipta
-            if self.log_master_id:
-              self.opsLog.write_log_detail(master_id=self.log_master_id
-                    , operation_sub_type='Error occured while deleting data'
-                    , operation_status='Failed'
-                    , operation_narration='Error occured while deleting data'
-                    )
-              self.opsLog.update_master_status(id=self.log_master_id,operation_status="ERROR")
-            #End of Addition by Sudipta
-
             return {"msg":e},500
 
 
     def insert_data(self,data):
 
         app.logger.info("Inseting data")
-        # Added By Sudipta
-        if self.log_master_id:
-            self.opsLog.write_log_detail(master_id=self.log_master_id
-                                         , operation_sub_type='Inserting Data'
-                                         , operation_status='Started'
-                                         ,
-                                         operation_narration='Processing Insertion of Data'
-                                         )
-            self.opsLog.update_master_status(id=self.log_master_id, operation_status="PROCESSING")
-
-        # End of addition by Sudipta
         try:
             res = self.dcc.insert_data(data)
-
-            # Added By Sudipta
-            if self.log_master_id:
-                self.opsLog.write_log_detail(master_id=self.log_master_id
-                                             , operation_sub_type='End of Inserting Data'
-                                             , operation_status='Complete'
-                                             ,
-                                             operation_narration='Data Inserted Successfully'
-                                             )
-            self.opsLog.update_master_status(id=self.log_master_id, operation_status="SUCCESS")
-
-            # End of addition by Sudipta
 
             return res
         except Exception as e:
             app.logger.error(str(e))
-
-            # Added by Sudipta
-            if self.log_master_id:
-                self.opsLog.write_log_detail(master_id=self.log_master_id
-                                             , operation_sub_type='Error occured while Inserting data'
-                                             , operation_status='Failed'
-                                             , operation_narration='Error occured while Inserting data'
-                                             )
-                self.opsLog.update_master_status(id=self.log_master_id, operation_status="ERROR")
-            # End of Addition by Sudipta
             return {"msg":str(e)},500
 
     def update_or_delete_data(self,data,id):
         app.logger.info("Updating or Deleting data")
-
-        # Added By Sudipta
-        if self.log_master_id:
-            self.opsLog.write_log_detail(master_id=self.log_master_id
-                                         , operation_sub_type='Updating or Deleting Data'
-                                         , operation_status='Processing'
-                                         ,
-                                         operation_narration='Processing updating or deleting of Data'
-                                         )
-            self.opsLog.update_master_status(id=self.log_master_id, operation_status="PROCESSING")
-
-        # End of addition by Sudipta
         try:
             res = self.dcc.update_or_delete_data(data, id)
-
-            # Added By Sudipta
-            if self.log_master_id:
-                self.opsLog.write_log_detail(master_id=self.log_master_id
-                                             , operation_sub_type='End of updating or deleting Data'
-                                             , operation_status='Complete'
-                                             ,
-                                             operation_narration='Data updated/deleted Successfully'
-                                             )
-            self.opsLog.update_master_status(id=self.log_master_id, operation_status="SUCCESS")
-
-            # End of addition by Sudipta
             return res
         except Exception as e:
             app.logger.error(str(e))
-
-            # Added by Sudipta
-            if self.log_master_id:
-                self.opsLog.write_log_detail(master_id=self.log_master_id
-                                             , operation_sub_type='Error occured while updating or deleting data'
-                                             , operation_status='Failed'
-                                             , operation_narration='Error occured while updating or deleting data'
-                                             )
-                self.opsLog.update_master_status(id=self.log_master_id, operation_status="ERROR")
-            # End of Addition by Sudipta
             return {"msg":str(e)},500
 
     def ret_source_data_by_id(self, table_name,business_date,id):
@@ -246,31 +145,8 @@ class ViewDataController(Resource):
 
         #db = DatabaseHelper()
         app.logger.info("Getting data source")
-        # Added By Sudipta
-        if self.log_master_id:
-            self.opsLog.write_log_detail(master_id=self.log_master_id
-                                         , operation_sub_type='Getting Data Source'
-                                         , operation_status='Processing'
-                                         ,
-                                         operation_narration='Getting Data Source'
-                                         )
-            self.opsLog.update_master_status(id=self.log_master_id, operation_status="PROCESSING")
-
-        # End of addition by Sudipta
         try:
             app.logger.info("Getting source table name ")
-
-            # Added By Sudipta
-            if self.log_master_id:
-                self.opsLog.write_log_detail(master_id=self.log_master_id
-                                             , operation_sub_type='Getting Source Table Name'
-                                             , operation_status='Processing'
-                                             ,
-                                             operation_narration='Getting Source Table Name'
-                                             )
-                self.opsLog.update_master_status(id=self.log_master_id, operation_status="PROCESSING")
-
-            # End of addition by Sudipta
             filter_maps = {
                 "starts":{"operator": "like", "start_wild_char":"", "end_wild_char":"%"},
                 "notstarts":{"operator": "not like", "start_wild_char":"", "end_wild_char":"%"},
@@ -288,17 +164,6 @@ class ViewDataController(Resource):
             start_page = int(page) * 100
             data_dict = {}
             app.logger.info("Getting data")
-            # Added By Sudipta
-            if self.log_master_id:
-                self.opsLog.write_log_detail(master_id=self.log_master_id
-                                             , operation_sub_type='Getting Data Source'
-                                             , operation_status='Processing'
-                                             ,
-                                             operation_narration='Getting Data Source'
-                                             )
-                self.opsLog.update_master_status(id=self.log_master_id, operation_status="PROCESSING")
-
-            # End of addition by Sudipta
             filter_sql = ''
             if filter and filter != 'null' and filter != 'undefined':
                 filter=json.loads(filter)
@@ -611,7 +476,23 @@ class ViewDataController(Resource):
         if source_id!='ALL':
             sql_str+=' where source_id =' + str(source_id)
 
+        self.log_master_id = self.opsLog.write_log_master(operation_type='Apply Rule'
+                          , operation_status='RUNNING'
+                          ,operation_narration='Apply Rule for sourceId {0} on date {1}'.format(source_id,business_date)
+                          , entity_type='data'
+                          , entity_name='source_id'
+                          , entity_table_name='data_catalog'
+                          , entity_id=source_id
+                          )
+        self.db.commit()
+
+
         tables=db.query(sql_str).fetchall()
+        if self.log_master_id:
+            self.opsLog.write_log_detail(master_id=self.log_master_id
+                                         , operation_sub_type='Apply Rule started'
+                                         , operation_status='Complete'
+                                         , operation_narration='Apply rule for data {0} started'.format(source_id))
 
         for src in tables:
             code = ''
@@ -619,6 +500,7 @@ class ViewDataController(Resource):
                          'sell_currency', 'mtm_currency'])
             # idf=pd.DataFrame()
             # Select the data in the rule ececution order to facilitate derived rules definitions in the rule
+
             #Stamp the business_rule version
             br_version= db.query("select version,id_list from business_rules_vers where source_id=%s and version=(select\
                         max(version) version from business_rules_vers where source_id=%s)",(src['source_id'],src['source_id'])).fetchone()
@@ -644,6 +526,12 @@ class ViewDataController(Resource):
             if not br_version or br_version_no != br_version['version']:
                db.transact("insert into business_rules_vers(source_id,version,id_list) values(%s,%s,%s)",(src['source_id'],br_version_no,br_id_list_str))
 
+            if self.log_master_id:
+                self.opsLog.write_log_detail(master_id=self.log_master_id
+                                             , operation_sub_type='Business Rule Creation started'
+                                             , operation_status='Complete'
+                                             , operation_narration='Business Rule created for data {0}'.format(src['source_id']))
+
             # code += 'if business_or_validation in [\'ALL\',\'BUSINESSRULES\']:\n'
             # code += '\tdb.transact("delete from qualified_data where source_id='+str(src["source_id"])+' and business_date=%s",(business_date,))\n'
             code += 'if business_or_validation in [\'ALL\',\'VALIDATION\']:\n'
@@ -664,6 +552,8 @@ class ViewDataController(Resource):
             buy_currency='\'\''
             sell_currency='\'\''
             mtm_currency='\'\''
+
+
             for idx,row in brdf.iterrows():
                 if row["python_implementation"].strip():
                      fields=row["data_fields_list"].split(',')
@@ -761,6 +651,8 @@ class ViewDataController(Resource):
                 #print(existing_qdf.dtypes)
                 #print(ldict['qdf'].dtypes)
                 # print(existing_qdf,ldict['qdf'])
+
+                ## Applied rules for source_id,source_id
                 ceate_version = False
                 if existing_qdf.empty:
                     qdf=ldict['qdf']
@@ -817,11 +709,30 @@ class ViewDataController(Resource):
                     db.transactmany("insert into qualified_data({0}) values({1})".format(columns,placeholder),qdf_records)
                     db.transact("insert into qualified_data_vers(business_date,source_id,version,br_version,id_list) values (%s,%s,%s,%s,%s)",\
                                 (business_date,source_id,version,br_version_no,id_list_str))
+
+                #creating version for qualified data
+                if self.log_master_id:
+                    self.opsLog.write_log_detail(master_id=self.log_master_id
+                                                 , operation_sub_type='Creating version for qualified data'
+                                                 , operation_status='Complete'
+                                                 , operation_narration='Creating version for qualified data {0}'.format(source_id))
+
                 db.commit()
                 data_sources["file_load_status"] = "SUCCESS"
                 #print(code)
                 print("End of try....")
                 self.update_data_catalog(status=data_sources["file_load_status"],source_id=source_id,business_date=business_date)
+                self.log_master_id = self.opsLog.write_log_master(operation_type='Apply Rule'
+                                                                  , operation_status='COMPLETE'
+                                                                  ,
+                                                                  operation_narration='Apply Rule for sourceId {0} on date {1}'.format(
+                                                                      source_id, business_date)
+                                                                  , entity_type='data'
+                                                                  , entity_name='source_id'
+                                                                  , entity_table_name='data_catalog'
+                                                                  , entity_id=source_id
+                                                                  )
+                self.db.commit()
                 return {"msg": "Apply rule SUCCESSFULLY COMPLETED for source ["+str(source_id)+"] Business date ["+str(business_date)+"]."}, 200
             except Exception as e:
                 print("In except..." + str(e))
@@ -829,6 +740,11 @@ class ViewDataController(Resource):
                 #print(code)
                 data_sources["file_load_status"] = "FAILED"
                 self.update_data_catalog(status=data_sources["file_load_status"],source_id=source_id,business_date=business_date)
+                if self.log_master_id:
+                    self.opsLog.write_log_detail(master_id=self.log_master_id
+                                                 , operation_sub_type='Error occured while updating report catalog'
+                                                 , operation_status='Failed'
+                                                 , operation_narration='Apply rule FAILED with error: {0}'.format(str(e), ))
                 return {"msg": str(e) + " Apply rule FAILED for source ["+ str(source_id) +"] Business date ["+str(business_date)+"]"}, 400
             # finally:
             #     print("In finally")
@@ -838,14 +754,6 @@ class ViewDataController(Resource):
 
     def update_data_catalog(self,status,source_id,business_date):
         app.logger.info("Updating data catalog")
-        self.opsLog.write_log_detail(master_id=self.log_master_id
-                                     , operation_sub_type='Updating data catalog'
-                                     , operation_status='Processing'
-                                     ,
-                                     operation_narration='Getting Data Source'
-                                     )
-        self.opsLog.update_master_status(id=self.log_master_id, operation_status="PROCESSING")
-
         try:
             self.db.transact("update data_catalog set file_load_status=%s \
                         where source_id=%s and business_date=%s",(status,source_id,business_date))
