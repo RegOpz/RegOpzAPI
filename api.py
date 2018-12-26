@@ -1,6 +1,7 @@
 from Controllers.Info import Info
 from Controllers.DocumentController import DocumentController
 from Controllers.ReportTemplateController import ReportTemplateController
+from Controllers.FreeFormatReportController import FreeFormatReportController
 from Controllers.MaintainBusinessRulesController import MaintainBusinessRulesController
 from Controllers.MaintainReportRulesController import MaintainReportRulesController
 from Controllers.UserController import UserController
@@ -439,6 +440,15 @@ api.add_resource(PasswordRecoveryController,
 api.add_resource(PasswordRecoveryController,
     apiPath + "/pwd-recovery/save-password-policy/<int:id>",
     endpoint = "save_password_policy_ep"
+)
+
+api.add_resource(FreeFormatReportController,
+    apiPath + "/free-format-report"
+)
+
+api.add_resource(FreeFormatReportController,
+    apiPath + "/free-format-report/report/<string:report_id>",
+    endpoint = "view_free_formt_report_ep"
 )
 
 if __name__ == '__main__':

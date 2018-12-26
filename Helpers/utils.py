@@ -101,3 +101,67 @@ def autheticateTenant():
     else:
         # raise ValueError("Forbidden! No Token Recieved for Subscriber Authentication")
         return None
+
+def get_css_style_from_openpyxl(_cell):
+    cell_style={}
+    # Font
+    # if _cell.font.color:
+    cell_style['color'] = _cell.font.color.rgb if _cell.font.color else '00000000'
+    cell_style['font']={}
+    if _cell.font.name:
+        cell_style['font']['family'] = _cell.font.name
+    if _cell.font.b:
+        cell_style['font']['weight'] = 'bold'
+    if _cell.font.i:
+        cell_style['font']['style'] = 'italic'
+    if _cell.font.sz:
+        cell_style['font']['size'] = str(int(_cell.font.sz)) + "px"
+    # Background
+    if _cell.fill.fill_type and _cell.fill.fgColor.rgb and _cell.fill.fgColor.rgb.upper()!='FFFFFFFF':
+        cell_style['background'] = {'color': _cell.fill.fgColor.rgb }
+    # alignment
+    cell_style['alignment']={}
+    if _cell.alignment.horizontal:
+        cell_style['alignment']['horizontal'] = _cell.alignment.horizontal
+    if _cell.alignment.vertical:
+        cell_style['alignment']['vertical'] = _cell.alignment.vertical
+    # Border
+    cell_style['border']={}
+    if _cell.border.top.style:
+        cell_style['border']['top']={ 'style': 'solid', 'width': 'thin',
+                                    'color': _cell.border.top.color.rgb if _cell.border.top.color else '00000000' }
+    if _cell.border.bottom.style:
+        cell_style['border']['bottom']={ 'style': 'solid', 'width': 'thin',
+                                    'color': _cell.border.bottom.color.rgb if _cell.border.bottom.color else '00000000' }
+    if _cell.border.left.style:
+        cell_style['border']['left']={ 'style': 'solid', 'width': 'thin',
+                                    'color': _cell.border.left.color.rgb if _cell.border.left.color else '00000000' }
+    if _cell.border.right.style:
+        cell_style['border']['right']={ 'style': 'solid', 'width': 'thin',
+                                    'color': _cell.border.right.color.rgb if _cell.border.right.color else '00000000' }
+
+    return cell_style
+
+def process_td_class_names(style_obj , td_class_name, sheet_styles, path=()):
+    # app.logger.info("inside process_td_class_names {} ".format(style_obj,))
+    for k, v in style_obj.items():
+        if hasattr(v, 'items'):
+            process_td_class_names(v, td_class_name, sheet_styles, path + (k,))
+        else:
+            # Check whether path is alignment
+            if 'alignment' in path :
+                if str(v) != "None":
+                    new_value =  "middle" if k=='vertical' and str(v)=="center" else str(v)
+                    class_name = ' ht' + new_value.capitalize()
+                    td_class_name['classes'] += class_name
+            else :
+                new_class_type = '-'.join(path + (k,))[0:]
+                # check for background color
+                if k =='color':
+                    new_value =  '#' + (str(v)[2:] if len(str(v))==8 else str(v))
+                else:
+                    new_value = str(v)
+
+                class_name = ' ht' + new_class_type + '-' + new_value.replace('#','HEX').replace(' ','_')
+                td_class_name['classes'] += class_name
+                sheet_styles['style_classes'][class_name]={'new_class_type' : new_class_type, 'new_value' : new_value}
