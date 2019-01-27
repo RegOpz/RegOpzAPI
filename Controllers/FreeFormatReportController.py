@@ -20,6 +20,7 @@ from datetime import datetime
 import time
 import math
 import re
+from Pipeline.PyDAG import DAG
 from Helpers.utils import autheticateTenant
 from Helpers.authenticate import *
 
@@ -50,11 +51,16 @@ class FreeFormatReportController(Resource):
     def post(self):
         return self.capture_template()
 
-    def put(self,report_id):
-        self.report_id = report_id
-        self.db_object_suffix= request.args.get('domain_type')
-        report_data = request.get_json(force=True)
-        return self.save_hot_table_report_template(report_data)
+    def put(self,report_id=None):
+        if request.endpoint == 'validate_section_free_formt_report_ep':
+            sections = request.get_json(force=True)
+            self.DAG = DAG()
+            return self.validate_sec_dependency(sections=sections)
+        else:
+            self.report_id = report_id
+            self.db_object_suffix= request.args.get('domain_type')
+            report_data = request.get_json(force=True)
+            return self.save_hot_table_report_template(report_data)
 
     def capture_template(self):
         try:
@@ -368,18 +374,18 @@ class FreeFormatReportController(Resource):
                 section_details = []
                 for sec in sections:
                     sec_def = json.loads(sec['cell_calc_ref'])
-                    cell = sec['cell_id'].split(':') # split it as we might have merged cells represented as A1:V10
-                    start_xy = coordinate_from_string(cell[0])
-                    # note that openpyxls util provides visual coordinates, but array elements starts with 0
-                    start_row = start_xy[1]-1
-                    start_col = column_index_from_string(start_xy[0])-1
-
-                    end_xy = coordinate_from_string(cell[1])
-                    end_row = end_xy[1]-1
-                    end_col = column_index_from_string(end_xy[1])-1
-                    # Add hot table cell range [startrow,startcol,endrow,endcol]
-                    sec_def['ht_cell_range'] = [start_row, start_col, end_row, end_col]
-                    sec_def['excel_cell_range'] = cell
+                    # cell = sec['cell_id'].split(':') # split it as we might have merged cells represented as A1:V10
+                    # start_xy = coordinate_from_string(cell[0])
+                    # # note that openpyxls util provides visual coordinates, but array elements starts with 0
+                    # start_row = start_xy[1]-1
+                    # start_col = column_index_from_string(start_xy[0])-1
+                    #
+                    # end_xy = coordinate_from_string(cell[1])
+                    # end_row = end_xy[1]-1
+                    # end_col = column_index_from_string(end_xy[1])-1
+                    # # Add hot table cell range [startrow,startcol,endrow,endcol]
+                    # sec_def['ht_cell_range'] = [start_row, start_col, end_row, end_col]
+                    # sec_def['excel_cell_range'] = cell
 
                     section_details.append(sec_def)
 
@@ -468,6 +474,13 @@ class FreeFormatReportController(Resource):
                                             'agg_ref': agg_ref,
                                             }
 
+                app.logger.info("Creating entries for sections")
+                for sec in sheet['sections']:
+                    row = sec['ht_range'][0]+1
+                    col = get_column_letter(sec['ht_range'][1]+1)
+                    self.db.transact(('insert into {}(report_id,sheet_id,cell_id,col_id,row_id,cell_render_def,cell_calc_ref) '+\
+                                'values(%s,%s,%s,%s,%s,%s,%s)').format(def_object,),
+                                (self.report_id, sheet['sheet'], sec['range'], col, row, 'SECTION_DEF', json.dumps(sec)))
                 # if sheet_index==1 :
                 #     app.logger.info("Merged cell data {} {} {}".format(sheet_index, merged_cell,sheet))
 
@@ -510,3 +523,76 @@ class FreeFormatReportController(Resource):
             app.logger.error(str(e))
             raise
             # return {"msg": str(e)}, 500
+
+    def create_DAG(self,sections):
+        try:
+            self.DAG.reset_graph()
+            # Sec dependency will be a list of sections like:
+            # {section_id:'section id', section_position:[list of parent section_id], .....}
+            # app.logger.info("sections: {}".format(sections,))
+            for sec in sections:
+                # Create the node for the section
+                # app.logger.info("Creating node for {}, {}".format(sec['section_id'],sec))
+                self.DAG.add_node(str(sec['section_id']))
+
+            for sec in sections:
+                # Now add dependencies
+                # app.logger.info("Creating dependencies for {}".format(sec['section_position']))
+                for dep in sec['section_position']:
+                    self.DAG.add_edge(str(dep), str(sec['section_id']))
+        except Exception as e:
+            app.logger.error(str(e))
+            raise(e)
+
+    def validate_sec_dependency(self,sections):
+        try:
+            self.create_DAG(sections);
+
+            while len(sections):
+                self.DAG.reset_graph()
+                self.create_DAG(sections)
+                new_sections = []
+                for node in self.DAG.ind_nodes():
+                    app.logger.info("ind_node section [{}] {}".format(node,len(sections)))
+                for sec in sections:
+                    for node in self.DAG.ind_nodes():
+                        if node in sec['section_position']:
+                            sec['section_position'].remove(node)
+                    if sec['section_id'] not in self.DAG.ind_nodes():
+                        new_sections.append(sec)
+                    # app.logger.info("New sections {}".format(new_sections))
+
+                sections = new_sections
+
+            return {"msg": "Sections validated successfully", "donotUseMiddleWare": True}, 200
+        except Exception as e:
+            app.logger.error(str(e))
+            return {"msg": "Invalid sections definition detected (possible reasons: use of cyclic reference, invalid section refernce etc), please check!" + str(e) ,
+                    "donotUseMiddleWare": True}, 400
+
+    def traverse_DAG_nodes(self,sections):
+        try:
+            while len(sections):
+                self.DAG.reset_graph()
+                self.create_DAG(sections)
+                new_sections = []
+                for node in self.DAG.ind_nodes():
+                    app.logger.info("ind_node section [{}] {}".format(node,len(sections)))
+                    # Do sec data population for the report json
+                # Once the independent node action complete, refresh the DAG with remaining nodes
+                # so that appropriate actions can be taken for respective nodes
+                for sec in sections:
+                    for node in self.DAG.ind_nodes():
+                        if node in sec['section_position']:
+                            sec['section_position'].remove(node)
+                    if sec['section_id'] not in self.DAG.ind_nodes():
+                        new_sections.append(sec)
+                    # app.logger.info("New sections {}".format(new_sections))
+
+                sections = new_sections
+
+            # return {"msg": "Sections validated successfully", "donotUseMiddleWare": True}, 200
+        except Exception as e:
+            app.logger.error(str(e))
+            # return {"msg": "Invalid sections definition detected (possible reasons: use of cyclic reference, invalid section refernce etc), please check!" + str(e) ,
+            #         "donotUseMiddleWare": True}, 400

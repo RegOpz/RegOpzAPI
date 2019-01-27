@@ -26,6 +26,7 @@ from Controllers.ManageMasterBusinessRulesController import ManageMasterBusiness
 from Controllers.ManageMasterReportController import ManageMasterReportController
 from Controllers.OperationalLogController import OperationalLogController
 from Controllers.PasswordRecoveryController import PasswordRecoveryController
+from Controllers.JobController import JobController
 from flask_cors import CORS, cross_origin
 
 api.add_resource(Info, apiPath + "/info")
@@ -449,6 +450,31 @@ api.add_resource(FreeFormatReportController,
 api.add_resource(FreeFormatReportController,
     apiPath + "/free-format-report/report/<string:report_id>",
     endpoint = "view_free_formt_report_ep"
+)
+
+api.add_resource(FreeFormatReportController,
+    apiPath + "/free-format-report/validate-section",
+    endpoint = "validate_section_free_formt_report_ep"
+)
+
+api.add_resource(JobController,
+    apiPath + "/pipeline/run-job",
+    endpoint="run_job_ep"
+)
+
+api.add_resource(JobController,
+    apiPath + "/pipeline/restart-job",
+    endpoint="restart_job_ep"
+)
+
+api.add_resource(JobController,
+    apiPath+"/pipeline/get-job-parameter",
+    endpoint="get_job_parameter_ep"
+)
+
+api.add_resource(JobController,
+    apiPath+"/pipeline/get-task-input",
+    endpoint="get_task_input_ep"
 )
 
 if __name__ == '__main__':
