@@ -8,8 +8,12 @@ import json
 from Helpers.utils import autheticateTenant
 from Helpers.authenticate import *
 import pandas as pd
+from Constants.Status import *
+import os
+import uuid
+from werkzeug.utils import secure_filename
 
-UPLOAD_FOLDER='.'
+UPLOAD_FOLDER='./uploads/templates'
 
 class FFCaptureTemplateController(Resource):
     def __init__(self):
@@ -21,12 +25,61 @@ class FFCaptureTemplateController(Resource):
             self.db=DatabaseHelper(self.tenant_info)
 
     def post(self, report_id=None):
-        self.report_id = report_id
-        self.db_object_suffix = request.args.get('domain_type')
-        report_data = request.get_json(force=True)
-        return self.save_hot_table_report_template(report_data)
+        if request.endpoint=="capture_xls_template_ep":
+            #app.logger.info(request)
+            if 'file' not in request.files:
+                return NO_FILE_SELECTED
 
-    def extract_content_type(val):
+            self.report_id = request.form.get('report_id')
+            self.report_type = request.form.get('report_type').upper()
+            self.country = request.form.get('country').upper()
+            self.report_description = request.form.get('report_description')
+            self.db_object_suffix = request.form.get('domain_type')
+
+            if self.report_id == None or self.report_id == "":
+                return REPORT_ID_EMPTY
+
+            if self.country == None or self.country == "":
+                return COUNTRY_EMPTY
+
+            file = request.files['file']
+            self.selected_file = file.filename
+            filename = str(uuid.uuid4()) + "_" + secure_filename(file.filename)
+            file.save(os.path.join(UPLOAD_FOLDER, filename))
+
+            res = self.insert_report_def_catalog()
+            if res:
+                return self.load_report_template(filename)
+            else:
+                return res
+
+        if request.endpoint=="capture_hot_template_ep":
+            self.report_id = report_id
+            self.db_object_suffix = request.args.get('domain_type')
+            report_data = request.get_json(force=True)
+            return self.save_hot_table_report_template(report_data)
+
+    def insert_report_def_catalog(self):
+        app.logger.info("Creating entry for report catalog")
+        try:
+            catalog_object = "report_def_catalog"
+            if self.db_object_suffix:
+                catalog_object += "_" + self.db_object_suffix
+            app.logger.info("Checking if report {} for country {} already exists in catalog".format(self.report_id,self.country))
+            count = self.db.query("select count(*) as count from {} where report_id=%s and country=%s".format(catalog_object,),\
+                                (self.report_id,self.country,)).fetchone()
+            app.logger.info("Creating catalog entry for country {} and report {}".format(self.country,self.report_id))
+            if not count['count']:
+                res = self.db.transact("insert into {}(report_id,report_type,country,report_description) values(%s,%s,%s,%s)".format(catalog_object,),\
+                        (self.report_id,self.report_type,self.country,self.report_description,))
+                # self.db.commit()
+                return res
+            return 1
+        except Exception as e:
+            app.logger.error(str(e))
+            return {"msg":str(e)},500
+
+    def extract_content_type(self,val):
         if not val:
             return '', 'BLANK'
         return val, 'STATIC_TEXT'
@@ -44,16 +97,12 @@ class FFCaptureTemplateController(Resource):
                 ref_object += "_" + self.db_object_suffix
                 sec_object += "_" + self.db_object_suffix
 
-            ref_columns = self.db.query("select * from {} limit 1".format(ref_object)).description
-            def_columns = self.db.query("select * from {} limit 1".format(def_object)).description
-            #sec_columns = self.db.query("select * from {} limit 1").format(sec_object).description
-
-            ref_df = pd.DataFrame(columns=[i[0] for i in ref_columns])
-            def_df = pd.DataFrame(columns=[i[0] for i in def_columns])
+            ref_df = pd.DataFrame()
+            def_df = pd.DataFrame()
 
             target_dir = UPLOAD_FOLDER + "/"
             app.logger.info("Loading {} file from {} directory".format(template_file_name, target_dir))
-            wb = xls.load_workbook(target_dir + template_file_name,read_only=True)
+            wb = xls.load_workbook(target_dir + template_file_name)
 
             sheet_index = 0
             for sheet in wb.worksheets:
@@ -96,6 +145,7 @@ class FFCaptureTemplateController(Resource):
                         row = cell_idx.row
                         col = str(cell_idx.column)
 
+                        is_merged_cell=False
                         if cell in merged_cell.keys():
                             cell_id = merged_cell[cell]['cell_rng']
                             start_cell=merged_cell[cell]['start_cell']
@@ -104,19 +154,20 @@ class FFCaptureTemplateController(Resource):
                             cell_id = cell
                             start_cell=cell
 
+
                         try :
                             idx=cell_added.index(cell_id)
                         except ValueError:
                             ref+=1
                             cell_ref='S'+str(sheet_index)+'{:04d}'.format(ref)
                             content,content_type=self.extract_content_type(cell_idx.value)
-                            ref_df=ref_df.append({'report_id':self.report_id,'sheet_id':sheet['sheet'],'cell_id':cell_id,
+                            ref_df=ref_df.append({'report_id':self.report_id,'sheet_id':sheet.title,'cell_id':cell_id,
                                            'col_id':col,'row_id':row,'cell_type':'MERGED' if is_merged_cell else 'SINGLE',
                                            'cell_ref':cell_ref,'section_id':None,'section_type':None,},ignore_index=True)
-                            def_df=def_df.append({'report_id':self.report_id,'sheet_id':sheet['sheet'],'entity_type':'CELL',
+                            def_df=def_df.append({'report_id':self.report_id,'sheet_id':sheet.title,'entity_type':'CELL',
                                                   'entity_ref':cell_ref,'content_type':content_type,'content':content},ignore_index=True)
                             cell_style = util.get_css_style_from_openpyxl(cell_idx)
-                            def_df=def_df.append({'report_id':self.report_id,'sheet_id':sheet['sheet'],'entity_type':'CELL',\
+                            def_df=def_df.append({'report_id':self.report_id,'sheet_id':sheet.title,'entity_type':'CELL',\
                                                   'entity_ref':cell_ref,'content_type':'CELL_STYLE','content':json.dumps(cell_style)},ignore_index=True)
                             cell_added.append(cell_id)
 
@@ -128,10 +179,10 @@ class FFCaptureTemplateController(Resource):
             def_df.fillna('',inplace=True)
             ref_df.fillna('',inplace=True)
 
-            self.db.transact("insert into {0}({1}) values({2})".format(def_object, ",".join(def_df.columns),",".join(['%s'] * len(def_df.columns))),
+            self.db.transactmany("insert into {0}({1}) values({2})".format(def_object, ",".join(def_df.columns),",".join(['%s'] * len(def_df.columns))),
                              list(def_df.itertuples(index=False, name=None)))
 
-            self.db.transact("insert into {0}({1}) values({2})".format(ref_object, ",".join(ref_df.columns),",".join(['%s'] * len(def_df.columns))),
+            self.db.transactmany("insert into {0}({1}) values({2})".format(ref_object, ",".join(ref_df.columns),",".join(['%s'] * len(ref_df.columns))),
                              list(ref_df.itertuples(index=False, name=None)))
 
             self.db.commit()
@@ -139,7 +190,8 @@ class FFCaptureTemplateController(Resource):
             return {"msg": "Report [" + self.report_id + "] template updates has been captured successfully "}, 200
         except Exception as e:
             app.logger.error(str(e))
-            return {"msg": str(e)}, 500
+            #return {"msg": str(e)}, 500
+            raise e
 
 
     def save_hot_table_report_template(self,report_data):
@@ -164,24 +216,21 @@ class FFCaptureTemplateController(Resource):
                 ref_object += "_" + self.db_object_suffix
                 sec_object += "_" + self.db_object_suffix
 
-            ref_columns=self.db.query("select * from {} limit 1".format(ref_object)).description
-            def_columns=self.db.query("select * from {} limit 1".format(def_object)).description
-            sec_columns=self.db.query("select * from {} limit 1").format(sec_object).description
-
-            ref_df=pd.DataFrame(columns=[i[0] for i in ref_columns])
-            def_df=pd.DataFrame(columns=[i[0] for i in def_columns])
+            ref_df=pd.DataFrame()
+            def_df=pd.DataFrame()
+            sec_df2 = pd.DataFrame()
 
             sheet_index =0
             for sheet in report_data:
                 #{"ht_range": [0, 0, 0, 1], "range": "A1:B1", "section_id": "s1", "section_position": [], "section_type": "FIXEDFORMAT"}
                 sec_df=[]
-                sec_df2=pd.DataFrame(columns=[i[0] for i in sec_columns])
                 for sec in sheet['sections']:
-                    sec_df.append({'section_id':sec['secction_id'],'section_type':sec['section_type'],'start_row':sec['ht_range'][0],
+                    #print(sec)
+                    sec_df.append({'section_id':sec['section_id'],'section_type':sec['section_type'],'start_row':sec['ht_range'][0],
                                 'start_col':sec['ht_range'][1],'end_row':sec['ht_range'][2],'end_col':sec['ht_range'][3]})
-                    sec_df2.append({'report_id':self.report_id ,'sheet_id':sheet['sheet'],'section_id':sec['section_id'] ,
-                                    'section_range':sec['range'],'section_ht_range':",".join(sec['ht_range']),
-                                    'section_depenendency':",".join(sec['section_position']),'section_type':sec['section_type']},ignore_index=True)
+                    sec_df2=sec_df2.append({'report_id':self.report_id ,'sheet_id':sheet['sheet'],'section_id':sec['section_id'] ,
+                                    'section_range':sec['range'],'section_ht_range':",".join(map(str,sec['ht_range'])),
+                                    'section_dependency':",".join(sec['section_position']),'section_type':sec['section_type']},ignore_index=True)
 
                 merged_cell = {}
                 for rng in sheet['mergedCells']:
@@ -192,8 +241,8 @@ class FFCaptureTemplateController(Resource):
                     start_row = rng['row'] + 1
                     start_col = get_column_letter(rng['col'] + 1)
 
-                    for r in range(rng['row']+1,rng['row']+rng['rowspan']):
-                      for c in range(rng['col']+1,rng['col']+rng['colspan']):
+                    for r in range(rng['row']+1,rng['row']+rng['rowspan']+1):
+                      for c in range(rng['col']+1,rng['col']+rng['colspan']+1):
                           cell=get_column_letter(c)+str(r)
                           merged_cell[cell] = {'cell_rng': cell_rng,'start_cell':startcell}
 
@@ -219,7 +268,7 @@ class FFCaptureTemplateController(Resource):
                             idx=cell_added.index(cell_id)
                         except ValueError:
                             ref+=1
-                            cell_ref='S'+str(sheet_index)+'{:04d}'.format(ref)
+                            cell_ref='S'+'{:02d}'.format(sheet_index)+'{:04d}'.format(ref)
                             content,content_type=self.extract_content_type(val)
                             ref_df=ref_df.append({'report_id':self.report_id,'sheet_id':sheet['sheet'],'cell_id':cell_id,
                                            'col_id':col,'row_id':row,'cell_type':'MERGED' if is_merged_cell else 'SINGLE',
@@ -234,16 +283,16 @@ class FFCaptureTemplateController(Resource):
 
 
 
-                        app.logger.info("Creating entries for row height")
-                        for row in sheet['rowHeights'].keys():
-                            def_df = def_df.append({'report_id': self.report_id, 'sheet_id': sheet['sheet'], 'entity_type': 'ROW',\
-                        'entity_ref':str(row),'content_type':'ROW_HEIGHT', 'content': str(sheet['rowHeights'][str(row)])}, ignore_index = True)
+                app.logger.info("Creating entries for row height")
+                for row in sheet['rowHeights'].keys():
+                    def_df = def_df.append({'report_id': self.report_id, 'sheet_id': sheet['sheet'], 'entity_type': 'ROW',\
+                'entity_ref':str(row),'content_type':'ROW_HEIGHT', 'content': str(sheet['rowHeights'][str(row)])}, ignore_index = True)
 
-                        app.logger.info("Creating entries for column width")
-                        for col in sheet['colWidths'].keys():
-                            def_df = def_df.append(
-                                {'report_id': self.report_id, 'sheet_id': sheet['sheet'], 'entity_type': 'COL','entity_ref': str(row), 'content_type': 'COLUMN_WIDTH',\
-                                 'content': str(sheet['colWidths'][col]/8)}, ignore_index=True)
+                app.logger.info("Creating entries for column width")
+                for col in sheet['colWidths'].keys():
+                    def_df = def_df.append(
+                        {'report_id': self.report_id, 'sheet_id': sheet['sheet'], 'entity_type': 'COL','entity_ref': str(col), 'content_type': 'COLUMN_WIDTH',\
+                         'content': str(sheet['colWidths'][col]/8)}, ignore_index=True)
 
 
             app.logger.info("Deleting definition entries for report {}".format(self.report_id, ))
@@ -251,12 +300,12 @@ class FFCaptureTemplateController(Resource):
             self.db.transact('delete from {} where report_id=%s'.format(ref_object), (self.report_id,))
             self.db.transact('delete from {} where report_id=%s'.format(sec_object), (self.report_id,))
 
-            self.db.transact("insert into {0}({1}) values({2})".format(def_object,",".join(def_df.columns),
+            self.db.transactmany("insert into {0}({1}) values({2})".format(def_object,",".join(def_df.columns),
                              ",".join(['%s'] * len(def_df.columns))),list(def_df.itertuples(index=False, name=None)))
 
-            self.db.transact("insert into {0}({1}) values({2})".format(ref_object, ",".join(ref_df.columns),
-                            ",".join(['%s'] * len(def_df.columns))),list(ref_df.itertuples(index=False, name=None)))
-            self.db.transact("insert into {0}({1}) values({2})".format(sec_object,",".join(sec_df2.columns),
+            self.db.transactmany("insert into {0}({1}) values({2})".format(ref_object, ",".join(ref_df.columns),
+                            ",".join(['%s'] * len(ref_df.columns))),list(ref_df.itertuples(index=False, name=None)))
+            self.db.transactmany("insert into {0}({1}) values({2})".format(sec_object,",".join(sec_df2.columns),
                             ",".join(['%s'] * len(sec_df2.columns))),list(sec_df2.itertuples(index=False, name=None)))
             self.db.commit()
 

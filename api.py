@@ -27,6 +27,8 @@ from Controllers.ManageMasterReportController import ManageMasterReportControlle
 from Controllers.OperationalLogController import OperationalLogController
 from Controllers.PasswordRecoveryController import PasswordRecoveryController
 from Controllers.JobController import JobController
+from Controllers.FFCaptureTemplateController import FFCaptureTemplateController
+from Controllers.FFRenderController import FFRenderController
 from flask_cors import CORS, cross_origin
 
 api.add_resource(Info, apiPath + "/info")
@@ -443,14 +445,21 @@ api.add_resource(PasswordRecoveryController,
     endpoint = "save_password_policy_ep"
 )
 
-api.add_resource(FreeFormatReportController,
-    apiPath + "/free-format-report"
+api.add_resource(FFCaptureTemplateController,
+    apiPath + "/free-format-report/capture-template-xls",
+    endpoint="capture_xls_template_ep"
 )
 
-api.add_resource(FreeFormatReportController,
-    apiPath + "/free-format-report/report/<string:report_id>",
-    endpoint = "view_free_formt_report_ep"
+api.add_resource(FFCaptureTemplateController,
+    apiPath + "/free-format-report/capture-template-hot/<string:report_id>",
+    endpoint="capture_hot_template_ep"
 )
+
+api.add_resource(FFRenderController,
+    apiPath + "/free-format-report/report/<string:report_id>",
+    endpoint="view_free_formt_report_ep"
+)
+
 
 api.add_resource(FreeFormatReportController,
     apiPath + "/free-format-report/validate-section",

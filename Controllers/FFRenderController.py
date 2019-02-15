@@ -36,16 +36,27 @@ class FFRenderController(Resource):
             self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
             self.db=DatabaseHelper(self.tenant_info)
 
+    def get(self,report_id=None):
+        if request.endpoint == 'view_free_formt_report_ep':
+            self.report_id = report_id
+            self.db_object_suffix= request.args.get('domain_type')
+            reporting_date = request.args.get('reporting_date')
+            version = request.args.get('version')
+            report_parameters = request.args.get('report_parameters')
+            report_snapshot = request.args.get('report_snapshot')
+            # print(reporting_date)
+            if not reporting_date:
+                return self.render_template_json()
+
+
 
     def render_template_json(self):
 
         app.logger.info("Rendering free format report")
         try:
-            app.logger.info("Getting list of sheet for report {0} version {1}".format(self.report_id))
-
             def_object = "report_free_format_def"
             ref_object="report_free_format_ref"
-            sec_object="report_free_fromat_section"
+            sec_object="report_free_format_section"
 
             if self.db_object_suffix:
                 def_object += "_" + self.db_object_suffix
@@ -53,14 +64,14 @@ class FFRenderController(Resource):
                 sec_object+="_"+ self.db_object_suffix
 
             template_df = pd.DataFrame(self.db.query("select a.report_id,a.sheet_id,a.cell_id,a.col_id,a.row_id,a.cell_type,a.cell_ref,\
-                                    b.entity_type,b.entity_ref,b.content_type,b.content from {1} a,\
-                                    {2} b where a.report_id=%s and a.sheet_id=%s and a.report_id=b.report_id\
-                                    and a.sheet_id=b.sheet_id and a.cell_ref=b.entity_ref".format(ref_object,def_object)).fetchall())
+                                    b.entity_type,b.entity_ref,b.content_type,b.content from {0} a,\
+                                    {1} b where a.report_id=%sand a.report_id=b.report_id\
+                                    and a.sheet_id=b.sheet_id and a.cell_ref=b.entity_ref".format(ref_object,def_object),(self.report_id,)).fetchall())
             hw_df=pd.DataFrame(self.db.query("select report_id,sheet_id,entity_type,entity_ref,content_type,content from {}\
-                                     where report_id=%s and sheet_id=%s and ((entity_type='ROW'and content_type='ROW_HEIGHT')\
-                                    or (entity_type='COL' and content_type='COLUMN_WIDTH')".format(def_object),(self.report_id,)).fetchall())
+                                     where report_id=%s and ((entity_type='ROW'and content_type='ROW_HEIGHT')\
+                                    or (entity_type='COL' and content_type='COLUMN_WIDTH'))".format(def_object),(self.report_id,)).fetchall())
             sec_df=pd.DataFrame(self.db.query("select sheet_id,section_id,section_type,section_range,section_ht_range,section_dependency\
-                                     from {} where report_id=%s",(self.report_id,)))
+                                     from {} where report_id=%s".format(sec_object),(self.report_id,)).fetchall())
 
             sheet_content=[]
             for sheet in template_df['sheet_id'].unique():
@@ -87,7 +98,11 @@ class FFRenderController(Resource):
                     else:
                         col_widths[column_index_from_string(col['entity_ref']) - 1] = int(float(col['content']) * 8)
 
-                sec_attr=sec_df.loc[sec_df['sheet_id']==sheet].to_dict('records')
+                if not sec_df.empty:
+                    sec_attr=sec_df.loc[sec_df['sheet_id']==sheet].to_dict('records')
+                else:
+                    sec_attr={}
+
                 section_details=[]
                 # {"ht_range": [0, 0, 0, 1], "range": "A1:B1", "section_id": "s1", "section_position": [], "section_type": "FIXEDFORMAT"}
                 for sec in sec_attr:
@@ -122,8 +137,8 @@ class FFRenderController(Resource):
                         start_col=column_index_from_string(start_xy[0]) - 1
 
                     if t['content_type'] in ('BLANK','DATA',''):
-                        data[start_row][start_col] = ''
-                    elif t['conent_type']=='STATIC_TEXT':
+                        data[start_row][start_col] = None
+                    elif t['content_type']=='STATIC_TEXT':
                         data[start_row][start_col]=t['content']
                     elif t['content_type'] == 'CELL_STYLE':
                         td_style = json.loads(t['content'])
@@ -132,7 +147,7 @@ class FFRenderController(Resource):
                         sheet_styles['td_styles'].append({'row': start_row, 'col': start_col, 'class_name': td_class_name['classes']})
 
                 sheet_d = {}
-                sheet_d['sheet'] = sheet['sheet_id']
+                sheet_d['sheet'] = sheet
                 sheet_d['sheet_styles'] = sheet_styles
                 sheet_d['row_heights'] = row_heights
                 sheet_d['col_widths'] = col_widths
