@@ -315,3 +315,27 @@ class FFCaptureTemplateController(Resource):
             raise e
             # return {"msg": str(e)}, 500
 
+    def update_content_type(self,data,db=None,content_type=None,check_before_update=True):
+        app.logger.info("Updating content type for {}".format(data,))
+        if not db:
+            return true
+        # Get the rule record to obtain report_id, sheet_id and cell_id for the rule in concern
+        sql = "select * from {0} where id={1}".format(data['table_name'],data['id'])
+        rule = db.query(sql).fetchone()
+        if check_before_update:
+            # Now check whether there is any existing valid rule for the cell_id
+            sql = ("select cell_id from report_calc_def where report_id='{0}' and sheet_id='{1}' and cell_id='{2}' and in_use='Y' " + \
+                " union " + \
+                "select cell_id from report_comp_agg_def where report_id='{0}' and sheet_id='{1}' and cell_id='{2}' and in_use='Y' " + \
+                "").format(rule['report_id'], rule['sheet_id'],rule['cell_id'])
+            rule_in_use = db.query(sql).fetchall()
+            # If no valid rule exits on the cell_id then mark it as BLANK cell
+            if not rule_in_use:
+                content_type = 'BLANK'
+
+        # Now that content type is decided, set the value in def table
+        app.logger.info("Updating content type for {0} {1} {2} {3}".format(content_type,rule['report_id'], rule['sheet_id'],rule['cell_id']))
+        sql = ("update report_free_format_def set content_type='{0}', content='' " + \
+            " where report_id='{1}' and sheet_id='{2}' and entity_ref='{3}'" + \
+            " and content_type in ('BLANK','DATA','STATIC_TEXT')").format(content_type,rule['report_id'], rule['sheet_id'],rule['cell_id'])
+        db.transact(sql)

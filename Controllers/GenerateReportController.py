@@ -224,8 +224,11 @@ class GenerateReportController(Resource):
                           from report_comp_agg_def WHERE report_id=%s AND in_use='Y'",(report_id,)).fetchall())
             car_version=self.db.query("select report_id,version,id_list from report_comp_agg_def_vers where report_id=%s\
                        and version=(select max(version) from report_comp_agg_def_vers where report_id=%s)",(report_id,report_id)).fetchone()
-            cardf['id']=cardf['id'].astype(dtype='int64',errors='ignore')
-            car_id_list=list(map(int,cardf['id'].tolist()))
+            if len(cardf.index) == 0:
+                 car_id_list = []
+            else:
+                cardf['id']=cardf['id'].astype(dtype='int64',errors='ignore')
+                car_id_list=list(map(int,cardf['id'].tolist()))
             car_id_list.sort()
             car_id_list_str=",".join(map(str,car_id_list))
 

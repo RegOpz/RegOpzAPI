@@ -4,6 +4,7 @@ from flask_restful import Resource
 from Helpers.DatabaseHelper import DatabaseHelper
 from Helpers.utils import autheticateTenant
 from Helpers.authenticate import *
+from Controllers.FFCaptureTemplateController import FFCaptureTemplateController
 import pandas as pd
 import json
 from datetime import datetime
@@ -20,6 +21,7 @@ class DefChangeController(Resource):
 
         self.db=DatabaseHelper(self.tenant_info)
         self.db_master=DatabaseHelper()
+        self.ffr=FFCaptureTemplateController()
 
 
     #@authenticate
@@ -435,10 +437,19 @@ class DefChangeController(Resource):
     def approve_dml(self,data,create_new_flag=True):
         try:
             app.logger.info("AuditDicision meta data approval dml")
+            report_template_tables = ['report_calc_def','report_comp_agg_def',
+                                      'report_free_format_ref','report_free_format_def',
+                                      ]
             if data["change_type"]=="INSERT":
                 self.update_approval_status(table_name=data["table_name"],id=data["id"],dml_allowed='Y',in_use='Y')
+                # Callback for maintain report template
+                if data['table_name'] in report_template_tables:
+                    self.ffr.update_content_type(data,db=self.db,content_type='DATA',check_before_update=False)
             elif data["change_type"]=="DELETE":
                 self.update_approval_status(table_name=data["table_name"], id=data["id"], dml_allowed='X',in_use='X')
+                # Callback for maintain report template
+                if data['table_name'] in report_template_tables:
+                    self.ffr.update_content_type(data,db=self.db,content_type='DATA',check_before_update=True)
             elif data["change_type"] == "UPDATE":
                 if create_new_flag:
                     self.update_approval_status(table_name=data["table_name"], id=data["prev_id"], dml_allowed='X',in_use='X')

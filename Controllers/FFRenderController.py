@@ -68,8 +68,8 @@ class FFRenderController(Resource):
                                     {1} b where a.report_id=%sand a.report_id=b.report_id\
                                     and a.sheet_id=b.sheet_id and a.cell_ref=b.entity_ref".format(ref_object,def_object),(self.report_id,)).fetchall())
             hw_df=pd.DataFrame(self.db.query("select report_id,sheet_id,entity_type,entity_ref,content_type,content from {}\
-                                     where report_id=%s and ((entity_type='ROW'and content_type='ROW_HEIGHT')\
-                                    or (entity_type='COL' and content_type='COLUMN_WIDTH'))".format(def_object),(self.report_id,)).fetchall())
+                                     where report_id=%s and entity_type in ('ROW','COL') and content_type in ('ROW_HEIGHT','COLUMN_WIDTH')\
+                                    ".format(def_object),(self.report_id,)).fetchall())
             sec_df=pd.DataFrame(self.db.query("select sheet_id,section_id,section_type,section_range,section_ht_range,section_dependency\
                                      from {} where report_id=%s".format(sec_object),(self.report_id,)).fetchall())
 
@@ -106,13 +106,19 @@ class FFRenderController(Resource):
                 section_details=[]
                 # {"ht_range": [0, 0, 0, 1], "range": "A1:B1", "section_id": "s1", "section_position": [], "section_type": "FIXEDFORMAT"}
                 for sec in sec_attr:
-                    section_details.append({'ht_range':sec['section_ht_range'].split(','),'range':sec['section_range'],'section_id':sec['section_id'],
-                           'section_position':sec['section_dependency'].split(','),'section_type':sec['section_type']})
+                    section_details.append({
+                        'ht_range':json.loads("["+sec['section_ht_range']+"]"), # To convert string into array of numbers
+                        'range':sec['section_range'],
+                        'section_id':sec['section_id'],
+                        'section_position':[] if sec['section_dependency']=='' else sec['section_dependency'].split(','),
+                        'section_type':sec['section_type']
+                        })
 
 
 
 
                 data=[[None]*len(col_attr) for row in range(len(row_attr))]
+                cell_refs=[[None]*len(col_attr) for row in range(len(row_attr))]
                 merged_cells=[]
                 sheet_styles = {'style_classes': {}, 'td_styles': []}
 
@@ -136,6 +142,8 @@ class FFRenderController(Resource):
                         start_row=start_xy[1]-1
                         start_col=column_index_from_string(start_xy[0]) - 1
 
+                    # Get the reference for the cell
+                    cell_refs[start_row][start_col] = t['cell_ref']
                     if t['content_type'] in ('BLANK','DATA',''):
                         data[start_row][start_col] = None
                     elif t['content_type']=='STATIC_TEXT':
@@ -152,6 +160,7 @@ class FFRenderController(Resource):
                 sheet_d['row_heights'] = row_heights
                 sheet_d['col_widths'] = col_widths
                 sheet_d['data'] = data
+                sheet_d['cell_refs'] = cell_refs
                 sheet_d['merged_cells'] = merged_cells
                 sheet_d['sections'] = section_details
                 sheet_content.append(sheet_d)
@@ -161,15 +170,3 @@ class FFRenderController(Resource):
         except Exception as e:
             app.logger.error(str(e))
             raise
-
-
-
-
-
-
-
-
-
-
-
-
