@@ -318,7 +318,7 @@ class FFCaptureTemplateController(Resource):
     def update_content_type(self,data,db=None,content_type=None,check_before_update=True):
         app.logger.info("Updating content type for {}".format(data,))
         if not db:
-            return true
+            return True
         # Get the rule record to obtain report_id, sheet_id and cell_id for the rule in concern
         sql = "select * from {0} where id={1}".format(data['table_name'],data['id'])
         rule = db.query(sql).fetchone()
