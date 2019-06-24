@@ -11,6 +11,7 @@ from Helpers.utils import autheticateTenant
 from Helpers.authenticate import *
 import pandas as pd
 from Models.Token import Token
+from Controllers.FFRenderController import FFRenderController
 
 
 class ManageMasterReportController(Resource):
@@ -25,6 +26,7 @@ class ManageMasterReportController(Resource):
             self.tenant_db=DatabaseHelper(self.tenant_info)
             self.dcc_tenant=DefChangeController(tenant_info=self.tenant_info)
             self.user_id=Token().authenticate()
+        self.ffr = FFRenderController()
 
     def get(self,country=None, report_id=None):
         if request.endpoint == 'repository_drill_down_rule_ep':
@@ -203,96 +205,7 @@ class ManageMasterReportController(Resource):
         app.logger.info("Rendering repository report")
 
         try:
-            app.logger.info("Getting list of sheet for report {0}".format(self.report_id))
-            sheets = self.master_db.query("select distinct sheet_id from report_def_master where report_id=%s",
-                                   (self.report_id,)).fetchall()
-
-            sheet_d_list = []
-            for sheet in sheets:
-                matrix_list = []
-                row_attr = {}
-                col_attr = {}
-                cell_style = {}
-                app.logger.info("Getting report repository definition for report {0},sheet {1}".format(self.report_id,sheet["sheet_id"]))
-                report_template = self.master_db.query(
-                    "select cell_id,cell_render_def,cell_calc_ref from report_def_master where report_id=%s and sheet_id=%s",
-                    (self.report_id, sheet["sheet_id"])).fetchall()
-
-                app.logger.info("Writing report definition to dictionary")
-                for row in report_template:
-                    cell_d = {}
-                    if row["cell_render_def"] == 'STATIC_TEXT':
-                        cell_d['cell'] = row['cell_id']
-                        cell_d['value'] = row['cell_calc_ref']
-                        cell_d['origin'] = "TEMPLATE"
-                        matrix_list.append(cell_d)
-
-
-                    elif row['cell_render_def'] == 'MERGED_CELL':
-                        start_cell, end_cell = row['cell_id'].split(':')
-                        cell_d['cell'] = start_cell
-                        cell_d['value'] = row['cell_calc_ref']
-                        cell_d['merged'] = end_cell
-                        cell_d['origin'] = "TEMPLATE"
-                        matrix_list.append(cell_d)
-
-
-                    elif row['cell_render_def'] == 'ROW_HEIGHT':
-                        if row['cell_calc_ref'] == 'None':
-                            row_height = '12.5'
-                        else:
-                            row_height = row['cell_calc_ref']
-                        row_attr[row['cell_id']] = {'height': row_height}
-
-
-                    elif row['cell_render_def'] == 'COLUMN_WIDTH':
-                        if row['cell_calc_ref'] == 'None':
-                            col_width = '13.88'
-                        else:
-                            col_width = row['cell_calc_ref']
-                        col_attr[row['cell_id']] = {'width': col_width}
-
-                    elif row['cell_render_def'] == 'CELL_STYLE':
-                        if ':' in row['cell_id']:
-                            start_cell, end_cell = row['cell_id'].split(':')
-                        else:
-                            start_cell=row['cell_id']
-
-                        app.logger.info("Inside CELL_STYLE for cell {}".format(start_cell,))
-                        cell_style[start_cell] = eval(row['cell_calc_ref'])
-
-                comp_agg_def = self.master_db.query("select cell_id,cell_render_def,cell_calc_ref from report_def_master where \
-                report_id=%s and sheet_id=%s and cell_render_def='COMP_AGG_REF'",
-                                             (self.report_id, sheet["sheet_id"])).fetchall()
-
-                for row in comp_agg_def:
-                    cell_d = {}
-                    if ':' in row['cell_id']:
-                        start_cell, end_cell = row['cell_id'].split(':')
-                    else:
-                        start_cell=row['cell_id']
-
-                    current_cell_exists=next((item for item in matrix_list if item['cell']==start_cell),False)
-                    if not current_cell_exists:
-                        cell_d['cell'] = start_cell
-                        cell_d['value'] = '' #row['cell_calc_ref']
-                        cell_d['origin'] = "TEMPLATE"
-                        #print(cell_d)
-                        matrix_list.append(cell_d)
-
-                sheet_d = {}
-                sheet_d['sheet'] = sheet['sheet_id']
-                # print(sheet_d['sheet'])
-                sheet_d['matrix'] = matrix_list
-                sheet_d['row_attr'] = row_attr
-                sheet_d['col_attr'] = col_attr
-                sheet_d['cell_style'] = cell_style
-                sheet_d_list.append(sheet_d)
-
-
-            json_dump = (sheet_d_list)
-            # print(json_dump)
-            return json_dump
+            return self.ffr.render_template_json()
         except Exception as e:
             app.logger.error(e)
             return {"msg": e}, 500
@@ -312,9 +225,9 @@ class ManageMasterReportController(Resource):
             if comp_agg_rules:
                 formula = comp_agg_rules[0]['comp_agg_rule'].replace('.','')
                 app.logger.info("cell formula {}".format(formula,))
-                variables = list(set([node.id for node in ast.walk(ast.parse(formula)) if isinstance(node, ast.Name)]))
-                app.logger.info("cell variables {}".format(variables,))
-                cell_calc_ref_list = ','.join(variables)
+                # variables = list(set([node.id for node in ast.walk(ast.parse(formula)) if isinstance(node, ast.Name)]))
+                # app.logger.info("cell variables {}".format(variables,))
+                # cell_calc_ref_list = ','.join(variables)
 
             agg_rules=[]
 

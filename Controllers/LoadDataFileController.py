@@ -12,7 +12,10 @@ UPLOAD_FOLDER = './uploads/source-files'
 class LoadDataFileController(Resource):
     def post(self):
         file = request.files['data_file']
-        app.logger.info("Inside post of Loading data {}".format(file))
+        return self.save_file(file)
+
+    def save_file(self,file):
+        app.logger.info("Inside post of saving data file {}".format(file))
         selectedfilename = secure_filename(file.filename)
         if file:
             filename = str(uuid.uuid4()) + '_' +\

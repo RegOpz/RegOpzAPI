@@ -194,7 +194,7 @@ class ViewDataController(Resource):
 
                 qddata = self.db.query(sql).fetchone()
                 if qddata:
-                    qd_id_list = [(id,) for id in qddata['id_list'].split(',')]
+                    qd_id_list = [(-9999,)] if qddata['id_list']=='' or qddata['id_list'] == None else [(id,) for id in qddata['id_list'].split(',')]
                     if not filter or filter == 'null' or filter == 'undefined':
                         app.logger.info("Qualified data [{0}:{1}] in the version {2} is {3}".format(start_page,start_page+100,version,len(qd_id_list)))
                         if gridCount and gridCount != 'null' and gridCount != 'undefined':

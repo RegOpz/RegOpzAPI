@@ -40,6 +40,7 @@ class MaintainBusinessRulesController(Resource):
 			page = request.args.get('page')
 			business_date = request.args.get('business_date')
 			qualified_data_version = request.args.get('qualified_data_version')
+			self.origin = request.args.get('origin')
 			return self.get_business_rules_list_by_source(rules=rules,source=source,page=page
 														,business_date=business_date
 														,qualified_data_version=qualified_data_version)
@@ -144,6 +145,7 @@ class MaintainBusinessRulesController(Resource):
 		data_dict['count'] = count['count']
 		data_dict['table_name'] = 'business_rules'
 		data_dict['sql'] = sql + where_clause
+		data_dict['origin'] = self.origin
 
 		return data_dict
 

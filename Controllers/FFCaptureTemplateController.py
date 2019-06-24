@@ -215,6 +215,7 @@ class FFCaptureTemplateController(Resource):
                 def_object += "_" + self.db_object_suffix
                 ref_object += "_" + self.db_object_suffix
                 sec_object += "_" + self.db_object_suffix
+                self.db = self.db_master
 
             ref_df=pd.DataFrame()
             def_df=pd.DataFrame()

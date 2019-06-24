@@ -1,5 +1,6 @@
 from Helpers.DatabaseHelper import DatabaseHelper
 from datetime import datetime
+import json
 
 
 class Backend:
@@ -14,7 +15,7 @@ class Backend:
     def create_job_run(self,job_id,job_parameter):
         current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         row_id=self.db.transact("insert into job_log(job_id,job_start_time,job_parameter) values(%s,%s,%s)",(int(job_id),current_time,\
-                                                                                                             str(job_parameter)))
+                                                                                                             json.dumps(job_parameter)))
         self.db.commit()
         return row_id
 

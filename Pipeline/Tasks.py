@@ -1,9 +1,13 @@
 from .Backend import  Backend
 from multiprocessing import Pool
 from Controllers.GenerateReportController import GenerateReportController
+from Controllers.LoadDataController import LoadDataController
+from Controllers.ViewDataController import ViewDataController
 task_types = {
     'DummyTask': "Dummy Task",
-    'CreateReportTask':"Create Report"
+    'CreateReportTask':"Create Report",
+    'LoadData': 'Load Data',
+    'ApplyRules': 'Apply Business Rule',
 }
 
 class JobSignal:
@@ -151,6 +155,119 @@ class CreateReportTask(Task):
                                }
 
             msg,status_code=report.create_report(report_parameters)
+            status="SUCCESS" if status_code ==200 else "FAILURE"
+
+            self.backend.update_task_run(self.run_id, self.job_id, self.task_id, status,
+                                         msg["msg"], status_code)
+        except Exception as e:
+            self.backend.update_task_run(self.run_id, self.job_id, self.task_id, "FAILURE",
+                                         str(e), "403")
+            raise(e)
+
+
+
+    def output(self):
+        decision = self.runtime_parameters.get(self.task_id, True)
+        if not decision:
+            self.parent_job.terminate_scheduler(JobSignal.ABORT)
+            return decision
+
+        task_status=self.backend.get_task_status(self.run_id,self.job_id,self.task_id)
+        decision= True if task_status=="SUCCESS" else False
+
+        if not decision:
+            self.parent_job.terminate_scheduler(JobSignal.FAILURE)
+
+        return decision
+
+
+class LoadData(Task):
+    def inputs(self):
+        inp={"source_id":"number"}
+
+        return inp
+
+    def parameters(self):
+        param={
+                "business_date":"string",
+                "data_file": "string",
+                "selected_file":"string",
+                }
+        return param
+
+    def run(self):
+        try:
+            ldc=LoadDataController()
+
+            self.backend.create_task_run(self.run_id, self.job_id, self.task_id)
+            input = self.inputs()
+            for key in input:
+                if key not in self.input.keys():
+                    raise KeyError("%s not present in inputs" % key)
+
+            param = self.parameters()
+            for key in param:
+                if key not in self.runtime_parameters.keys():
+                    raise KeyError("%s not present in parameters" % key)
+
+            msg,status_code=ldc.load_data(self.input['source_id'],
+                                        self.runtime_parameters['data_file'],
+                                        self.runtime_parameters['business_date'],
+                                        self.runtime_parameters['selected_file'])
+            status="SUCCESS" if status_code ==200 else "FAILURE"
+
+            self.backend.update_task_run(self.run_id, self.job_id, self.task_id, status,
+                                         msg["msg"], status_code)
+        except Exception as e:
+            self.backend.update_task_run(self.run_id, self.job_id, self.task_id, "FAILURE",
+                                         str(e), "403")
+            raise(e)
+
+
+
+    def output(self):
+        decision = self.runtime_parameters.get(self.task_id, True)
+        if not decision:
+            self.parent_job.terminate_scheduler(JobSignal.ABORT)
+            return decision
+
+        task_status=self.backend.get_task_status(self.run_id,self.job_id,self.task_id)
+        decision= True if task_status=="SUCCESS" else False
+
+        if not decision:
+            self.parent_job.terminate_scheduler(JobSignal.FAILURE)
+
+        return decision
+
+class ApplyRules(Task):
+    def inputs(self):
+        inp={"source_id":"number"}
+
+        return inp
+
+    def parameters(self):
+        param={
+                "business_date":"string",
+                }
+        return param
+
+    def run(self):
+        try:
+            vdc=ViewDataController()
+
+            self.backend.create_task_run(self.run_id, self.job_id, self.task_id)
+            input = self.inputs()
+            for key in input:
+                if key not in self.input.keys():
+                    raise KeyError("%s not present in inputs" % key)
+
+            param = self.parameters()
+            for key in param:
+                if key not in self.runtime_parameters.keys():
+                    raise KeyError("%s not present in parameters" % key)
+
+            msg,status_code=vdc.run_rules_engine(self.input['source_id'],
+                                        self.runtime_parameters['business_date'])
             status="SUCCESS" if status_code ==200 else "FAILURE"
 
             self.backend.update_task_run(self.run_id, self.job_id, self.task_id, status,

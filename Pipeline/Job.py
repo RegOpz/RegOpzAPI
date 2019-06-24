@@ -4,6 +4,7 @@ from .Tasks import task_types,Task,JobSignal
 from queue import Queue
 from threading import Thread
 import time
+import json
 
 class TaskStatus:
     READY=4
@@ -176,22 +177,22 @@ class Job(DAG):
         task_types = self.list_task_types()
         if task['task_type'] not in task_types.keys():
             raise KeyError("Tasktype %s not defined" % task['task_type'])
-        task_inst =t.create_task(task['task_type'],str(task['task_id']),eval(task['task_input']),self)
-        self.task_list[str(task['task_id'])] = task_inst
-        self.add_node(str(task['task_id']))
-        self.set_task_status(str(task['task_id']),task_status)
+        task_inst =t.create_task(task['task_type'],str(task['id']),json.parse(task['task_input']),self)
+        self.task_list[str(task['id'])] = task_inst
+        self.add_node(str(task['id']))
+        self.set_task_status(str(task['id']),task_status)
 
     def add_dependency(self,task):
         if task['task_dependency']:
             dependencies = task['task_dependency'].split(',')
             for dep in dependencies:
-                self.add_edge(str(dep), str(task['task_id']))
+                self.add_edge(str(dep), str(task['id']))
 
 
     def restart_job(self,job_id,job_run_id,start_task_id,runtime_job_parameters=None):
         job_log = self.backend.get_job_log(job_id, job_run_id)
         if not runtime_job_parameters:
-            runtime_job_parameters=eval(job_log['job_parameter'])
+            runtime_job_parameters=json.parse(job_log['job_parameter'])
         self.job_parameters = runtime_job_parameters if runtime_job_parameters else {}
         self.recreate_job(job_id,job_run_id,start_task_id)
 
@@ -218,7 +219,7 @@ class Job(DAG):
         tasks = job_detail['tasks']
 
         for task in tasks:
-            idx=find(job_log,'task_id',task['task_id'])
+            idx=find(job_log,'task_id',task['id'])
 
 
             if idx<0:

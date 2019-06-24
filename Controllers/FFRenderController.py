@@ -87,6 +87,7 @@ class FFRenderController(Resource):
                 def_object += "_" + self.db_object_suffix
                 ref_object+="_" + self.db_object_suffix
                 sec_object+="_"+ self.db_object_suffix
+                self.db = self.db_master
 
             template_df = pd.DataFrame(self.db.query("select a.report_id,a.sheet_id,a.cell_id,a.col_id,a.row_id,a.cell_type,a.cell_ref,\
                                     b.entity_type,b.entity_ref,b.content_type,b.content from {0} a,\
