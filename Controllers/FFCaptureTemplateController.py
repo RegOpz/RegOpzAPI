@@ -296,7 +296,7 @@ class FFCaptureTemplateController(Resource):
 
 
             app.logger.info("Deleting definition entries for report {}".format(self.report_id, ))
-            self.db.transact('delete from {} where report_id=%s'.format(def_object, ),(self.report_id,))
+            self.db.transact('delete from {} where report_id=%s'.format(def_object),(self.report_id,))
             self.db.transact('delete from {} where report_id=%s'.format(ref_object), (self.report_id,))
             self.db.transact('delete from {} where report_id=%s'.format(sec_object), (self.report_id,))
 
@@ -309,7 +309,7 @@ class FFCaptureTemplateController(Resource):
                             ",".join(['%s'] * len(sec_df2.columns))),list(sec_df2.itertuples(index=False, name=None)))
             self.db.commit()
 
-            return {"msg": "Report [" + self.report_id + "] template updates has been captured successfully "}, 200
+            return {"msg": "Report [" + self.report_id + "] template updates has been captured successfully "},200
         except Exception as e:
             app.logger.error(str(e))
             raise e

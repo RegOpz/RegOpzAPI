@@ -42,12 +42,12 @@ class FFRenderController(Resource):
         if request.endpoint == 'view_free_formt_report_ep':
             self.report_id = report_id
             self.db_object_suffix= request.args.get('domain_type')
-            reporting_date = request.args.get('reporting_date')
-            version = request.args.get('version')
+            self.reporting_date = request.args.get('reporting_date')
+            self.version = request.args.get('version')
             report_parameters = request.args.get('report_parameters')
             report_snapshot = request.args.get('report_snapshot')
             # print(reporting_date)
-            if not reporting_date:
+            if not self.reporting_date:
                 return self.render_template_json()
 
     def get_position(self,this_section, other_section):
@@ -202,8 +202,8 @@ class FFRenderController(Resource):
                                                                                    sheet, section)).fetchall())
 
         ws = wb.create_worksheet(sheet + '-' + section)
-        section_params = \
-        sec_df.loc[(sec_df['sheet_id'] == sheet) & (sec_df['section_id'] == section)].to_dict(orient='record')[0]
+        ws_template=wb.create_worksheet(sheet+'-'+section+'-template')
+        section_params =sec_df.loc[(sec_df['sheet_id'] == sheet) & (sec_df['section_id'] == section)].to_dict(orient='record')[0]
         section_start_row, section_start_col, section_end_row, section_end_col = map(int, section_params[
             'section_ht_range'].split(','))
 
@@ -224,19 +224,27 @@ class FFRenderController(Resource):
                         start_col -= section_start_col
                         end_col -= section_end_col
                         ws.merge_cells(start_row=start_row, start_column=start_col, end_row=end_row, end_column=end_col)
+                        ws_template.merge_cells(start_row=start_row, start_column=start_col, end_row=end_row, end_column=end_col)
                     elif cell_template['cell_type'] == 'SINGLE':
                         start_row, start_col = coordinate_to_tuple(cell_template['cell_id'])
                         start_row -= section_start_row
                         start_col -= section_start_col
 
-                if cell_template['content_type'] == 'STATIC_TEXT':
-                    ws.cell(row=start_row, column=start_col).value = cell_template['content']
-                elif cell_template['content_type'] in ('', 'BLANK', 'DATA'):
-                    cell_data = data_df.loc[data_df['cell_id'] == cell_template['cell_ref']].to_dict(orient='record')
-                    if cell_data:
-                        ws.cell(row=start_row, column=start_col).value = cell_data[0]['cell_summary']
+                    for template in cell_template_lst:
+                        if template['content_type'] == 'STATIC_TEXT':
+                            ws.cell(row=start_row, column=start_col).value = template['content']
+                        elif template['content_type'] in ('', 'BLANK', 'DATA'):
+                            cell_data = data_df.loc[data_df['cell_id'] == template['cell_ref']].to_dict(orient='record')
+                            if cell_data:
+                                ws.cell(row=start_row, column=start_col).value = cell_data[0]['cell_summary']
+                        elif template['content_type']=='CELL_STYLE':
+                            td_style = json.loads(template['content'])
+                            row_height=hw_df.loc[(hw_df['sheet_id']==sheet)&(hw_df['entity_type']=='ROW')&(hw_df['entity_ref']==row+1) &(hw_df['content_type']=='ROW_HEIGHT')].reset_index().at[0,'content']
+                            col_width=hw_df.loc[(hw_df['sheet_id']==sheet)&(hw_df['entity_type']=='COL')&(hw_df['entity_ref']==get_column_letter(col+1)) &(hw_df['content_type']=='COLUMN_WIDTH')].reset_index().at[0,'content']
+                            t_content={'row_height':row_height,'col_width':col_width,'cell_ref':template['cell_ref'],'cell_style':td_style}
+                            ws_template.cell(row=start_row,column=start_col).value=json.dumps(t_content)
 
-    def copy_section_to_final(self,ws_dest, sec_start_pos, ws_source):
+    def copy_section_to_final(self,ws_dest, ws_dest_template,sec_start_pos, ws_source,ws_source_template):
         sec_start_row, sec_start_col = sec_start_pos
         merged_cells = ws_source.merged_cell_ranges
 
@@ -244,12 +252,16 @@ class FFRenderController(Resource):
             start_col, start_row, end_col, end_row = range_boundaries(cell_rng)
             ws_dest.merge_cells(start_row=start_row + sec_start_row, start_column=start_col + sec_start_col,
                                 end_row=end_row + sec_start_row, end_column=end_col + sec_start_col)
+            ws_dest_template.merge_cells(start_row=start_row + sec_start_row, start_column=start_col + sec_start_col,
+                                end_row=end_row + sec_start_row, end_column=end_col + sec_start_col)
 
         for row in ws_source.rows:
             for cell in row:
                 cell_row = cell.row
                 cell_col = column_index_from_string(cell.column)
                 ws_dest.cell(row=cell_row + sec_start_row, column=cell_col + sec_start_col).value = ws_source.cell(
+                    row=cell_row, column=cell_col).value()
+                ws_dest_template.cell(row=cell_row + sec_start_row, column=cell_col + sec_start_col).value = ws_source_template.cell(
                     row=cell_row, column=cell_col).value()
 
         return (ws_source.max_row + sec_start_row, column_index_from_string(ws_source.max_column) + sec_start_col)
@@ -289,7 +301,7 @@ class FFRenderController(Resource):
 
         return start_pos
 
-    def render_report_intermediate(self):
+    def render_report_intermediate(self,wb_data):
         app.logger.info("Rendering free format report to intermediate ")
         try:
             def_object = "report_free_format_def"
@@ -329,7 +341,6 @@ class FFRenderController(Resource):
 
 
             sheets=template_df['sheet_id'].unique()
-            wb_data=xls.Workbook()
             for sheet in sheets:
                 sections=sec_df.loc['sheet_id'==sheet]
 
@@ -344,20 +355,20 @@ class FFRenderController(Resource):
                 nodes_in_order=sheet_dep_graph.topological_sort()
 
                 for node in nodes_in_order:
-                    section_type=sections.loc[sections['section_id']==node].at[0,'section_type']
+                    section_type=sections.loc[sections['section_id']==node].reset_index().at[0,'section_type']
                     if section_type=='FIXEDFORMAT':
                         self.render_fixed_format_section(wb_data,sheet,node,sec_df,template_df,hw_df)
 
                 section_positioning=pd.DataFrame()
                 for node in nodes_in_order:
                     predecessors=sheet_dep_graph.predecessors(node)
-                    node_pos=sections.loc[sections['section_id']==node].at[0,'section_ht_range'].split(',')
+                    node_pos=sections.loc[sections['section_id']==node].reset_index().at[0,'section_ht_range'].split(',')
                     h_predecessors={}
                     v_predecessors={}
                     h_distance={}
                     v_distance={}
                     for prd in predecessors:
-                        prd_pos=sections.loc[sections['section_id']==prd].at[0,'section_ht_range'].split(',')
+                        prd_pos=sections.loc[sections['section_id']==prd].reset_index().at[0,'section_ht_range'].split(',')
                         h_pos,v_pos=self.get_position(node_pos,prd_pos)
                         if v_pos==V_INTERSECT and h_pos==LEFT:
                             h_predecessors[node]=prd_pos
@@ -371,16 +382,20 @@ class FFRenderController(Resource):
                                         'v_distance':v_distance,'start_pos':[],'end_pos':[]},ignore_index=True)
 
                 ws_dest=wb_data.create_sheet(sheet)
+                ws_dest_template=wb_data.create_sheet(sheet+'-template')
                 for node in nodes_in_order:
                     ws_source=wb_data[sheet+'-'+node]
+                    ws_source_template=wb_data[sheet+'-'+node+'-template']
                     start_pos=self.get_start_pos(node,sections,section_positioning)
-                    end_pos=self.copy_section_to_final(ws_dest,start_pos,ws_source)
-                    section_positioning.loc[section_positioning['section_id']==node].at[0,'start_pos']=start_pos
-                    section_positioning.loc[section_positioning['section_id'] == node].at[0, 'end_pos'] = end_pos
-                    #wb_data.remove(ws_source)
+                    end_pos=self.copy_section_to_final(ws_dest,ws_dest_template,start_pos,ws_source,ws_source_template)
+                    section_positioning.loc[section_positioning['section_id']==node,'start_pos']=start_pos
+                    section_positioning.loc[section_positioning['section_id'] == node,'end_pos']= end_pos
+                    wb_data.remove(ws_source)
+                    wb_data.remove(ws_source_template)
 
                 #empty_zones=self.create_empty_zone_list(ws_dest,section_positioning)
 
+             return wb_data
 
         except Exception as e:
             app.logger.error(str(e))
@@ -444,50 +459,81 @@ class FFRenderController(Resource):
                 previous_col=report_grid[row][col]
 
 
-
-
-
     def render_report_json(self):
 
         app.logger.info("Rendering free format report to web ")
         try:
-            def_object = "report_free_format_def"
-            ref_object = "report_free_format_ref"
-            sec_object = "report_free_format_section"
+            ff_summary_df=pd.DataFrame(self.db.query("select * from report_free_format_summary where report_id=%s and \
+            reporting_date=%s and version=%s",(self.report_id,self.reporting_date,self.version)).fetchall())
 
-            template_df = pd.DataFrame(self.db.query("select a.report_id,a.sheet_id,a.cell_id,a.col_id,a.row_id,a.cell_type,a.cell_ref,\
-                                       b.entity_type,b.entity_ref,b.content_type,b.content from {0} a,\
-                                       {1} b where a.report_id=%s and a.report_id=b.report_id\
-                                       and a.sheet_id=b.sheet_id and a.cell_ref=b.entity_ref".format(ref_object,
-                                                                                                     def_object),
-                                                     (self.report_id,)).fetchall())
-            hw_df = pd.DataFrame(self.db.query("select report_id,sheet_id,entity_type,entity_ref,content_type,content from {}\
-                                        where report_id=%s and entity_type in ('ROW','COL') and content_type in ('ROW_HEIGHT','COLUMN_WIDTH')\
-                                       ".format(def_object), (self.report_id,)).fetchall())
+            sheet_content = []
+            for sheet in ff_summary_df['sheet_id'].unique():
 
-            #Move this portion to create report code -Code Start
-            sec_df = pd.DataFrame(self.db.query("select sheet_id,section_id,section_type,section_range,section_ht_range,section_dependency\
-                                        from {} where report_id=%s".format(sec_object), (self.report_id,)).fetchall())
+                # Get row heights
+                row_attr = ff_summary_df.loc[(ff_summary_df['sheet_id'] == sheet) & (ff_summary_df['entity_type'] == 'ROW') & (
+                ff_summary_df['cell_type'] == 'ROW_HEIGHT')].to_dict('records')
+                row_heights = [None] * len(row_attr)
+                for row in row_attr:
+                    row_heights[int(row['entity_id']) - 1] = int(float(row['content']))
 
-            section_dependency=self.create_section_dependency(sec_df)
+                # Get column widths
+                col_attr = ff_summary_df.loc[(ff_summary_df['sheet_id'] == sheet) & (ff_summary_df['entity_type'] == 'COL') & (
+                ff_summary_df['cell_type'] == 'COLUMN_WIDTH')].to_dict('records')
+                col_widths = [None] * len(col_attr)
+                for col in col_attr:
+                    col_widths[column_index_from_string(col['entity_id']) - 1] = int(float(col['content']))*8
 
-            for sec in section_dependency:
-                self.db.execute("update {} set section_depenedency=%s where report_id=%s and sheet_id=%s and section_id=%s".format(sec_object),
-                                (sec['section_dependency'],self.report_id,sec['sheet_id'],sec['section_id']))
+                data = [[None] * len(col_attr) for row in range(len(row_attr))]
+                cell_refs = [[None] * len(col_attr) for row in range(len(row_attr))]
+                merged_cells = []
+                sheet_styles = {'style_classes': {}, 'td_styles': []}
 
-            self.db.commit
+                ff_summary = ff_summary_df[(ff_summary_df['sheet_id'] == sheet)&(ff_summary_df['entity_type'] == 'CELL')].to_dict('records')
 
-            # Move this portion to create report code - Code End
+                for t in ff_summary:
 
-            sec_df = pd.DataFrame(self.db.query("select sheet_id,section_id,section_type,section_range,section_ht_range,section_dependency\
-                                                    from {} where report_id=%s".format(sec_object),
-                                                (self.report_id,)).fetchall())
+                    if t['cell_type'] == 'MERGED':
+                        cell = t['entity_id'].split(':')
+                        start_xy = coordinate_from_string(cell[0])
+                        # note that openpyxls util provides visual coordinates, but array elements starts with 0
+                        start_row = start_xy[1] - 1
+                        start_col = column_index_from_string(start_xy[0]) - 1
+                        end_xy = coordinate_from_string(cell[1])
+                        end_row = end_xy[1] - 1
+                        end_col = column_index_from_string(end_xy[0]) - 1
+                        merged_cells.append({'row': start_row, 'col': start_col, 'rowspan': end_row - start_row + 1,
+                                             'colspan': end_col - start_col + 1})
 
+                    elif t['cell_type'] == 'SINGLE':
+                        start_xy = coordinate_from_string(t['entity_id'])
+                        start_row = start_xy[1] - 1
+                        start_col = column_index_from_string(start_xy[0]) - 1
 
+                    # Get the reference for the cell
+                    cell_refs[start_row][start_col] = t['cell_ref']
+                    data[start_row][start_col]=t['content']
+                    td_style = json.loads(t['cell_syle'])
+                    td_class_name = {'classes': ''}
+                    util.process_td_class_names(td_style, td_class_name, sheet_styles)
+                    sheet_styles['td_styles'].append(
+                        {'row': start_row, 'col': start_col, 'class_name': td_class_name['classes']})
+
+                sheet_d = {}
+                sheet_d['sheet'] = sheet
+                sheet_d['sheet_styles'] = sheet_styles
+                sheet_d['row_heights'] = row_heights
+                sheet_d['col_widths'] = col_widths
+                sheet_d['data'] = data
+                sheet_d['cell_refs'] = cell_refs
+                sheet_d['merged_cells'] = merged_cells
+                sheet_d['sections'] = []
+                sheet_content.append(sheet_d)
+
+            return sheet_content
 
         except Exception as e:
             app.logger.error(str(e))
-            raise
+            raise(e)
 
     def create_section_dependency(self,sec_df):
         try:
