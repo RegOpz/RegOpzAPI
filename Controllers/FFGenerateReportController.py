@@ -51,7 +51,8 @@ class FFGenerateReportController(Resource):
             self.update_report_catalog(status='RUNNING'
                                         , report_parameters=report_parameters
                                         , version=report_version_no)
-            report_snapshot=self.create_report_snapshot(report_version_no,**report_parameters)
+            # report_snapshot=self.create_report_snapshot(report_version_no,**report_parameters)
+            report_snapshot=self.create_report_snapshot(**report_parameters)
             self.update_report_catalog(status='SNAPSHOTCREATED'
                                         , report_parameters=report_parameters
                                         , report_snapshot=report_snapshot
@@ -83,14 +84,14 @@ class FFGenerateReportController(Resource):
             return {'msg': str(e)}, 400
             # raise e
 
-    def create_report_detail(self,report_version_no,report_snapshot,report_parameters):
+    def create_report_detail(self,report_version_no,report_snapshot,**report_parameters):
         try:
             report_id=report_parameters['report_id']
             reporting_date=report_parameters['business_date_from']+report_parameters['business_date_to']
             render_controller=FFRenderController()
             fixed_controller=FFCreateFixedFormatController()
             wb_data=xls.Workbook()
-            report_id=report_parameters['report_id']
+            # report_id=report_parameters['report_id']
             sec_object = "report_free_format_section"
             ff_summary_object="report_free_format_summary"
 
@@ -100,10 +101,12 @@ class FFGenerateReportController(Resource):
             fixed_created=False
             for sec in sec_df:
                 if sec['section_type']=="FIXEDFORMAT" and not fixed_created:
-                    fixed_controller.create_fixed_format_sections(report_id,report_version_no,report_snapshot,self.log_master_id,**report_parameters)
+                    fixed_controller.create_fixed_format_sections(report_version_no,report_snapshot,self.log_master_id,**report_parameters)
                     fixed_created=True
 
-            wb_data=render_controller.render_report_intermediate(wb_data)
+            wb_data =render_controller.render_report_intermediate(wb_data,report_version_no, **report_parameters)
+            # Delete the first default Sheet
+            wb_data.remove(wb_data.get_sheet_by_name('Sheet'))
 
             ff_summary_df=pd.DataFrame()
             for sheet in wb_data.sheetnames:
@@ -112,6 +115,12 @@ class FFGenerateReportController(Resource):
 
                 ws=wb_data[sheet]
                 ws_template=wb_data[sheet+'-template']
+
+                # for row in ws_template.rows:
+                #     for col in row:
+                #         tcell = str(col.column) + str(col.row)
+                #         app.logger.info("cell_template {} {}".format(tcell, col.value))
+                app.logger.info("cell_template sheet row column {} {} {} {}".format(sheet, ws.max_row,ws.max_column,ws_template['G8'].value))
 
                 merged_cell = {}
                 for cell_rng in ws.merged_cell_ranges:  # move to 2.5.14 sheet.merged_cells.ranges
@@ -128,9 +137,23 @@ class FFGenerateReportController(Resource):
                             merged_cell[cell] = {'cell_rng': cell_rng, 'start_cell': startcell}
 
                 cell_added = []
-                for row in ws.rows:
-                    for cell_idx in row:
-                        cell = str(cell_idx.column) + str(cell_idx.row)
+
+                source_range_start, source_range_end = ws_template.dimensions.split(':')
+                ws_start_xy = coordinate_to_tuple(source_range_start)
+                ws_end_xy = coordinate_to_tuple(source_range_end)
+                end_of_sheet = False
+                for row in range(1,ws_end_xy[0]+1):
+                    if end_of_sheet:
+                        break
+                    for col in range(1,ws_end_xy[1]+1):
+                        cell_value = ws.cell(row=row,column=col).value
+                        template_cell_value = ws_template.cell(row=row,column=col).value
+                        column = get_column_letter(col)
+                        app.logger.info("Processing cell [{}] [{}]".format((sheet,row,column),cell_value))
+                        if template_cell_value and template_cell_value == "END-OF-TECHNICAL-SHEET-DATA-FOR-INDIVIDUALSHEET":
+                            end_of_sheet = True
+                            break
+                        cell = str(column) + str(row)
                         is_merged_cell=False
                         if cell in merged_cell.keys():
                             cell_id = merged_cell[cell]['cell_rng']
@@ -144,39 +167,60 @@ class FFGenerateReportController(Resource):
                         try :
                             idx=cell_added.index(cell_id)
                         except ValueError:
-                            content=cell_idx.value
-                            cell_template=json.loads(ws_template[start_cell])
-                            cell_style=json.dumps(cell_template.get('cell_style'))
-                            cell_style=cell_style if cell_style!='null' else None
-                            cell_ref=cell_template.get('cell_ref')
+                            content=cell_value
+                            template_content = ws_template[start_cell].value
+                            # # app.logger.info("start cell being processed [{}] [{}]".format(start_cell,content))
+                            if not template_content and not content:
+                                cell_style='{}'
+                                cell_ref=json.dumps({'cell_ref': start_cell, 'section': None})
+                            else:
+                                cell_template=json.loads(ws_template[start_cell].value)
+                                # app.logger.info("cell_template {}".format(cell_template))
+                                cell_style=json.dumps(cell_template.get('cell_style'))
+                                cell_style=cell_style if cell_style!='null' else None
+                                cell_ref=cell_template.get('cell_ref')
 
                             ff_summary_df=ff_summary_df.append({'version':report_version_no,'report_id':report_id,
                                           'reporting_date':reporting_date,'sheet_id':sheet,
-                                          'entity_type':'CELL','entity_id':cell_id,'col_id':str(cell_idx.column),'row_id':int(cell_idx.row),
+                                          'entity_type':'CELL','entity_id':cell_id,'col_id':str(column),'row_id':int(row),
                                           'cell_type':'MERGED' if is_merged_cell else 'SINGLE','cell_ref':cell_ref,
                                           'cell_style':cell_style,'content':content,},ignore_index=True)
                             cell_added.append(cell_id)
 
-                for row in range(ws_template.max_row):
+
+                end_of_sheet = False
+                for row in range(1,ws_end_xy[0]+1):
                     row_height=0
-                    for col in range(ws_template.max_column):
-                        cell = get_column_letter(col+1) + str(row+1)
-                        content=ws_template[cell]
+                    # if end_of_sheet:
+                    #     break
+                    for col in range(1,ws_end_xy[1]+1):
+                        app.logger.info("Row height processing....{}".format(row,col))
+                        col_value = ws_template.cell(row=row,column=col).value
+                        if col_value and col_value == "END-OF-TECHNICAL-SHEET-DATA-FOR-INDIVIDUALSHEET":
+                            end_of_sheet = True
+                            break
+                        cell = get_column_letter(col) + str(row)
+                        content=ws_template[cell].value
                         if content:
                             rh=float(json.loads(content)['row_height'])
                             if rh > row_height:
                                 row_height=rh
 
+                    if end_of_sheet:
+                        break
+
                     row_height=row_height if row_height else 25
                     ff_summary_df = ff_summary_df.append({'version': report_version_no, 'report_id': report_id, 'reporting_date':reporting_date,'sheet_id': sheet,
-                         'entity_type': 'ROW', 'entity_id': str(row+1), 'col_id': None,'row_id': None,
+                         'entity_type': 'ROW', 'entity_id': str(row), 'col_id': None,'row_id': None,
                          'cell_type': 'ROW_HEIGHT','cell_ref':None,'cell_style':None, 'content': row_height, }, ignore_index=True)
 
-                for col in range(ws_template.max_column):
+                for col in range(1,ws_end_xy[1]+1):
                     col_width=0
-                    for row in range(ws_template.max_row):
-                        cell = get_column_letter(col+1) + str(row+1)
-                        content=ws_template[cell]
+                    for row in range(1,ws_end_xy[0]+1):
+                        cell = get_column_letter(col) + str(row)
+                        content=ws_template[cell].value
+                        if content and content == "END-OF-TECHNICAL-SHEET-DATA-FOR-INDIVIDUALSHEET":
+                            break
                         if content:
                             cw=float(json.loads(content)['col_width'])
                             if cw > col_width:
@@ -184,7 +228,7 @@ class FFGenerateReportController(Resource):
 
                     col_width=col_width if col_width else 90/8
                     ff_summary_df = ff_summary_df.append({'version': report_version_no, 'report_id': report_id, 'sheet_id': sheet,
-                         'reporting_date':reporting_date,'entity_type': 'COL', 'entity_id': str(row + 1), 'col_id': None, 'row_id': None,
+                         'reporting_date':reporting_date,'entity_type': 'COL', 'entity_id': str(col), 'col_id': None, 'row_id': None,
                          'cell_type': 'COLUMN_WIDTH', 'cell_ref': None, 'cell_style': None, 'content': col_width, },ignore_index=True)
 
             self.db.transactmany("insert into {0}({1}) values({2})".format(ff_summary_object, ",".join(ff_summary_df.columns),
@@ -198,7 +242,7 @@ class FFGenerateReportController(Resource):
 
     def create_report_snapshot(self,**report_parameters):
         try:
-            app.logger.info("Creating report snapshot for {}".fromat(report_parameters['report_id']))
+            app.logger.info("Creating report snapshot for {}".format(report_parameters['report_id']))
             report_snapshot={}
             data_snapshot=self.create_data_snapshot(**report_parameters)
             fixed_format_snapshot=self.create_fixed_format_snapshot(**report_parameters)
@@ -391,5 +435,3 @@ class FFGenerateReportController(Resource):
                     , operation_status='Failed'
                     , operation_narration='Report creation Failed with error : {0}'.format(str(e),))
             raise(e)
-
-

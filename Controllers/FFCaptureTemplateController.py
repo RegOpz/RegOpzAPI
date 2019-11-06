@@ -202,7 +202,7 @@ class FFCaptureTemplateController(Resource):
                 for cell in cells:
                     r,c=coordinate_to_tuple(cell)
                     for row in sec_df:
-                        if row['start_row']<= r and row['end_row'] >= r and row['start_col'] <= c and row['end_col'] >= c:
+                        if row['start_row']<= r-1 and row['end_row'] >= r-1 and row['start_col'] <= c-1 and row['end_col'] >= c-1:
                             return row['section_id'],row['section_type']
                 return None,None
 
@@ -264,7 +264,7 @@ class FFCaptureTemplateController(Resource):
                         else:
                             cell_id = cell
                             start_cell=cell
-                        section,section_type=cell_section(sec_df,cell_rng)
+                        section,section_type=cell_section(sec_df,cell_id)
                         try :
                             idx=cell_added.index(cell_id)
                         except ValueError:

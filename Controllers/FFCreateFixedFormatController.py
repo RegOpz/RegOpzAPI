@@ -13,16 +13,23 @@ import Parser.FormulaTranslator2 as fm_trns2
 from Parser.PandasLib import *
 from Parser.ExcelLib import *
 from Controllers.OperationalLogController import OperationalLogController
+from Helpers.utils import autheticateTenant
 
 class FFCreateFixedFormatController:
     def __init__(self):
+        self.domain_info = autheticateTenant()
+        if self.domain_info:
+            tenant_info = json.loads(self.domain_info)
+            self.tenant_info = json.loads(tenant_info['tenant_conn_details'])
+            self.db=DatabaseHelper(self.tenant_info)
+            self.user_id=Token().authenticate()
         self.opsLog = OperationalLogController()
         self.er = {}
         self.log_master_id = None
 
-    def  create_fixed_format_sections(self,report_id,report_version_no,report_snapshot,log_master_id,report_parameters):
+    def  create_fixed_format_sections(self,report_version_no,report_snapshot,log_master_id,**report_parameters):
         try:
-            app.logger.info("Creating fixed format sections for report {}".format(report_id))
+            app.logger.info("Creating fixed format sections for report {}".format(report_parameters['report_id']))
 
             self.report_id = report_parameters["report_id"]
             self.reporting_currency = report_parameters["reporting_currency"]
@@ -65,6 +72,7 @@ class FFCreateFixedFormatController:
 
     def create_report_detail(self):
         try:
+            app.logger.info("Creating fixed format sections report details for report {}".format(self.report_id))
 
             all_sources=self.db.query('select distinct source_id from report_calc_def where report_id=%s and in_use=\'Y\' \
                         and source_id !=0',(self.report_id,)).fetchall()
@@ -73,9 +81,10 @@ class FFCreateFixedFormatController:
             dbqd = DatabaseHelper(self.tenant_info)
             dbqd.transact("create temporary table tmp_qd_id_list(business_date int,id bigint)")
             for source in all_sources:
+                app.logger.info("Creating fixed format sections report details for report {} source {}".format(self.report_id,source['source_id']))
                 if self.log_master_id:
                     self.opsLog.write_log_detail(master_id=self.log_master_id
-                        , operation_sub_type='Processing source:{} for  report:{},sheet:{},section:{}'.format(source['source_id'],section_id)
+                        , operation_sub_type='Processing source:{} '.format(source['source_id'],)
                         , operation_status='Started'
                         , operation_narration="Begining of identifying qualified data for source {}".format(source['source_id'],)
                         )
@@ -83,19 +92,19 @@ class FFCreateFixedFormatController:
                 resultdf=pd.DataFrame(columns=['report_id','sheet_id' ,'section_id','cell_id' ,'cell_calc_ref','source_id','qualifying_key','reporting_date'])
                 #Create versioning for REPORT_CALC_DEF
                 all_business_rules=self.db.query("select id,report_id,section_id,sheet_id,cell_id,cell_calc_ref,cell_business_rules \
-                        from report_calc_def where report_id=%s and source_id=%s and in_use='Y'",(self.report_id,source_id,)).fetchall()
+                        from report_calc_def where report_id=%s and source_id=%s and in_use='Y'",(self.report_id,source['source_id'],)).fetchall()
 
                 all_business_rules_df=pd.DataFrame(all_business_rules)
                 report_snapshot=json.loads(self.report_snapshot)
                 qdvers_snapshot=report_snapshot['qualified_data']
                 id_list_df=pd.DataFrame(columns=['report_id','sheet_id' ,'cell_id' ,'cell_calc_ref','source_id','reporting_date','id_list_no'])
                 startcur = time.time()
-                qd_vers_source=qdvers_snapshot[source['source_id']]
+                qd_vers_source=qdvers_snapshot[str(source['source_id'])]
                 dbqd.transact("truncate table tmp_qd_id_list")
 
                 for business_date in qd_vers_source.keys():
                     qd_list=dbqd.query("select id_list from qualified_data_vers where business_date=%s and source_id=%s \
-                                and version=%s",(business_date,source['source_id'],qd_vers_source[business_date])).fetchone()['id_list']
+                                and version=%s",(business_date,source['source_id'],qd_vers_source[business_date])).fetchone()#['id_list']
                     qd_id_list = [(int(business_date),int(id)) for id in qd_list['id_list'].split(',')]
                     start = time.time()
                     dbqd.transactmany("insert into tmp_qd_id_list(business_date,id) values (%s,%s)",qd_id_list)
@@ -390,7 +399,7 @@ class FFCreateFixedFormatController:
             raise(e)
         #return
 
-    def create_report_summary_final(self,populate_summary = True,cell_format_yn = 'N'):
+    def create_report_summary_final(self,populate_summary = True,cell_format_yn = 'Y'):
         try:
             app.logger.info("Creating final Report-summary")
             if self.log_master_id:
@@ -426,7 +435,6 @@ class FFCreateFixedFormatController:
 
             #print(formula_set)
             summary_set = fm_trns2.tree(formula_set, format_flag=cell_format_yn)
-            # print(summary_set)
 
             result_set = []
             for cls in comp_agg_cls:

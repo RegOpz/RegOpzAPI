@@ -7,6 +7,7 @@ from Controllers.MaintainReportRulesController import MaintainReportRulesControl
 from Controllers.UserController import UserController
 from Controllers.ViewDataController import ViewDataController
 from Controllers.GenerateReportController import GenerateReportController
+from Controllers.FFGenerateReportController import FFGenerateReportController
 from Controllers.VarianceAnalysisController import VarianceAnalysisController
 from app import *
 from Controllers.ResourceController import ResourceController
@@ -173,10 +174,10 @@ api.add_resource(ViewDataController,
     apiPath+"/view-data/apply-rules",
     endpoint="apply_rules_ep"
 )
-api.add_resource(GenerateReportController,
-    apiPath+"/view-data/generate-report",
-    apiPath+"/create-report/generate-report"
-)
+# api.add_resource(GenerateReportController,
+#     apiPath+"/view-data/generate-report",
+#     apiPath+"/create-report/generate-report"
+# )
 
 api.add_resource(GenerateReportController,
     apiPath+"/create-report/get-report-list",
@@ -186,6 +187,11 @@ api.add_resource(GenerateReportController,
 api.add_resource(GenerateReportController,
     apiPath+"/create-report/get-country-list",
     endpoint="get_country_list_ep"
+)
+
+api.add_resource(FFGenerateReportController,
+    apiPath+"/view-data/generate-report",
+    apiPath+"/create-report/generate-report"
 )
 
 

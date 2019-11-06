@@ -620,6 +620,10 @@ class DocumentController(Resource):
         src_inf=self.db.query("select * from data_source_information where source_id=" + str(source_id)).fetchone()
 
         key_column = 'id' #util.get_keycolumn(self.db._cursor(), src_inf['source_table_name'])
+        startPage = int(page) * 100
+        if filter:
+            filter='' if len(json.loads(filter)) == 0 else json.loads(filter)
+        # print("Filter value [{}]".format(filter))
 
         self.db.transact("create temporary table tmp_rqd_id_list(idlist bigint)")
         self.db.transact("truncate table tmp_rqd_id_list")
@@ -630,14 +634,20 @@ class DocumentController(Resource):
 
         rqdldata = self.db.query(sql).fetchone()
         if rqdldata:
-            qd_id_list = [(id,) for id in rqdldata['id_list'].split(',')]
+            # qd_id_list = [(id,) for id in rqdldata['id_list'].split(',')]
+            qd_id_list = [(-9999,)] if rqdldata['id_list']=='' or rqdldata['id_list'] == None else [(id,) for id in rqdldata['id_list'].split(',')]
+            if not filter or filter == 'null' or filter == 'undefined':
+                # app.logger.info("Qualified data link [{0}:{1}] in the version {2} is {3}".format(startPage,startPage+100,version,len(qd_id_list)))
+                count={'count': len(qd_id_list)}
+                qd_id_list = qd_id_list[startPage:startPage+100]
+                limit_sql = ' '
+                # print("qd id list {}".format(qd_id_list))
             self.db.transactmany("insert into tmp_rqd_id_list(idlist) values (%s)",qd_id_list)
 
-        startPage = int(page) * 100
         data_dict = {}
         filter_sql = ''
         if filter and filter != 'undefined':
-            filter=json.loads(filter)
+            # filter=json.loads(filter)
             for col in filter:
                 col_filter_sql =''
                 conditions = col['value'].split(",")
@@ -661,7 +671,8 @@ class DocumentController(Resource):
         if export_to_csv=='Y':
             limit_sql = ''
         else:
-            limit_sql = ' limit {0},100'.format(startPage)
+            if filter and filter != 'null' and filter != 'undefined':
+                limit_sql = ' limit {0},100'.format(startPage)
 
         sqlqry = "select {0} from  {1} a, tmp_rqd_id_list b where a.id=b.idlist {2} {3}"
 
@@ -678,7 +689,8 @@ class DocumentController(Resource):
         print(cols)
         sql = sqlqry.format( 'count(*) as count', src_inf['source_table_name'] ,filter_sql, '')
         print(sql)
-        count = self.db.query(sql).fetchone()
+        if filter and filter != 'null' and filter != 'undefined':
+            count = self.db.query(sql).fetchone()
         # sql = "select a.* from " + src_inf['source_table_name'] + " a, tmp_rqd_id_list b" + \
         #      " where a." + key_column + "=b.idlist"
         for i,d in enumerate(data):
