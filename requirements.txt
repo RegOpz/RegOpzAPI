@@ -17,7 +17,7 @@ Jinja2==2.9.5
 jwt==0.5.3
 MarkupSafe==1.0
 mysql-connector==2.1.4
-numpy==1.12.1
+numpy==1.21.0
 openpyxl==2.4.5
 packaging==16.8
 pandas==0.20.1
